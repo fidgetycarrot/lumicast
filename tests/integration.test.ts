@@ -9,7 +9,7 @@ function harness(provider='openrouter',model='test/generative') {
   const listeners=new Set<(payload:unknown)=>void>();
   let handler:((payload:unknown,user?:string,session?:string)=>void)|undefined;
   const storage=new Map<string,unknown>();const calls:unknown[]=[];const replies:{payload:unknown;user?:string;session?:string}[]=[];
-  let fail=false,block=false;let latestSignal:AbortSignal|undefined;
+  let fail=false,block=false;let latestSignal:AbortSignal|undefined;let responses:unknown[]|undefined;
   const api={
     permissions:{has:()=>true},
     userStorage:{getJson:async(path:string,o:{fallback:unknown;userId?:string})=>storage.get(`${o.userId}:${path}`)??o.fallback,setJson:async(path:string,value:unknown,o:{userId?:string})=>{storage.set(`${o.userId}:${path}`,value);}},
@@ -21,7 +21,7 @@ function harness(provider='openrouter',model='test/generative') {
       if(input.model!==model||input.provider!==provider||input.connection_id!=='c1')throw new Error('API error 400: missing or invalid model');
       if(fail)throw new Error('Invalid API key SECRET-DO-NOT-LEAK');
       if(block)await new Promise((_,reject)=>input.signal.addEventListener('abort',()=>reject(new DOMException('aborted','AbortError')),{once:true}));
-      return{content:JSON.stringify(input.messages[0].content.includes('Extract all')?{traits:[{id:'t1',evidence:'Short red hair.',tag:'red_hair'}]}:{keep:['red_hair'],issues:[]}),finish_reason:'stop'};
+      return{content:JSON.stringify(responses ? responses.shift() : input.messages[0].content.includes('Extract all')?{traits:[{id:'t1',evidence:'Short red hair.',tag:'red_hair',detail:'Short red hair'}]}:{keep:['red_hair'],safeDetails:['t1'],covered:[],issues:[]}),finish_reason:'stop'};
     }},
     onFrontendMessage:(fn:typeof handler)=>{handler=fn;return()=>{handler=undefined;};},
     sendToFrontend:(payload:unknown,user?:string,options?:{frontendSessionId?:string})=>{replies.push({payload,user,session:options?.frontendSessionId});if(user==='u1'&&options?.frontendSessionId==='s1')listeners.forEach(fn=>fn(payload));},
@@ -29,7 +29,7 @@ function harness(provider='openrouter',model='test/generative') {
   const root=document.createElement('div');document.body.append(root);
   const ctx={sendToBackend:(payload:unknown)=>handler?.(payload,'u1','s1'),onBackendMessage:(fn:(payload:unknown)=>void)=>{listeners.add(fn);return()=>{listeners.delete(fn);};},ui:{registerDrawerTab:()=>({root,destroy:()=>root.remove()})},dom:{addStyle:()=>()=>{}}} as unknown as SpindleFrontendContext;
   const stop=setupBackend(api);
-  return{ctx,root,calls,replies,storage,stop,emit:(payload:unknown,user='u1',session='s1')=>handler?.(payload,user,session),setFail:()=>{fail=true;},setBlock:()=>{block=true;},signal:()=>latestSignal};
+  return{ctx,root,calls,replies,storage,stop,emit:(payload:unknown,user='u1',session='s1')=>handler?.(payload,user,session),setFail:()=>{fail=true;},setBlock:()=>{block=true;},setResponses:(values:unknown[])=>{responses=values;},signal:()=>latestSignal};
 }
 const cleanups:(()=>void)[]=[];
 afterEach(()=>{while(cleanups.length)cleanups.pop()!();});
@@ -83,4 +83,13 @@ test('direct DeepSeek v4 pro passes the saved provider/model on both raw calls',
   const requests=h.calls.filter(v=>(v as unknown[])[0]==='generation').map(v=>(v as unknown[])[1] as {provider:string;model:string;connection_id:string;userId:string});
   expect(requests.length).toBe(2);
   for(const r of requests){expect(r.provider).toBe('deepseek');expect(r.model).toBe('deepseek-v4-pro');expect(r.connection_id).toBe('c1');expect(r.userId).toBe('u1');}
+});
+test('compact panel prompt omits narration while preserving original source quotes',async()=> {
+  dom();const h=harness();cleanups.push(h.stop);const dispose=setup(h.ctx);cleanups.push(dispose);
+  h.setResponses([{traits:[{id:'1',evidence:'Red hair, obviously!',tag:'red_hair',detail:'Red hair'}]},{keep:['red_hair'],safeDetails:['1'],covered:['1'],issues:[]}]);
+  const translate=Array.from(h.root.querySelectorAll('button')).find(b=>b.textContent==='Translate')!;
+  await until(()=>!translate.disabled);h.root.querySelector('select')!.value='c1';
+  const areas=Array.from(h.root.querySelectorAll('textarea'));areas[0].value='Red hair, obviously!';translate.click();await until(()=>!translate.disabled);
+  expect(areas[1].value).toBe('red_hair');expect(areas[2].value).toBe('');expect(areas[3].value).toBe('red hair');
+  expect(h.root.querySelector('details:not(.lc-card)')?.textContent).toContain('Red hair, obviously!');
 });

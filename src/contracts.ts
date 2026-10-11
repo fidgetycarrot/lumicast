@@ -1,4 +1,4 @@
-export interface Trait { id: string; evidence: string; tag: string | null }
+export interface Trait { id: string; evidence: string; tag: string | null; detail?: string }
 export interface Extraction { traits: Trait[] }
 export interface VerifiedTag {
   name: string; source: 'Danbooru' | 'Gelbooru'; wiki: string; url: string;
@@ -8,7 +8,7 @@ export interface TagRow extends VerifiedTag { evidence: string; traitId: string 
 export interface Issue { kind: 'ambiguity' | 'contradiction'; evidence: string[]; message: string }
 export interface Translation {
   tags: TagRow[]; prose: string; issues: Issue[]; notices: string[];
-  prompt: string; model: string;
+  prompt: string; model: string; evidence: Trait[];
 }
 export interface Settings { connectionId: string; gelUser: string; gelKey: string }
 export interface PublicSettings { connectionId: string; gelUser: string; hasGelKey: boolean }
@@ -30,6 +30,10 @@ export function tagName(v: unknown): string {
   const name = text(v, 'tag', 100).toLowerCase().replace(/\s+/g, '_');
   if (!/^[a-z0-9][a-z0-9_():.'\/-]*$/.test(name)) throw new Error('Use a plain booru tag name, without weights or wildcards.');
   return name;
+}
+// A bra cup label is a clothing measurement, not a reliable visual tag.
+export function isCupSizeTag(name: string): boolean {
+  return /^(?:(?:aa|a|b|c|ddd|dd|d|e|f|g|h|i|j|k)[_-]?cup|cup[_-](?:aa|a|b|c|ddd|dd|d|e|f|g|h|i|j|k))$/.test(name);
 }
 export function isGenerative(model: string): boolean {
   return !!model.trim() && !/(?:\bjev\b|decisions?|embedding|rerank|moderation)/i.test(model);

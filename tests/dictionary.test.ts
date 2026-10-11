@@ -43,3 +43,8 @@ test('bad network response does not become a verified tag',async()=> {
   const d=new BooruDictionary(async()=>({status:200,body:'<html>challenge</html>'}),undefined,0);
   await expect(d.resolve('blue_eyes',signal())).rejects.toThrow('Invalid tag service');
 });
+test('cup labels cannot be verified manually or appear in tag search',async()=> {
+  const seen:string[]=[];const d=new BooruDictionary(async url=>{seen.push(url);return{status:200,body:JSON.stringify([{name:'b_cup',category:0,post_count:100},{name:'tea_cup',category:0,post_count:100}])};},undefined,0);
+  for(const name of ['B cup','B-cup','cup_b','ddd_cup'])expect(await d.resolve(name,signal())).toBeNull();
+  expect(seen).toEqual([]);expect((await d.search('b',signal())).map(t=>t.name)).toEqual(['tea_cup']);
+});

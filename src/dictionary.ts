@@ -1,4 +1,4 @@
-import { record, tagName, type TagDictionary, type VerifiedTag } from './contracts';
+import { isCupSizeTag, record, tagName, type TagDictionary, type VerifiedTag } from './contracts';
 
 export interface HttpResponse { status: number; body: string }
 export type HttpGet = (url: string) => Promise<HttpResponse>;
@@ -70,9 +70,11 @@ export class BooruDictionary implements TagDictionary {
     const count = Number(r.post_count ?? r.count);
     if (!Number.isFinite(count) || count < 1) return null;
     let name: string; try {name=tagName(r.name);} catch {return null;}
+    if (isCupSizeTag(name)) return null;
     return {name,source,count,wiki:'',url:source === 'Danbooru' ? `${DAN}/wiki_pages/${encodeURIComponent(name)}` : `https://gelbooru.com/index.php?page=wiki&s=list&search=${encodeURIComponent(name)}`};
   }
   async resolve(raw: string, signal: AbortSignal): Promise<VerifiedTag | null> {
+    if (isCupSizeTag(tagName(raw))) return null;
     const requested = tagName(raw); let canonical = requested;
     const visited = new Set<string>();
     for (let hop=0;hop<4;hop++) {

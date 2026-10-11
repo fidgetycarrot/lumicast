@@ -1,8 +1,8 @@
-# LumiCast 0.1.1
+# LumiCast 0.1.2
 
-**v0.1.1 fixes the initial provider-request failure:** raw generation now passes the saved provider and model explicitly. Update LumiCast in Extensions, reload if needed, and retry your saved connection.
+**v0.1.2 compacts personality-heavy descriptions:** the model proposes neutral visual clauses, a second review checks them against literal source quotes, and fully tag-covered facts need not repeat in prose. Cup-size labels remain measurements rather than invented booru tags. The v0.1.1 provider/model request fix is included. Update LumiCast in Extensions and reload if needed.
 
-A new standalone Lumiverse Spindle extension. Paste a character appearance, translate it, review verified booru tags and exact source wording, edit the assembled Anima prompt, and copy it.
+A new standalone Lumiverse Spindle extension. Paste a character appearance, translate it, review verified booru tags and compact visual detail, edit the assembled Anima prompt, and copy it. Original source quotes remain available for comparison.
 
 This release contains only the manual translator. It has no NPC detection, character storage, watchlists, invented appearances, attribute checklist, or connections to Set Points or Lumi Studio. Those projects were inspected as references and left unchanged.
 
@@ -21,11 +21,11 @@ Prebuilt `dist/` files are committed for Lumiverse installation. If the tab does
 
 Requires **Lumiverse 1.2.5 or later**. Compatibility was checked against the current 1.2.5 source and SDK 0.6.40; older versions have not been verified.
 
-1. Unzip `lumicast-0.1.1-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
+1. Unzip `lumicast-0.1.2-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
 2. On the machine running your Lumiverse **server**, copy that folder into `<DATA_DIR>/extensions/`. The server's default DATA_DIR is `./data`, relative to where Lumiverse runs. For Docker, copy into the volume mounted as the server's data directory. Do not copy it into another extension's folder.
 3. As the Lumiverse owner/admin, open **Extensions**, open its add menu, and choose **Import Local**. Enable LumiCast and grant `generation` and `cors_proxy`. If the tab does not appear, reload Lumiverse.
 4. Open **LumiCast** in the sidebar drawer or find it in the command palette. Expand **Connection & tag services**, choose a saved generative connection, and save.
-5. Paste an appearance and select **Translate**. Review the tags and source wording. Edit them as needed, rebuild, and copy the prompt.
+5. Paste an appearance and select **Translate**. Review the tags and compact detail. Original quotes appear under **Tag sources & uncertainty**. Edit as needed, rebuild, and copy the prompt.
 
 The install ZIP contains prebuilt self-contained bundles and no package manager dependencies. Installation does not need a build step. Lumiverse supports the local layout above and normalizes it into its managed `lumicast/repo` directory. Keep the separate `lumicast/storage` directory intact when updating.
 
@@ -41,11 +41,13 @@ Jev, Decisions, embedding, reranking and moderation models are blocked by recogn
 
 ## Tag verification and Anima formatting
 
-1. The generative model extracts visible traits with literal, continuous source quotes and at most 24 candidate tags. Unmentioned attributes are not requested or filled in.
+1. The generative model extracts visible traits with literal, continuous source quotes, compact neutral paraphrases and at most 24 candidate tags. It is instructed to strip narrator personality, jokes, repetition and nonvisual biography while preserving concrete pose, expression, clothing conditions and subtle visual qualifiers. Unmentioned attributes are not requested or filled in.
 2. The dictionary resolves active Danbooru aliases, checks exact live tags, rejects deprecated/nonexistent/artist/copyright/character entries, and fetches wiki definitions where available. Search lists real general/meta tags by prefix, without fetching images or posts.
-3. A second generative review checks meaning against the quote and available definition. Popularity or existence is not treated as proof of Anima suitability. Ambiguous, exaggerated, metaphorical and contradictory tags should be dropped. A deterministic guard also removes incompatible global hair, eye and subject tags together.
-4. Every extracted source quote remains in prose, including subtle proportions, asymmetry, texture, negation and character ownership. A lookup failure preserves prose and adds a notice. An invalid AI response leaves previous edits intact.
+3. A second generative review checks tag meaning against the quote and available definition, and separately checks compact detail against the original source. Popularity or existence is not treated as proof of Anima suitability. Ambiguous, exaggerated, metaphorical and contradictory tags should be dropped. Basic tags can accompany precise prose qualifiers. A deterministic guard also removes incompatible global hair, eye and subject tags together.
+4. Only approved paraphrases enter the compact prose. A fact can be omitted from prose only when the review says its entire visual content is covered by a retained tag assigned to that fact. Unknown, untagged, unapproved or conflicted facts retain their detail; an unapproved paraphrase falls back to the literal quote with a notice. All extracted quotes stay outside the assembled prompt under **Tag sources & uncertainty**. Subtle proportions, asymmetry, texture, negation, measurements and character ownership must remain represented. A lookup failure preserves prose and adds a notice. An invalid AI response leaves previous edits intact.
 5. Canonical names use underscores in the editor. The assembled prompt uses lowercase tags with spaces, preserving `score_*` spelling if manually supplied. Tags and prose are separated by a blank line. No positive quality, safety, artist, lighting, pose, outfit or scene defaults are added.
+
+Cup labels such as `B cup` are retained as natural-language measurements, not accepted as `b_cup` tags. The engine also blocks proposed visual breast-size tags when their sole evidence is a bare cup measurement. No automatic cup-to-visual-size conversion is made. This does not stop a genuinely described visual proportion from being reviewed independently.
 
 This follows the [official Anima model guidance](https://huggingface.co/circlestone-labs/Anima/blob/main/README.md), which supports tags, natural language and combinations, and prefers Gelbooru spellings where they differ. Appropriate image quality or safety prefixes can be added intentionally in the editable final prompt for the Anima variant you use.
 
@@ -83,7 +85,7 @@ bun run smoke:live
 
 `build.ts` produces `dist/backend.js` and `dist/frontend.js`. All runtime imports are bundled. Development dependencies are pinned and `bun.lock` is included. The source ZIP excludes `node_modules` and contains no credentials.
 
-`bun run smoke:live` makes real public Danbooru metadata calls. It does not call a paid provider. The optional `scripts/provider-smoke.ts` runs eight synthetic descriptions against an OpenRouter-compatible provider you explicitly configure; see `SMOKE-TESTS.md` for usage and cost scope.
+`bun run smoke:live` makes real public Danbooru metadata calls. It does not call a paid provider. The optional `scripts/provider-smoke.ts` runs nine synthetic descriptions against an OpenRouter-compatible provider you explicitly configure; see `SMOKE-TESTS.md` for usage and cost scope.
 
 ## Architecture and verification
 

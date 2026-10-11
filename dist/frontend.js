@@ -114,7 +114,7 @@ function setup(ctx) {
   const intro = el("header");
   const kicker = el("div", "DESCRIPTION → ANIMA");
   kicker.className = "lc-kicker";
-  intro.append(kicker, el("h1", "LumiCast"), el("p", "Keep the character you described."), el("p", "Verified tags for clear traits. Source wording for the details tags cannot capture."));
+  intro.append(kicker, el("h1", "LumiCast"), el("p", "Keep the character you described."), el("p", "Verified tags for clear traits. Compact prose for the details tags cannot capture."));
   const status = el("div");
   status.className = "lc-status";
   status.setAttribute("role", "status");
@@ -177,12 +177,14 @@ function setup(ctx) {
       item.append(link, el("blockquote", t.evidence));
       provenance.append(item);
     });
+    sourceQuotes.replaceChildren(el("p", "Original visual details — retained for comparison, outside the assembled prompt."));
+    next.evidence.forEach((t) => sourceQuotes.append(el("blockquote", t.evidence)));
     issues.replaceChildren();
     next.issues.forEach((i) => issues.append(el("p", `${i.kind}: ${i.message}`), el("blockquote", i.evidence.join(" / "))));
     if (!next.issues.length)
       issues.append(el("p", "No unresolved ambiguity was reported."));
-    tagState.textContent = `${next.tags.length} tags checked against live metadata and reviewed for meaning. ${next.model}.`;
-    notify(["Translation ready. Review the source wording and tags.", !gelUser.value ? "Gelbooru is not configured; verified tags use Danbooru." : "", ...next.notices].filter(Boolean).join(`
+    tagState.textContent = next.tags.length ? `${next.tags.length} tags checked against live metadata and reviewed for meaning. ${next.model}.` : `No verified tags retained. Review the notices below. ${next.model}.`;
+    notify(["Translation ready. Review the compact detail and tags.", !gelUser.value ? "Gelbooru is not configured; verified tags use Danbooru." : "", ...next.notices].filter(Boolean).join(`
 `));
     update();
   }, true);
@@ -201,7 +203,7 @@ function setup(ctx) {
   const prose = el("textarea");
   prose.rows = 6;
   prose.maxLength = 16000;
-  prose.placeholder = "Source wording retained for precision";
+  prose.placeholder = "Compact visual details beyond the tags";
   const tagState = el("p", "Translate to verify tags.");
   tagState.className = "lc-muted";
   const verify = button("Verify edited tags", async () => {
@@ -229,9 +231,10 @@ function setup(ctx) {
   });
   const provenance = el("div");
   const issues = el("div");
+  const sourceQuotes = el("div");
   const evidence = el("details");
-  evidence.append(el("summary", "Tag sources & uncertainty"), provenance, issues);
-  review.append(field("Booru tags — comma separated", tags, "Canonical underscores are shown here; the assembled Anima prompt uses spaces."), tagState, verify, field("Natural-language detail", prose, "Copied source wording preserves subtle traits and ownership. Edit freely; no absent attributes are filled in."), evidence);
+  evidence.append(el("summary", "Tag sources & uncertainty"), provenance, issues, sourceQuotes);
+  review.append(field("Booru tags — comma separated", tags, "Canonical underscores are shown here; the assembled Anima prompt uses spaces."), tagState, verify, field("Natural-language detail", prose, "Reviewed visual clauses preserve nuance without repeating fully covered tags. Original quotes are below. Edit freely; no absent attributes are filled in."), evidence);
   const output = card("03 / Use");
   const prompt = el("textarea");
   prompt.rows = 8;
@@ -278,7 +281,7 @@ function setup(ctx) {
     notify("Search complete. Popularity is not an Anima quality score.");
   });
   searchCard.append(field("Tag name or prefix", query, "Metadata only. No images or posts are fetched."), search, found);
-  app.append(intro, settings, status, input, review, output, searchCard, el("p", "LumiCast 0.1.1 · Manual translator · Draft stays in this tab until reload."));
+  app.append(intro, settings, status, input, review, output, searchCard, el("p", "LumiCast 0.1.2 · Manual translator · Draft stays in this tab until reload."));
   const controls = [translate, save, refreshButton, verify, rebuild, copy, search];
   function update() {
     for (const c of controls)

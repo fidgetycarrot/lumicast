@@ -15,12 +15,12 @@ The host implementation confirms generation requires explicit `userId` for opera
 ## Completed checks
 
 - TypeScript strict typecheck against the pinned SDK: passed.
-- 29 automated tests, 153 assertions: passed. Eight challenging description fixtures plus malformed JSON, fabricated evidence, unsupported model names, nonexistent/deprecated tags, alias/cache behavior, Gelbooru failure, edited tags, RPC expiry, cancellation, per-user secret isolation and failure preservation.
+- 37 automated tests, 213 assertions: passed. Nine challenging description fixtures plus malformed JSON, fabricated evidence, unsupported model names, nonexistent/deprecated tags, alias/cache behavior, Gelbooru failure, edited tags, RPC expiry, cancellation, per-user secret isolation and failure preservation.
 - Production frontend/backend bundle build: passed.
 - Current Lumiverse `detectDangerousBackendCapabilities` scanner, extracted unchanged from the pinned source: backend accepted with zero declared capabilities.
 - Manifest entry existence and package structure checks: passed.
-- Real public Danbooru requests: exact `blue_eyes`, wiki definition, active `gray_hair → grey_hair` alias, `heterochromia` prefix search and nonexistent-tag rejection passed.
-- Bun's default HTTP client was challenged by Danbooru; an honest `LumiCast/0.1.1 (tag metadata client)` header succeeded and is used in production CORS requests.
+- Real public Danbooru requests rerun for v0.1.2: exact `blue_eyes`, wiki definition, active `gray_hair → grey_hair` alias, `heterochromia` prefix search and nonexistent-tag rejection passed. Additional exact metadata checks verified `hoodie`, `leggings`, `black_hair` and `bored`.
+- Bun's default HTTP client was challenged by Danbooru; an honest `LumiCast/0.1.2 (tag metadata client)` header succeeded and is used in production CORS requests.
 - Real Gelbooru request without credentials: HTTP 401. The extension's authenticated response parsing and fallback path were tested with controlled fixtures.
 - Browser-rendered standalone frontend preview: paste → Translate → editable tag, source wording and prompt fields visibly populated. This used a clearly labeled fixture response, not a live provider. Preview screenshot supplied separately.
 
@@ -39,3 +39,11 @@ The package is ready to install locally and includes live provider smoke instruc
 v0.1.0 omitted `provider` and `model` from raw-generation input. Although `connection_id` resolves the connection credentials, the inspected host `prepareRawCall` uses `input.model` for the provider request instead of inheriting `connection.model`. This left the model name blank. SDK 0.6.40 also omits these runtime fields from its request interface, despite showing them in its raw-generation examples.
 
 v0.1.1 explicitly passes the saved provider and model on both calls. A direct DeepSeek regression requires `deepseek` / `deepseek-v4-pro`, the connection ID and authenticated user ID for extraction and review; the test would reject the old request. Errors now expose a fixed category and validated HTTP status with the generation step, while suppressing upstream text. A real paid DeepSeek request remains untested by this development run.
+
+## v0.1.2 correction
+
+The v0.1.1 engine assembled every extracted quote into the prompt, even when tags already covered it. This preserved grounding but also repeated attributes and narrator personality. v0.1.2 adds proposed compact visual clauses to extraction and independently reviews them in the existing second generation call. Reviewed coverage can suppress prose only for facts assigned to a retained tag. Every literal quote remains in a separate evidence DTO and the expandable source panel. Unapproved paraphrases use literal source wording with a notice; no extra paid call or retry is added.
+
+New controlled regressions cover chatty narration with repeated frame descriptors, cup measurement, approximate hair length, clip/loose strands, soft adult facial features, oversized sleeves and visibly wet clothing without inferred causes; unapproved/invented paraphrases; invalid coverage IDs; restoring prose after conflict removal; bare cup measurements incorrectly proposed as visual size tags; and UI source-quote retention outside the assembled prompt. These validate the engine's handling of supplied model responses. They do not demonstrate a live model's accuracy on the user's original description.
+
+Typecheck, all 37 tests (213 assertions), production build, current host backend scanner and package layout checks passed. Real paid generation with the revised prompts remains untested by this development run. The user's original character name and explicit story excerpt are not included in the public fixtures; the new fixture is synthetic.

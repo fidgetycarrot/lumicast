@@ -42,7 +42,7 @@ export function setup(ctx:SpindleFrontendContext) {
   const removeStyle=ctx.dom.addStyle(STYLES);
   const app=el('div');app.className='lc-app';tab.root.append(app);
   const intro=el('header');const kicker=el('div','DESCRIPTION → ANIMA');kicker.className='lc-kicker';
-  intro.append(kicker,el('h1','LumiCast'),el('p','Keep the character you described.'),el('p','Verified tags for clear traits. Source wording for the details tags cannot capture.'));
+  intro.append(kicker,el('h1','LumiCast'),el('p','Keep the character you described.'),el('p','Verified tags for clear traits. Compact prose for the details tags cannot capture.'));
   const status=el('div');status.className='lc-status';status.setAttribute('role','status');status.setAttribute('aria-live','polite');
   const settings=el('details');settings.className='lc-card';settings.append(el('summary','Connection & tag services'));
   const connection=el('select');connection.setAttribute('aria-label','Generative connection');
@@ -70,17 +70,19 @@ export function setup(ctx:SpindleFrontendContext) {
       const item=el('div');item.className='lc-provenance';const link=el('a',`${t.name} · ${t.source}${t.aliasFrom ? ` · alias: ${t.aliasFrom}` : ''}`);link.href=t.url;link.target='_blank';link.rel='noopener noreferrer';
       item.append(link,el('blockquote',t.evidence));provenance.append(item);
     });
+    sourceQuotes.replaceChildren(el('p','Original visual details — retained for comparison, outside the assembled prompt.'));
+    next.evidence.forEach(t=>sourceQuotes.append(el('blockquote',t.evidence)));
     issues.replaceChildren();next.issues.forEach(i=>issues.append(el('p',`${i.kind}: ${i.message}`),el('blockquote',i.evidence.join(' / '))));
     if(!next.issues.length)issues.append(el('p','No unresolved ambiguity was reported.'));
-    tagState.textContent=`${next.tags.length} tags checked against live metadata and reviewed for meaning. ${next.model}.`;
-    notify(['Translation ready. Review the source wording and tags.',!gelUser.value ? 'Gelbooru is not configured; verified tags use Danbooru.' : '',...next.notices].filter(Boolean).join('\n'));
+    tagState.textContent=next.tags.length ? `${next.tags.length} tags checked against live metadata and reviewed for meaning. ${next.model}.` : `No verified tags retained. Review the notices below. ${next.model}.`;
+    notify(['Translation ready. Review the compact detail and tags.',!gelUser.value ? 'Gelbooru is not configured; verified tags use Danbooru.' : '',...next.notices].filter(Boolean).join('\n'));
     update();
   },true);
   const cancel=el('button','Cancel');cancel.type='button';cancel.hidden=true;cancel.addEventListener('click',()=>{void rpc.request('cancel').then(()=>notify('Cancellation requested.')).catch(e=>notify(e.message,true));});
   input.append(field('Character description',source,'Only this pasted description is sent to your selected provider. No chat history is read.'),row(translate,cancel));
   const review=card('02 / Review');
   const tags=el('textarea');tags.rows=3;tags.maxLength=4000;tags.placeholder='Verified booru tags appear here';
-  const prose=el('textarea');prose.rows=6;prose.maxLength=16_000;prose.placeholder='Source wording retained for precision';
+  const prose=el('textarea');prose.rows=6;prose.maxLength=16_000;prose.placeholder='Compact visual details beyond the tags';
   const tagState=el('p','Translate to verify tags.');tagState.className='lc-muted';
   const verify=button('Verify edited tags',async()=> {
     const names=tags.value.split(/[\n,]/).map(v=>v.trim()).filter(Boolean);
@@ -92,9 +94,9 @@ export function setup(ctx:SpindleFrontendContext) {
     provenance.replaceChildren();checks.forEach(c=>{const a=el('a',`${c.tag!.name} · ${c.tag!.source}`);a.href=c.tag!.url;a.target='_blank';a.rel='noopener noreferrer';const p=el('p');p.append(a);provenance.append(p);});
     tagState.textContent='Edited tags exist in the dictionary. Manual edits have not had AI meaning review; check them against your description.';notify(compatible.length<checks.length?'Edited tags verified; conflicting tags removed. Preserve their precise relationship in prose.':'Edited tags verified. Rebuild the prompt when ready.');update();
   });
-  const provenance=el('div');const issues=el('div');
-  const evidence=el('details');evidence.append(el('summary','Tag sources & uncertainty'),provenance,issues);
-  review.append(field('Booru tags — comma separated',tags,'Canonical underscores are shown here; the assembled Anima prompt uses spaces.'),tagState,verify,field('Natural-language detail',prose,'Copied source wording preserves subtle traits and ownership. Edit freely; no absent attributes are filled in.'),evidence);
+  const provenance=el('div');const issues=el('div');const sourceQuotes=el('div');
+  const evidence=el('details');evidence.append(el('summary','Tag sources & uncertainty'),provenance,issues,sourceQuotes);
+  review.append(field('Booru tags — comma separated',tags,'Canonical underscores are shown here; the assembled Anima prompt uses spaces.'),tagState,verify,field('Natural-language detail',prose,'Reviewed visual clauses preserve nuance without repeating fully covered tags. Original quotes are below. Edit freely; no absent attributes are filled in.'),evidence);
   const output=card('03 / Use');const prompt=el('textarea');prompt.rows=8;prompt.maxLength=24_000;
   const rebuild=button('Rebuild from tags + detail',()=> {
     if(tags.value.trim()&&!verified)throw new Error('Verify edited tags before rebuilding.');
@@ -114,7 +116,7 @@ export function setup(ctx:SpindleFrontendContext) {
     notify('Search complete. Popularity is not an Anima quality score.');
   });
   searchCard.append(field('Tag name or prefix',query,'Metadata only. No images or posts are fetched.'),search,found);
-  app.append(intro,settings,status,input,review,output,searchCard,el('p','LumiCast 0.1.1 · Manual translator · Draft stays in this tab until reload.'));
+  app.append(intro,settings,status,input,review,output,searchCard,el('p','LumiCast 0.1.2 · Manual translator · Draft stays in this tab until reload.'));
   const controls=[translate,save,refreshButton,verify,rebuild,copy,search];
   function update(){for(const c of controls)c.disabled=busy;rebuild.disabled=busy||(!verified&&!!tags.value.trim());copy.disabled=busy||!prompt.value.trim();cancel.hidden=!busy;connection.disabled=busy;gelUser.disabled=busy;gelKey.disabled=busy;clearKey.disabled=busy;tags.readOnly=busy;prose.readOnly=busy;prompt.readOnly=busy;source.readOnly=busy;}
   function notify(message:string,error=false){if(closed)return;status.textContent=message;status.dataset.error=String(error);}
