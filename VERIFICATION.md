@@ -104,3 +104,9 @@ Lumi Studio 1.8.1 (`fidgetycarrot/lumidraw-studio`, commit `1a74a99`) was read t
 
 v0.4.0 adds a `sheet` to each translation with those five fields, built from the verified tags by group plus short phrases the review call writes for what no tag covers. Typecheck, 63 tests (433 assertions) and the build passed. Nothing was pasted into or generated through Lumi Studio in this run, and Lumi Studio itself was not modified.
 
+## v0.4.1: gaps
+
+A sheet for one character carried a lip phrase with no colours, because the source said only "gradient lips"; an earlier character had no eye colour at all. Both leave the image model to guess, which defeats a saved identity. v0.4.1 adds an advisory `gaps` list: four fixed anchors checked in code (count, hair colour, hair length, eye colour) and up to four vague traits named by the review call. Gaps never alter tags, captions or the sheet; a test asserts the output is identical with and without them. The roadmap's rule that missing information is not uncertainty still holds for `issues`.
+
+The colour and length word lists are finite, so an unusual colour word stated only in prose could be reported as not stated. Typecheck, 64 tests (442 assertions) and the build passed, with controlled responses only.
+

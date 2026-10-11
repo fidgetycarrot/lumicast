@@ -27,7 +27,9 @@ export interface View { tags: TagRow[]; prose: string; prompt: string; notices: 
 /** The requested scope's view at the top level, plus every scope so the panel can switch without another run. */
 /** The result laid out as Lumi Studio's character sheet fields: comma-separated, spaces for underscores, no sentences. */
 export interface Sheet { countTag: string; subject: string; always: string; appearance: string; outfit: string }
-export interface Translation extends View { issues: Issue[]; model: string; views: Record<Scope, View>; sheet: Sheet }
+/** Something that leaves the character under-specified. Advisory only: a gap never changes tags, captions or the sheet. */
+export interface Gap { kind: 'missing' | 'vague'; what: string; note: string }
+export interface Translation extends View { issues: Issue[]; model: string; views: Record<Scope, View>; sheet: Sheet; gaps: Gap[] }
 export interface Settings { connectionId: string; gelUser: string; gelKey: string; notes: string }
 export interface PublicSettings { connectionId: string; gelUser: string; hasGelKey: boolean; notes: string }
 export interface Snapshot {

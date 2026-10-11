@@ -52,7 +52,7 @@ test('stated character type is quotable evidence, reaches the model, and is abse
   const withType=await run('He has silver hair.',{traits},{captions:{character:'A feminine-presenting young man with silver hair.'}},{stated:' femboy, android '});
   expect(withType.result.prompt).toBe('trap, silver hair\n\nA feminine-presenting young man with silver hair.');
   expect(JSON.parse(withType.inputs[0]).stated).toBe('femboy, android');expect(withType.result.notices.join(' ')).not.toContain('left out');
-  await expect(run('x',{traits},{},{stated:'y'.repeat(301)})).rejects.toThrow('Invalid character type');
+  await expect(run('x',{traits},{},{stated:'y'.repeat(301)})).rejects.toThrow('Invalid known facts');
   expect((await run('Silver hair.',{traits:[traits[1]]},{},{stated:'she is a D cup'})).result.tags.map(t=>t.name)).toEqual(['silver_hair','large_breasts']);
 });
 test('tags follow identity order however the model ordered its traits',async()=> {
@@ -232,4 +232,22 @@ test('sheet fields take the same tag edits as the tags box',()=> {
   const changes=[{kind:'remove',tag:'blue_eyes'},{kind:'weight',tag:'silver_hair',weight:1.5},{kind:'weight',tag:'trap',weight:1},{kind:'add',tag:'panel_lines'},{kind:'caption'}];
   expect(editList('silver hair, Blue Eyes, (trap:1.4), choppy silver-white hair',changes,true)).toBe('(silver hair:1.5), trap, choppy silver-white hair, panel lines');
   expect(editList('thighhighs',changes)).toBe('thighhighs');expect(editList('',changes)).toBe('');
+});
+test('gaps: missing anchors come from plain checks, vague traits from review, and neither changes the output',async()=> {
+  const narrated=cases.find(c=>c.name.includes('character only'))!;
+  expect((await run(narrated.source,{traits:narrated.traits},{})).result.gaps).toEqual([]);
+  const traits=[{id:'s',group:'subject',evidence:'She',tags:['1girl'],detail:'A woman'},{id:'h',group:'hair',evidence:'near-black hair',tags:['black_hair'],detail:'Near-black hair'},{id:'l',group:'face',evidence:'gradient lips',tags:[],detail:'Full gradient lips'},{id:'m',group:'moment',evidence:'dark eyes',tags:[],detail:'Dark, tired eyes'}];
+  const source='She has near-black hair, gradient lips and dark eyes.';
+  const plain=await run(source,{traits},{});
+  const flagged=await run(source,{traits},{vague:[{traitId:'l',what:'lips',why:'a gradient is named but no colours'},{traitId:'m',what:'eyes',why:'scene trait'},{traitId:'nope',what:'x',why:'y'},{traitId:'l',what:'lips',why:'again'}]});
+  expect(flagged.result.gaps).toEqual([
+    {kind:'missing',what:'hair length',note:'The image model will pick one, and not the same one each time.'},
+    {kind:'missing',what:'eye colour',note:'The image model will pick one, and not the same one each time.'},
+    {kind:'vague',what:'lips',note:'a gradient is named but no colours'}]);
+  expect(flagged.result.prompt).toBe(plain.result.prompt);expect(flagged.result.sheet).toEqual(plain.result.sheet);expect(flagged.result.issues).toEqual([]);
+  // A colour or length stated only in words counts, as does one supplied through Known facts.
+  const worded=await run('Lavender hair cropped at the chin. Amber eyes.',{traits:[{id:'h',group:'hair',evidence:'Lavender hair cropped at the chin.',tags:[],detail:'Lavender hair cropped at the chin'},{id:'e',group:'face',evidence:'Amber eyes.',tags:[],detail:'Amber eyes'}]},{});
+  expect(worded.result.gaps.map(g=>g.what)).toEqual(['man, woman or other']);
+  const bald=await run('A bald man with a scarred jaw.',{traits:[{id:'s',group:'subject',evidence:'A bald man',tags:['1boy','bald'],detail:'A bald man'}]},{});
+  expect(bald.result.gaps.map(g=>g.what)).toEqual(['eye colour']);
 });

@@ -33,7 +33,7 @@ function field(label:string,input:HTMLElement,hint?:string) {
   const wrapper=el('label');wrapper.className='lc-field';wrapper.append(el('span',label),input);
   if(hint)wrapper.append(el('small',hint));return wrapper;
 }
-const STYLES=`.lc-app{box-sizing:border-box;font:14px/1.55 system-ui,sans-serif;color:var(--lumiverse-text,#eee);padding:24px;max-width:860px;margin:auto}.lc-app *{box-sizing:border-box}.lc-app h1{font-size:32px;letter-spacing:-1px;margin:2px 0}.lc-app h2{font-size:18px;margin:0 0 12px}.lc-app p{margin:8px 0}.lc-kicker{color:#d4b7ff;font-size:11px;letter-spacing:2px;text-transform:uppercase}.lc-muted,.lc-app small{color:var(--lumiverse-text-muted,#b4adc1);font-size:12px}.lc-card{border:1px solid #81708e55;background:#83709c0a;border-radius:16px;padding:18px;margin-top:18px}.lc-field{display:flex;flex-direction:column;gap:7px;margin:12px 0}.lc-field>span{font-size:13px;font-weight:600}.lc-app textarea,.lc-app input,.lc-app select{width:100%;border:1px solid #9484a566;border-radius:9px;background:var(--lumiverse-bg,#211c29);color:inherit;padding:11px;font:inherit}.lc-app textarea{resize:vertical;min-height:95px;line-height:1.55}.lc-app button{border:1px solid #a18caf66;border-radius:9px;padding:9px 15px;background:#8b719025;color:inherit;font:inherit;cursor:pointer}.lc-app button.lc-primary{background:#d0adf3;color:#261733;border-color:#d0adf3;font-weight:650}.lc-app button:disabled{opacity:.45;cursor:default}.lc-app :focus-visible{outline:2px solid #d0adf3;outline-offset:3px}.lc-row{display:flex;flex-wrap:wrap;gap:9px;align-items:center}.lc-status{padding:12px 0;white-space:pre-wrap;min-height:45px}.lc-status[data-error=true]{color:#ffa7a7}.lc-app summary{cursor:pointer;font-weight:600}.lc-app a{color:#d4b7ff}.lc-proposal{display:flex;gap:9px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #81708e33}.lc-proposal input{width:auto;margin-top:4px}.lc-proposal small{display:block}.lc-provenance{overflow-wrap:anywhere;padding:9px 0;border-bottom:1px solid #81708e33}.lc-provenance blockquote{margin:4px 0 0;padding-left:12px;border-left:2px solid #8b7190;font-size:12px}.lc-app [hidden]{display:none!important}@media(max-width:450px){.lc-app{padding:14px}.lc-card{padding:13px}}`;
+const STYLES=`.lc-app{box-sizing:border-box;font:14px/1.55 system-ui,sans-serif;color:var(--lumiverse-text,#eee);padding:24px;max-width:860px;margin:auto}.lc-app *{box-sizing:border-box}.lc-app h1{font-size:32px;letter-spacing:-1px;margin:2px 0}.lc-app h2{font-size:18px;margin:0 0 12px}.lc-app p{margin:8px 0}.lc-kicker{color:#d4b7ff;font-size:11px;letter-spacing:2px;text-transform:uppercase}.lc-muted,.lc-app small{color:var(--lumiverse-text-muted,#b4adc1);font-size:12px}.lc-card{border:1px solid #81708e55;background:#83709c0a;border-radius:16px;padding:18px;margin-top:18px}.lc-field{display:flex;flex-direction:column;gap:7px;margin:12px 0}.lc-field>span{font-size:13px;font-weight:600}.lc-app textarea,.lc-app input,.lc-app select{width:100%;border:1px solid #9484a566;border-radius:9px;background:var(--lumiverse-bg,#211c29);color:inherit;padding:11px;font:inherit}.lc-app textarea{resize:vertical;min-height:95px;line-height:1.55}.lc-app button{border:1px solid #a18caf66;border-radius:9px;padding:9px 15px;background:#8b719025;color:inherit;font:inherit;cursor:pointer}.lc-app button.lc-primary{background:#d0adf3;color:#261733;border-color:#d0adf3;font-weight:650}.lc-app button:disabled{opacity:.45;cursor:default}.lc-app :focus-visible{outline:2px solid #d0adf3;outline-offset:3px}.lc-row{display:flex;flex-wrap:wrap;gap:9px;align-items:center}.lc-status{padding:12px 0;white-space:pre-wrap;min-height:45px}.lc-status[data-error=true]{color:#ffa7a7}.lc-app summary{cursor:pointer;font-weight:600}.lc-app a{color:#d4b7ff}.lc-gaps{border-left:3px solid #d0adf3;padding:6px 12px;margin:10px 0}.lc-gaps ul{margin:6px 0;padding-left:18px}.lc-proposal{display:flex;gap:9px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #81708e33}.lc-proposal input{width:auto;margin-top:4px}.lc-proposal small{display:block}.lc-provenance{overflow-wrap:anywhere;padding:9px 0;border-bottom:1px solid #81708e33}.lc-provenance blockquote{margin:4px 0 0;padding-left:12px;border-left:2px solid #8b7190;font-size:12px}.lc-app [hidden]{display:none!important}@media(max-width:450px){.lc-app{padding:14px}.lc-card{padding:13px}}`;
 
 export function setup(ctx:SpindleFrontendContext) {
   let closed=false,busy=false,verified=false,edited=false,result:Translation|null=null,revision=0;
@@ -60,7 +60,7 @@ export function setup(ctx:SpindleFrontendContext) {
   settings.append(field('Generative connection',connection,'Uses the model saved in Lumiverse. Add or change models in Connections, then refresh here.'),el('p','Choose a fast generative text model that follows JSON instructions. Jev, Decisions and embedding models are not translators.'),field('Gelbooru user ID (optional)',gelUser),field('Gelbooru API key (optional)',gelKey,'Stored in your extension storage on the Lumiverse server. Never returned to this panel. Sent only to Gelbooru over HTTPS.'),clearLabel,credentialNotice,field('Your Anima notes (optional)',notes,'What you have learned works, in your own words. Saved with your settings and read on every translation and refinement. A weight is only ever applied when a note gives the number.'),row(save,refreshButton));
   const input=card('01 / Describe');
   const source=el('textarea');source.rows=7;source.maxLength=12_000;source.placeholder='Paste the character’s appearance. Narrator voice and scene detail are fine; they are filtered out.';
-  const stated=el('input');stated.maxLength=300;stated.autocomplete='off';stated.placeholder='e.g. femboy, android, werewolf, trans woman';
+  const stated=el('input');stated.maxLength=300;stated.autocomplete='off';stated.placeholder='e.g. femboy, android, green eyes, rose-pink gradient lips';
   const scope=el('select');scope.append(option('Character only — body, hair and face','character'),option('Character and outfit','outfit'),option('Everything — outfit, pose, expression and scene','scene'));
   const translate=button('Translate',async()=> {
     if(!source.value.trim())throw new Error('Paste a character description first.');
@@ -70,7 +70,7 @@ export function setup(ctx:SpindleFrontendContext) {
     result=next;show();
   },true);
   const cancel=el('button','Cancel');cancel.type='button';cancel.hidden=true;cancel.addEventListener('click',()=>{void rpc.request('cancel').then(()=>notify('Cancellation requested.')).catch(e=>notify(e.message,true));});
-  input.append(field('Character description',source,'Only this pasted description is sent to your selected provider. No chat history is read.'),field('Character type (optional)',stated,'What the character is, in your own words. Treated as true even if the description never says it, and translated into the matching tags.'),field('Include',scope,'Character only gives a prompt you can reuse in any scene. One translation covers all three; switch any time without another run.'),row(translate,cancel));
+  input.append(field('Character description',source,'Only this pasted description is sent to your selected provider. No chat history is read.'),field('Known facts (optional)',stated,'Anything you know that the description leaves out or leaves vague: what the character is, an eye colour. Treated as true and translated into the matching tags.'),field('Include',scope,'Character only gives a prompt you can reuse in any scene. One translation covers all three; switch any time without another run.'),row(translate,cancel));
   const review=card('02 / Review');
   const tags=el('textarea');tags.rows=3;tags.maxLength=4000;tags.placeholder='Verified booru tags appear here';
   const prose=el('textarea');prose.rows=6;prose.maxLength=16_000;prose.placeholder='A short caption for what the tags cannot say';
@@ -100,6 +100,7 @@ export function setup(ctx:SpindleFrontendContext) {
   // Field names and order match Lumi Studio's character sheet so each can be pasted straight across.
   const sheetCard=card('03 / Lumi Studio character sheet');
   sheetCard.append(el('p','One field per box in Lumi Studio’s character editor. Comma-separated, no sentences, the same for every Include choice.'));
+  const gapsBox=el('div');gapsBox.className='lc-gaps';gapsBox.hidden=true;sheetCard.append(gapsBox);
   const sheetField=(label:string,key:'countTag'|'subject'|'always'|'appearance'|'outfit',hint:string,long=false)=> {
     const box=long?el('textarea'):el('input');if(long)(box as HTMLTextAreaElement).rows=3;box.dataset.sheet=key;
     box.addEventListener('input',()=>{edited=true;});
@@ -172,13 +173,19 @@ export function setup(ctx:SpindleFrontendContext) {
     notify('Search complete. Popularity is not an Anima quality score.');
   });
   searchCard.append(field('Tag name or prefix',query,'Metadata only. No images or posts are fetched.'),search,found);
-  app.append(intro,settings,status,input,review,sheetCard,output,refine,searchCard,el('p','LumiCast 0.4.0 · Manual translator · Draft stays in this tab until reload.'));
+  app.append(intro,settings,status,input,review,sheetCard,output,refine,searchCard,el('p','LumiCast 0.4.1 · Manual translator · Draft stays in this tab until reload.'));
   const controls=[translate,save,refreshButton,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
   // Every scope comes back from one translation, so changing Include only re-renders.
   function show(){
     if(!result)return;
     const view=result.views[scope.value as Scope];const replaced=edited;
     for(const key of Object.keys(sheet) as (keyof typeof sheet)[])sheet[key].box.value=result.sheet[key];
+    gapsBox.replaceChildren();gapsBox.hidden=!result.gaps.length;
+    if(result.gaps.length) {
+      gapsBox.append(el('strong','Worth pinning down'));
+      const list=el('ul');result.gaps.forEach(g=>list.append(el('li',`${g.kind==='missing'?'Not stated':'Vague'}: ${g.what}. ${g.note}`)));
+      gapsBox.append(list,el('small','LumiCast does not fill these in. Add what you know under Known facts and translate again, or edit the fields below.'));
+    }
     tags.value=view.tags.map(t=>formatWeighted(t)).join(', ');prose.value=view.prose;prompt.value=view.prompt;verified=true;edited=false;
     provenance.replaceChildren();
     view.tags.forEach(t=> {
@@ -200,7 +207,7 @@ export function setup(ctx:SpindleFrontendContext) {
   function button(label:string,action:()=>void|Promise<void>,primary=false){const b=el('button',label);b.type='button';if(primary)b.className='lc-primary';b.addEventListener('click',()=>{if(busy||closed)return;busy=true;update();notify('Working…');void Promise.resolve().then(action).catch(e=>notify(e instanceof Error?e.message:'The operation failed.',true)).finally(()=>{busy=false;if(!closed)update();});});return b;}
   async function refresh(){const snapshot=await rpc.request<Snapshot>('snapshot');if(closed)return;const selected=connection.value||snapshot.settings.connectionId;connection.replaceChildren();connection.append(option('Select a generative connection',''));for(const c of snapshot.connections){const o=option(`${c.name} · ${c.provider} / ${c.model}${c.supported?'':' (not generative)'}`,c.id);o.disabled=!c.supported;connection.append(o);}connection.value=selected;gelUser.value=snapshot.settings.gelUser;notes.value=snapshot.settings.notes;credentialNotice.textContent=snapshot.settings.hasGelKey?'Gelbooru key saved.':'Danbooru works without credentials. Gelbooru requires its account API key.';if(!connection.value)settings.open=true;}
   source.addEventListener('input',()=>{revision++;if(result)notify('Description changed. Translate again to refresh the result.');});
-  stated.addEventListener('input',()=>{revision++;if(result)notify('Character type changed. Translate again to refresh the result.');});
+  stated.addEventListener('input',()=>{revision++;if(result)notify('Known facts changed. Translate again to refresh the result.');});
   scope.addEventListener('change',()=>{if(!busy)show();});
   tags.addEventListener('input',()=>{verified=false;edited=true;tagState.textContent='Tags edited — verify existence before rebuilding. Clear all tags to use prose only.';update();});
   prose.addEventListener('input',()=>{edited=true;notify('Detail changed. Rebuild to apply it to the prompt.');});

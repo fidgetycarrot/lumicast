@@ -1,10 +1,12 @@
-# LumiCast 0.4.0
+# LumiCast 0.4.1
+
+**v0.4.1 lists what is still open.** Above the sheet, "Worth pinning down" names anything that would make the image model guess: a count, hair colour, hair length or eye colour the description never states, and traits it states too vaguely to draw. It is advice only. The Character type field is now **Known facts** and takes any fact you want to add, such as an eye colour.
 
 **v0.4.0 outputs Lumi Studio's character sheet.** Every translation now fills five fields named and formatted the way Lumi Studio's character editor takes them (Count tag, Stable subject phrase, Always include, Permanent appearance tags, Default outfit tags), each with its own copy button. They are comma-separated lists with no sentences, because Lumi Studio splits those fields on commas and writes its own sentence for each character. The sentence-style prompt remains, as the standalone prompt for use without Lumi Studio.
 
 **v0.3.0 adds a feedback loop.** Generate an image, tell LumiCast in words what came out wrong, and it proposes changes you can accept one by one. It also adds saved notes for what you have learned works, emphasis weights in the tags box, and copy buttons for the tags and the detail.
 
-**v0.2.3 adds Character type.** An optional field for what the character is, in your own words (`femboy`, `android`, `werewolf`, `trans woman`). It is treated as true even when the description never says it, takes precedence where the two disagree, and is translated into the matching tag where Danbooru has one and into the caption either way. It is not saved between sessions.
+**v0.2.3 adds Character type (now Known facts).** An optional field for what the character is, in your own words (`femboy`, `android`, `werewolf`, `trans woman`). It is treated as true even when the description never says it, takes precedence where the two disagree, and is translated into the matching tag where Danbooru has one and into the caption either way. It is not saved between sessions.
 
 **v0.2.2 looks for type tags.** Danbooru tags that name a kind of character (`android`, `elf`, `trap`, `androgynous`, `tomboy`) steer an image more than any single body tag, and are often stated only as a combination of facts. Extraction now proposes them when the text states those facts, and no longer tags clothing the text says was removed.
 
@@ -23,7 +25,7 @@ Requires **Lumiverse 1.2.5 or later**.
 1. Open **Extensions** in Lumiverse and choose **Install from URL** in the add menu.
 2. Enter `https://github.com/fidgetycarrot/lumicast`.
 3. Grant `generation` and `cors_proxy`, then enable LumiCast.
-4. Open **LumiCast** in the sidebar or command palette. Choose a saved generative connection under **Connection & tag services**, save, paste an appearance, optionally fill in **Character type**, choose what to **Include**, and select **Translate**.
+4. Open **LumiCast** in the sidebar or command palette. Choose a saved generative connection under **Connection & tag services**, save, paste an appearance, optionally fill in **Known facts**, choose what to **Include**, and select **Translate**.
 
 Prebuilt `dist/` files are committed for Lumiverse installation. If the tab does not appear after installation, reload Lumiverse or toggle the extension once.
 
@@ -31,7 +33,7 @@ Prebuilt `dist/` files are committed for Lumiverse installation. If the tab does
 
 Requires **Lumiverse 1.2.5 or later**. Compatibility was checked against the current 1.2.5 source and SDK 0.6.40; older versions have not been verified.
 
-1. Unzip `lumicast-0.4.0-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
+1. Unzip `lumicast-0.4.1-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
 2. On the machine running your Lumiverse **server**, copy that folder into `<DATA_DIR>/extensions/`. The server's default DATA_DIR is `./data`, relative to where Lumiverse runs. For Docker, copy into the volume mounted as the server's data directory. Do not copy it into another extension's folder.
 3. As the Lumiverse owner/admin, open **Extensions**, open its add menu, and choose **Import Local**. Enable LumiCast and grant `generation` and `cors_proxy`. If the tab does not appear, reload Lumiverse.
 4. Open **LumiCast** in the sidebar drawer or find it in the command palette. Expand **Connection & tag services**, choose a saved generative connection, and save.
@@ -83,6 +85,15 @@ Card **03** lays the result out for Lumi Studio 1.8.1's character editor. It is 
 Tags are written with spaces and keep any weight. Phrases come from the review call, which is told to skip anything a kept tag already covers; they are lower-cased, split at any comma, stripped of a leading pronoun, and dropped if they repeat a tag or cite a number the description never gave. Pose, expression, setting and `solo` never appear here. Refine applies its tag changes to these fields as well; a newly added tag lands in Permanent appearance tags.
 
 This is a copy-and-paste handoff. LumiCast does not write to Lumi Studio, and the field mapping was read from Lumi Studio 1.8.1's code, not confirmed by generating through it.
+
+### Worth pinning down
+
+A reproducible character needs its anchors fixed, and a faithful translator will not fix them for you. After each translation LumiCast lists:
+
+- **Not stated:** man, woman or other; hair colour; hair length; eye colour. These four are checked by plain code against the verified tags and the extracted wording, with no model involved, so the list cannot grow into a general "uncertain" bucket. A colour or length given only in words counts as stated. A bald character is not asked about hair.
+- **Vague:** up to four traits the review call judges an artist could not draw without guessing, such as a gradient with no colours named.
+
+Nothing on this list changes the tags, the captions or the sheet, and nothing is filled in. To close a gap, add the fact under **Known facts** and translate again, or edit the sheet field yourself. This is separate from **issues**, which still report only contradictions and either/or statements in the text.
 
 ### Refining from a generated image
 

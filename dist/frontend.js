@@ -139,7 +139,7 @@ function field(label, input, hint) {
     wrapper.append(el("small", hint));
   return wrapper;
 }
-var STYLES = `.lc-app{box-sizing:border-box;font:14px/1.55 system-ui,sans-serif;color:var(--lumiverse-text,#eee);padding:24px;max-width:860px;margin:auto}.lc-app *{box-sizing:border-box}.lc-app h1{font-size:32px;letter-spacing:-1px;margin:2px 0}.lc-app h2{font-size:18px;margin:0 0 12px}.lc-app p{margin:8px 0}.lc-kicker{color:#d4b7ff;font-size:11px;letter-spacing:2px;text-transform:uppercase}.lc-muted,.lc-app small{color:var(--lumiverse-text-muted,#b4adc1);font-size:12px}.lc-card{border:1px solid #81708e55;background:#83709c0a;border-radius:16px;padding:18px;margin-top:18px}.lc-field{display:flex;flex-direction:column;gap:7px;margin:12px 0}.lc-field>span{font-size:13px;font-weight:600}.lc-app textarea,.lc-app input,.lc-app select{width:100%;border:1px solid #9484a566;border-radius:9px;background:var(--lumiverse-bg,#211c29);color:inherit;padding:11px;font:inherit}.lc-app textarea{resize:vertical;min-height:95px;line-height:1.55}.lc-app button{border:1px solid #a18caf66;border-radius:9px;padding:9px 15px;background:#8b719025;color:inherit;font:inherit;cursor:pointer}.lc-app button.lc-primary{background:#d0adf3;color:#261733;border-color:#d0adf3;font-weight:650}.lc-app button:disabled{opacity:.45;cursor:default}.lc-app :focus-visible{outline:2px solid #d0adf3;outline-offset:3px}.lc-row{display:flex;flex-wrap:wrap;gap:9px;align-items:center}.lc-status{padding:12px 0;white-space:pre-wrap;min-height:45px}.lc-status[data-error=true]{color:#ffa7a7}.lc-app summary{cursor:pointer;font-weight:600}.lc-app a{color:#d4b7ff}.lc-proposal{display:flex;gap:9px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #81708e33}.lc-proposal input{width:auto;margin-top:4px}.lc-proposal small{display:block}.lc-provenance{overflow-wrap:anywhere;padding:9px 0;border-bottom:1px solid #81708e33}.lc-provenance blockquote{margin:4px 0 0;padding-left:12px;border-left:2px solid #8b7190;font-size:12px}.lc-app [hidden]{display:none!important}@media(max-width:450px){.lc-app{padding:14px}.lc-card{padding:13px}}`;
+var STYLES = `.lc-app{box-sizing:border-box;font:14px/1.55 system-ui,sans-serif;color:var(--lumiverse-text,#eee);padding:24px;max-width:860px;margin:auto}.lc-app *{box-sizing:border-box}.lc-app h1{font-size:32px;letter-spacing:-1px;margin:2px 0}.lc-app h2{font-size:18px;margin:0 0 12px}.lc-app p{margin:8px 0}.lc-kicker{color:#d4b7ff;font-size:11px;letter-spacing:2px;text-transform:uppercase}.lc-muted,.lc-app small{color:var(--lumiverse-text-muted,#b4adc1);font-size:12px}.lc-card{border:1px solid #81708e55;background:#83709c0a;border-radius:16px;padding:18px;margin-top:18px}.lc-field{display:flex;flex-direction:column;gap:7px;margin:12px 0}.lc-field>span{font-size:13px;font-weight:600}.lc-app textarea,.lc-app input,.lc-app select{width:100%;border:1px solid #9484a566;border-radius:9px;background:var(--lumiverse-bg,#211c29);color:inherit;padding:11px;font:inherit}.lc-app textarea{resize:vertical;min-height:95px;line-height:1.55}.lc-app button{border:1px solid #a18caf66;border-radius:9px;padding:9px 15px;background:#8b719025;color:inherit;font:inherit;cursor:pointer}.lc-app button.lc-primary{background:#d0adf3;color:#261733;border-color:#d0adf3;font-weight:650}.lc-app button:disabled{opacity:.45;cursor:default}.lc-app :focus-visible{outline:2px solid #d0adf3;outline-offset:3px}.lc-row{display:flex;flex-wrap:wrap;gap:9px;align-items:center}.lc-status{padding:12px 0;white-space:pre-wrap;min-height:45px}.lc-status[data-error=true]{color:#ffa7a7}.lc-app summary{cursor:pointer;font-weight:600}.lc-app a{color:#d4b7ff}.lc-gaps{border-left:3px solid #d0adf3;padding:6px 12px;margin:10px 0}.lc-gaps ul{margin:6px 0;padding-left:18px}.lc-proposal{display:flex;gap:9px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #81708e33}.lc-proposal input{width:auto;margin-top:4px}.lc-proposal small{display:block}.lc-provenance{overflow-wrap:anywhere;padding:9px 0;border-bottom:1px solid #81708e33}.lc-provenance blockquote{margin:4px 0 0;padding-left:12px;border-left:2px solid #8b7190;font-size:12px}.lc-app [hidden]{display:none!important}@media(max-width:450px){.lc-app{padding:14px}.lc-card{padding:13px}}`;
 function setup(ctx) {
   let closed = false, busy = false, verified = false, edited = false, result = null, revision = 0;
   const rpc = createRpc(ctx);
@@ -196,7 +196,7 @@ function setup(ctx) {
   const stated = el("input");
   stated.maxLength = 300;
   stated.autocomplete = "off";
-  stated.placeholder = "e.g. femboy, android, werewolf, trans woman";
+  stated.placeholder = "e.g. femboy, android, green eyes, rose-pink gradient lips";
   const scope = el("select");
   scope.append(option("Character only — body, hair and face", "character"), option("Character and outfit", "outfit"), option("Everything — outfit, pose, expression and scene", "scene"));
   const translate = button("Translate", async () => {
@@ -217,7 +217,7 @@ function setup(ctx) {
   cancel.addEventListener("click", () => {
     rpc.request("cancel").then(() => notify("Cancellation requested.")).catch((e) => notify(e.message, true));
   });
-  input.append(field("Character description", source, "Only this pasted description is sent to your selected provider. No chat history is read."), field("Character type (optional)", stated, "What the character is, in your own words. Treated as true even if the description never says it, and translated into the matching tags."), field("Include", scope, "Character only gives a prompt you can reuse in any scene. One translation covers all three; switch any time without another run."), row(translate, cancel));
+  input.append(field("Character description", source, "Only this pasted description is sent to your selected provider. No chat history is read."), field("Known facts (optional)", stated, "Anything you know that the description leaves out or leaves vague: what the character is, an eye colour. Treated as true and translated into the matching tags."), field("Include", scope, "Character only gives a prompt you can reuse in any scene. One translation covers all three; switch any time without another run."), row(translate, cancel));
   const review = card("02 / Review");
   const tags = el("textarea");
   tags.rows = 3;
@@ -273,6 +273,10 @@ function setup(ctx) {
   review.append(field("Booru tags — comma separated", tags, "Canonical underscores are shown here; the assembled Anima prompt uses spaces. Add emphasis as (tag:1.4)."), tagState, row(verify, copyTags), field("Natural-language detail", prose, "A short caption written from the extracted facts. Source passages are below. Edit freely; nothing the text leaves out is filled in."), copyProse, evidence);
   const sheetCard = card("03 / Lumi Studio character sheet");
   sheetCard.append(el("p", "One field per box in Lumi Studio’s character editor. Comma-separated, no sentences, the same for every Include choice."));
+  const gapsBox = el("div");
+  gapsBox.className = "lc-gaps";
+  gapsBox.hidden = true;
+  sheetCard.append(gapsBox);
   const sheetField = (label, key, hint, long = false) => {
     const box = long ? el("textarea") : el("input");
     if (long)
@@ -407,7 +411,7 @@ function setup(ctx) {
     notify("Search complete. Popularity is not an Anima quality score.");
   });
   searchCard.append(field("Tag name or prefix", query, "Metadata only. No images or posts are fetched."), search, found);
-  app.append(intro, settings, status, input, review, sheetCard, output, refine, searchCard, el("p", "LumiCast 0.4.0 · Manual translator · Draft stays in this tab until reload."));
+  app.append(intro, settings, status, input, review, sheetCard, output, refine, searchCard, el("p", "LumiCast 0.4.1 · Manual translator · Draft stays in this tab until reload."));
   const controls = [translate, save, refreshButton, verify, rebuild, copy, copyTags, copyProse, suggest, apply, search, ...Object.values(sheet).map((f) => f.copyField)];
   function show() {
     if (!result)
@@ -416,6 +420,14 @@ function setup(ctx) {
     const replaced = edited;
     for (const key of Object.keys(sheet))
       sheet[key].box.value = result.sheet[key];
+    gapsBox.replaceChildren();
+    gapsBox.hidden = !result.gaps.length;
+    if (result.gaps.length) {
+      gapsBox.append(el("strong", "Worth pinning down"));
+      const list = el("ul");
+      result.gaps.forEach((g) => list.append(el("li", `${g.kind === "missing" ? "Not stated" : "Vague"}: ${g.what}. ${g.note}`)));
+      gapsBox.append(list, el("small", "LumiCast does not fill these in. Add what you know under Known facts and translate again, or edit the fields below."));
+    }
     tags.value = view.tags.map((t) => formatWeighted(t)).join(", ");
     prose.value = view.prose;
     prompt.value = view.prompt;
@@ -528,7 +540,7 @@ function setup(ctx) {
   stated.addEventListener("input", () => {
     revision++;
     if (result)
-      notify("Character type changed. Translate again to refresh the result.");
+      notify("Known facts changed. Translate again to refresh the result.");
   });
   scope.addEventListener("change", () => {
     if (!busy)
