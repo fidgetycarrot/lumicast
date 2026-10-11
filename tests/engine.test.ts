@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test';
 import { Translator, parseExtraction, removeConflicts } from '../src/engine';
-import { assemble, cupSize, inScope, isGenerative, type TagDictionary, type TagRow, type TranslateOptions } from '../src/contracts';
+import { assemble, cupSize, formatWeighted, inScope, isGenerative, parseWeighted, type TagDictionary, type TagRow, type TranslateOptions } from '../src/contracts';
 import { cases, narratedFiller } from './fixtures';
 const dictionary:TagDictionary={resolve:async name=>({name,source:'Danbooru',count:10,wiki:`Definition of ${name}`,url:'https://danbooru.donmai.us/wiki_pages/'+name}),search:async()=>[]};
 const signal=()=>new AbortController().signal;
@@ -164,4 +164,50 @@ test('a malformed or invented uncertainty note no longer costs the whole result'
 });
 test('non-generative models blocked without guessed model IDs',()=> {
   expect(isGenerative('typesafe/jev-1.13')).toBe(false);expect(isGenerative('openai/luna-decisions')).toBe(false);expect(isGenerative('text-embedding')).toBe(false);expect(isGenerative('provider/generative-text')).toBe(true);
+});
+test('weights parse, survive assembly, and reject nonsense',()=> {
+  expect(parseWeighted('(trap:1.4)')).toEqual({name:'trap',weight:1.4});expect(parseWeighted('( Red Hair : 2 )')).toEqual({name:'red_hair',weight:2});
+  expect(parseWeighted('(trap:1)')).toEqual({name:'trap'});expect(parseWeighted('trap_(object)')).toEqual({name:'trap_(object)'});
+  expect(()=>parseWeighted('(trap:9)')).toThrow('between 0.1 and 3');expect(()=>parseWeighted('(trap:0)')).toThrow();
+  expect(formatWeighted({name:'red_hair',weight:1.4})).toBe('(red_hair:1.4)');
+  expect(assemble(['(red_hair:1.4)','red hair','score_7',{name:'blue_eyes',weight:2}],'A face.')).toBe('(red hair:1.4), score_7, (blue eyes:2)\n\nA face.');
+});
+test('a weight reaches the prompt only when the user\'s notes give that number',async()=> {
+  const extraction={traits:[{id:'1',group:'hair',evidence:'red hair',tags:['(red_hair:1.4)','(short_hair:2)'],detail:'Red hair'}]};
+  expect((await run('red hair',extraction,{})).result.prompt).toBe('red hair, short hair\n\nRed hair.');
+  const noted=await run('red hair',extraction,{},{notes:'Weight red_hair at 1.4 for redheads.'});
+  expect(noted.result.prompt).toBe('(red hair:1.4), short hair\n\nRed hair.');expect(noted.result.tags[0].weight).toBe(1.4);
+  expect(JSON.parse(noted.inputs[0])).toEqual({notes:'Weight red_hair at 1.4 for redheads.',description:'red hair'});
+  // A note is quotable evidence, so a tag the note asks for is grounded.
+  const fromNote=await run('An android.',{traits:[{id:'1',group:'body',evidence:'add panel seams',tags:['panel_lines'],detail:'Visible panel seams'}]},{},{notes:'Androids: add panel seams.'});
+  expect(fromNote.result.tags.map(t=>t.name)).toEqual(['panel_lines']);
+});
+const refineWith=(response:unknown,input:Partial<Parameters<Translator['refine']>[0]>={},dict=dictionary)=> {
+  const inputs:string[]=[];
+  return new Translator(async(_s,i)=>{inputs.push(i);return typeof response==='string'?response:JSON.stringify(response);},dict)
+    .refine({tags:['1boy','(trap:1.4)','blue_eyes'],caption:'A slender young man.',feedback:'Reads too masculine and the eyes should be purple.',...input},signal(),'model').then(result=>({result,inputs}));
+};
+test('refine proposes only grounded changes: known tags to remove or weight, verified tags to add',async()=> {
+  const dict={...dictionary,resolve:async(name:string)=>name==='very_feminine_boy'?null:{...(await dictionary.resolve(name==='violet_eyes'?'purple_eyes':name,signal()))!,wiki:'Eyes that are   coloured purple.'}};
+  const {result,inputs}=await refineWith({reply:'The type tag is being outweighed.',
+    remove:[{tag:'blue_eyes',why:'pulls the wrong colour'},{tag:'green_eyes',why:'not in the prompt'}],
+    weight:[{tag:'trap',weight:1.8,why:'still ignored'},{tag:'1boy',weight:44,why:'bad number'},{tag:'not_here',weight:1.5}],
+    add:[{tag:'violet_eyes',weight:1.3,why:'asked colour'},{tag:'purple_eyes',why:'duplicate after alias'},{tag:'very_feminine_boy',why:'guess'},{tag:'1boy',why:'already there'},{tag:'androgynous',weight:null,why:'softens the read'}],
+    caption:'A slender, feminine young man with purple_eyes.'},{description:'desc',stated:'femboy',notes:'my notes'},dict);
+  expect(JSON.parse(inputs[0])).toEqual({tags:['1boy','(trap:1.4)','blue_eyes'],caption:'A slender young man.',feedback:'Reads too masculine and the eyes should be purple.',description:'desc',stated:'femboy',notes:'my notes'});
+  expect(result.reply).toBe('The type tag is being outweighed.');
+  expect(result.proposals.map(p=>[p.kind,p.tag,p.weight])).toEqual([['remove','blue_eyes',undefined],['weight','trap',1.8],['add','purple_eyes',1.3],['add','androgynous',undefined],['caption',undefined,undefined]]);
+  expect(result.proposals[2].definition).toBe('Eyes that are coloured purple.');expect(result.proposals[4].caption).toBe('A slender, feminine young man with purple eyes.');
+  expect(result.notices.join(' ')).toContain('“very_feminine_boy” is not a live Danbooru tag');
+});
+test('refine handles vague feedback, empty input and bad output without inventing changes',async()=> {
+  const vague=await refineWith({reply:'Which part looked wrong: the face, the body or the clothing?',remove:[],add:[],weight:[],caption:null});
+  expect(vague.result.proposals).toEqual([]);expect(vague.result.reply).toContain('Which part');
+  expect((await refineWith({})).result.reply).toContain('no changes');
+  expect((await refineWith({caption:'A slender young man.'})).result.proposals).toEqual([]);
+  await expect(refineWith({}, {feedback:'  '})).rejects.toThrow('say what the image got wrong');
+  await expect(refineWith('not json')).rejects.toThrow('valid translator JSON');
+  await expect(refineWith({}, {tags:['(trap:9)']})).rejects.toThrow('between 0.1 and 3');
+  const offline=await refineWith({add:[{tag:'purple_eyes',why:'x'}]},{},{...dictionary,resolve:async()=>{throw new Error('offline');}});
+  expect(offline.result.proposals).toEqual([]);expect(offline.result.notices.join(' ')).toContain('tag service was unavailable');
 });

@@ -1,4 +1,6 @@
-# LumiCast 0.2.4
+# LumiCast 0.3.0
+
+**v0.3.0 adds a feedback loop.** Generate an image, tell LumiCast in words what came out wrong, and it proposes changes you can accept one by one. It also adds saved notes for what you have learned works, emphasis weights in the tags box, and copy buttons for the tags and the detail.
 
 **v0.2.3 adds Character type.** An optional field for what the character is, in your own words (`femboy`, `android`, `werewolf`, `trans woman`). It is treated as true even when the description never says it, takes precedence where the two disagree, and is translated into the matching tag where Danbooru has one and into the caption either way. It is not saved between sessions.
 
@@ -27,7 +29,7 @@ Prebuilt `dist/` files are committed for Lumiverse installation. If the tab does
 
 Requires **Lumiverse 1.2.5 or later**. Compatibility was checked against the current 1.2.5 source and SDK 0.6.40; older versions have not been verified.
 
-1. Unzip `lumicast-0.2.4-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
+1. Unzip `lumicast-0.3.0-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
 2. On the machine running your Lumiverse **server**, copy that folder into `<DATA_DIR>/extensions/`. The server's default DATA_DIR is `./data`, relative to where Lumiverse runs. For Docker, copy into the volume mounted as the server's data directory. Do not copy it into another extension's folder.
 3. As the Lumiverse owner/admin, open **Extensions**, open its add menu, and choose **Import Local**. Enable LumiCast and grant `generation` and `cors_proxy`. If the tab does not appear, reload Lumiverse.
 4. Open **LumiCast** in the sidebar drawer or find it in the command palette. Expand **Connection & tag services**, choose a saved generative connection, and save.
@@ -43,7 +45,7 @@ LumiCast uses Lumiverse's `connections.list/get` and `generate.raw`. It does not
 
 Create a dedicated translator connection in Lumiverse using OpenRouter, an OpenAI-compatible endpoint, or any supported generative text provider. Choose a fast text model that reliably follows JSON instructions; run the examples in `SMOKE-TESTS.md` before trusting a cheaper model. Switch to a stronger generative model if the result is thin or JSON validation fails. The selector shows actual saved provider/model IDs, rather than a stale hardcoded catalog or prices. Refresh it after changing Connections.
 
-Jev, Decisions, embedding, reranking and moderation models are blocked by recognizable model names. This is a practical guard, not exhaustive capability discovery; a custom-named classifier will still fail the required text/JSON checks. No speculative Luna or Jev endpoint is used. Reasoning settings inherit your saved connection/host settings. Each translation makes **two generation calls**, with a 6,000 output-token limit per call. There are no automatic paid retries.
+Jev, Decisions, embedding, reranking and moderation models are blocked by recognizable model names. This is a practical guard, not exhaustive capability discovery; a custom-named classifier will still fail the required text/JSON checks. No speculative Luna or Jev endpoint is used. Reasoning settings inherit your saved connection/host settings. Each translation makes **two generation calls** and each refinement makes **one**, with a 6,000 output-token limit per call. There are no automatic paid retries.
 
 ## How a translation works
 
@@ -63,6 +65,20 @@ Each translation makes **two generation calls** and a series of tag lookups, and
 4. **Review and caption.** The second call sees the traits and the verified tags with the start of each wiki definition. It can remove tags (wrong meaning, exaggeration, metaphor) but cannot add any, and it writes the caption in three pieces: the character, the outfit, and the scene. The panel joins the pieces the chosen **Include** calls for. The character piece is instructed to mention no clothing, pose or setting; that is an instruction to the model, not a guarantee, so read it. If the answer is unusable, the verified tags are kept unreviewed and the caption is assembled from the first-pass clauses, with a notice. A piece that is missing, or cites a number the description never gave, is replaced the same way on its own.
 5. **Guards.** Two hair colours, hair lengths, eye colours, subject counts or breast sizes are removed together. A trait named in a genuine contradiction or ambiguity loses its tags and stays in the caption. A malformed uncertainty note is ignored, withholding tags only for a trait it can be traced to; a note about a missing attribute is discarded.
 6. **Assembly.** Tags are ordered subject, body, hair, face, outfit, moment. Canonical names use underscores in the editor; the assembled prompt uses lowercase tags with spaces, preserving `score_*` spelling if manually supplied. Tags and caption are separated by a blank line. No quality, safety, artist or lighting tags are added; add the prefix your Anima variant wants in the editable final prompt.
+
+### Refining from a generated image
+
+LumiCast never sees an image. Under **04 / Refine**, say what the image got wrong ("reads too masculine", "eyes came out blue", "no visible seams") and choose **Suggest changes**. One generation call returns a short explanation and a list of proposals: tags to remove, tags to weight, tags to add, and a reworded detail. Tags to remove or weight must already be in your tags box. Tags to add are looked up on Danbooru first; ones that do not exist are dropped and named in a notice, and each survivor is shown with the start of its wiki definition. Nothing changes until you tick what you want and choose **Apply selected**, which updates the tags and detail and rebuilds the prompt if the tags were verified.
+
+The model is given Anima's published prompting guidance, the current tags and detail, your feedback, the description and Character type from the panel, and your notes. Its suggestions are reasoning from your words, not from the picture, so judge them against what you saw.
+
+### Notes
+
+**Your Anima notes**, under Connection & tag services, holds up to 2,000 characters of your own findings: which tags to prefer or add for a kind of character, or a weight that works. Notes are saved with your settings and read on every translation and refinement. A note can cause a tag to be added that the description does not mention; that tag cites the note as its source.
+
+### Weights
+
+Write emphasis in the tags box as `(tag:1.4)`, from 0.1 to 3. **Verify edited tags** checks the bare tag and keeps the weight, and the assembled prompt writes it as `(tag name:1.4)`. During translation a weight is applied only when your notes give that number; LumiCast does not choose weights there. During refinement it may propose one for a trait you said the image ignored, for you to accept or decline. The model card notes that Anima needs higher weights than SDXL.
 
 ### Cup sizes
 
@@ -97,7 +113,7 @@ When both services verify an equivalent spelling (including an active Danbooru a
 - Changing tags marks them unverified. **Verify edited tags** resolves aliases, removes duplicates and incompatible global tags. It checks existence only: manually added tags have not received AI meaning review. Review them against your description yourself.
 - Keep nuance and multi-character ownership in the caption. Generic global tags can apply to the wrong character, so conflicting colors are removed together.
 - **Rebuild** explicitly replaces the final prompt with the edited tags and detail. **Copy** copies exactly the final field, including manual edits. If clipboard access is unavailable, the field is selected for your usual Copy shortcut.
-- Drafts stay in the open tab and are lost on reload. Pasted descriptions, AI outputs and prompts are not persisted by LumiCast. Provider-side handling follows your chosen provider's policy. Settings and optional Gelbooru credentials are persisted per user.
+- Drafts stay in the open tab and are lost on reload. Pasted descriptions, feedback, AI outputs and prompts are not persisted by LumiCast. Your notes are persisted with your settings in per-user extension storage, unencrypted, and are sent to your selected provider with each translation and refinement. Provider-side handling follows your chosen provider's policy. Settings and optional Gelbooru credentials are persisted per user.
 - Public metadata caches are memory-only, bounded at 512 responses: positive entries expire after seven days; empty responses after one hour. Failures are not cached as missing tags; HTTP failures briefly pause requests to that host. Requests are serialized with 450 ms spacing, two per live tag, so a first translation with many new tags can spend most of a minute on lookups; repeated tags come from the cache.
 - A translation has a four-minute limit and supports cancellation. Provider generation is aborted through Spindle. The CORS API has no cancellation signal; a tag lookup wait is capped at 12 seconds and the host applies its own network limits. Cancelling does not retroactively undo provider billing.
 - Frontend replies are scoped to the authenticated user and originating frontend session. Operator installations pass authenticated `userId` to connection and generation calls. Concurrent operations are limited to one per user.
@@ -121,7 +137,7 @@ bun run smoke:live
 ## Architecture and verification
 
 - `contracts.ts`: provider-neutral inputs, output DTOs, trait groups and scope, the cup-size table, dictionary interface and Anima assembly.
-- `engine.ts`: the two prompts, source grounding, scope filtering, cup conversion, review handling and conflict guards.
+- `engine.ts`: the translation and refinement prompts, source grounding, scope filtering, cup conversion, review handling and conflict guards.
 - `uncertainty.ts`: bounded annotation normalization, evidence validation and conservative recovery.
 - `dictionary.ts`: allowlisted booru metadata transport, alias resolution, caching and credential isolation.
 - `backend.ts`: Spindle adapter, user/session routing, settings, permission checks and cancellation.

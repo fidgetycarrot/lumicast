@@ -90,3 +90,11 @@ Typecheck, 56 tests and the build passed with controlled responses. How a live m
 
 A live run in Lumiverse showed the tag source line `trap · Danbooru · alias: otoko_no_ko`: the model proposed `otoko_no_ko`, and Danbooru's alias table resolved it to `trap`. Danbooru's live tag is therefore `trap`, the reverse of what the v0.2.2 notes and prompts assumed. The alias handling produced the right tag regardless. v0.2.4 names `trap` in the prompts, the README and the fixtures, and the provider smoke fixture now requires `trap`, which a live lookup can return, where it previously required a name that only ever appears as an alias. Typecheck, 56 tests and the build passed.
 
+## v0.3.0: refinement, notes, weights, copy buttons
+
+Adds `Translator.refine` (one generation call; removals and weights limited to current tags; additions verified against the dictionary; nothing applied without the user's selection), a `notes` setting sent to extraction and refinement and grounded as quotable evidence, weighted tags `(tag:1.4)` through parsing, verification and assembly, and copy buttons for the tags and the detail. During translation a model-supplied weight is kept only when that number appears in the user's notes.
+
+The Anima guidance in the refinement prompt paraphrases the model card read on October 11, 2026 (training on tags and captions, Gelbooru preference, tag dropout, weights needing higher values than SDXL). The repair heuristics in that prompt (look for a competing tag, then weight, then restate in the caption) are the author's reasoning and have not been measured against Anima output.
+
+Strict typecheck, 61 tests (422 assertions) and the production build passed, including a panel test from translation through suggestion, selection and rebuild. All use controlled responses: no refinement was run against a live provider, and no image was generated.
+

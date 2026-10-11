@@ -11,9 +11,27 @@ function tagName(v) {
   return name;
 }
 var BREAST_SIZE = /^(?:flat_chest|(?:small|medium|large|huge|gigantic)_breasts)$/;
-function assemble(names, prose) {
-  const tags = [...new Set(names.map(tagName))].map((n) => /^score_\d+$/.test(n) ? n : n.replaceAll("_", " "));
-  return [tags.join(", "), prose.trim()].filter(Boolean).join(`
+function parseWeighted(v) {
+  const raw = text(v, "tag", 120);
+  const m = raw.match(/^\(\s*(.+?)\s*:\s*(\d+(?:\.\d+)?)\s*\)$/);
+  if (!m)
+    return { name: tagName(raw) };
+  const weight = Number(m[2]);
+  if (!(weight >= 0.1 && weight <= 3))
+    throw new Error("Use a tag weight between 0.1 and 3.");
+  return weight === 1 ? { name: tagName(m[1]) } : { name: tagName(m[1]), weight };
+}
+function formatWeighted(tag, prompt = false) {
+  const name = prompt && !/^score_\d+$/.test(tag.name) ? tag.name.replaceAll("_", " ") : tag.name;
+  return tag.weight ? `(${name}:${tag.weight})` : name;
+}
+var splitTags = (value) => value.split(/[\n,]/).map((v) => v.trim()).filter(Boolean);
+function assemble(tags, prose) {
+  const unique = new Map;
+  for (const tag of tags.map((t) => typeof t === "string" ? parseWeighted(t) : { ...t, name: tagName(t.name) }))
+    if (!unique.has(tag.name))
+      unique.set(tag.name, tag);
+  return [[...unique.values()].map((t) => formatWeighted(t, true)).join(", "), prose.trim()].filter(Boolean).join(`
 
 `);
 }
@@ -104,7 +122,7 @@ function field(label, input, hint) {
     wrapper.append(el("small", hint));
   return wrapper;
 }
-var STYLES = `.lc-app{box-sizing:border-box;font:14px/1.55 system-ui,sans-serif;color:var(--lumiverse-text,#eee);padding:24px;max-width:860px;margin:auto}.lc-app *{box-sizing:border-box}.lc-app h1{font-size:32px;letter-spacing:-1px;margin:2px 0}.lc-app h2{font-size:18px;margin:0 0 12px}.lc-app p{margin:8px 0}.lc-kicker{color:#d4b7ff;font-size:11px;letter-spacing:2px;text-transform:uppercase}.lc-muted,.lc-app small{color:var(--lumiverse-text-muted,#b4adc1);font-size:12px}.lc-card{border:1px solid #81708e55;background:#83709c0a;border-radius:16px;padding:18px;margin-top:18px}.lc-field{display:flex;flex-direction:column;gap:7px;margin:12px 0}.lc-field>span{font-size:13px;font-weight:600}.lc-app textarea,.lc-app input,.lc-app select{width:100%;border:1px solid #9484a566;border-radius:9px;background:var(--lumiverse-bg,#211c29);color:inherit;padding:11px;font:inherit}.lc-app textarea{resize:vertical;min-height:95px;line-height:1.55}.lc-app button{border:1px solid #a18caf66;border-radius:9px;padding:9px 15px;background:#8b719025;color:inherit;font:inherit;cursor:pointer}.lc-app button.lc-primary{background:#d0adf3;color:#261733;border-color:#d0adf3;font-weight:650}.lc-app button:disabled{opacity:.45;cursor:default}.lc-app :focus-visible{outline:2px solid #d0adf3;outline-offset:3px}.lc-row{display:flex;flex-wrap:wrap;gap:9px;align-items:center}.lc-status{padding:12px 0;white-space:pre-wrap;min-height:45px}.lc-status[data-error=true]{color:#ffa7a7}.lc-app summary{cursor:pointer;font-weight:600}.lc-app a{color:#d4b7ff}.lc-provenance{overflow-wrap:anywhere;padding:9px 0;border-bottom:1px solid #81708e33}.lc-provenance blockquote{margin:4px 0 0;padding-left:12px;border-left:2px solid #8b7190;font-size:12px}.lc-app [hidden]{display:none!important}@media(max-width:450px){.lc-app{padding:14px}.lc-card{padding:13px}}`;
+var STYLES = `.lc-app{box-sizing:border-box;font:14px/1.55 system-ui,sans-serif;color:var(--lumiverse-text,#eee);padding:24px;max-width:860px;margin:auto}.lc-app *{box-sizing:border-box}.lc-app h1{font-size:32px;letter-spacing:-1px;margin:2px 0}.lc-app h2{font-size:18px;margin:0 0 12px}.lc-app p{margin:8px 0}.lc-kicker{color:#d4b7ff;font-size:11px;letter-spacing:2px;text-transform:uppercase}.lc-muted,.lc-app small{color:var(--lumiverse-text-muted,#b4adc1);font-size:12px}.lc-card{border:1px solid #81708e55;background:#83709c0a;border-radius:16px;padding:18px;margin-top:18px}.lc-field{display:flex;flex-direction:column;gap:7px;margin:12px 0}.lc-field>span{font-size:13px;font-weight:600}.lc-app textarea,.lc-app input,.lc-app select{width:100%;border:1px solid #9484a566;border-radius:9px;background:var(--lumiverse-bg,#211c29);color:inherit;padding:11px;font:inherit}.lc-app textarea{resize:vertical;min-height:95px;line-height:1.55}.lc-app button{border:1px solid #a18caf66;border-radius:9px;padding:9px 15px;background:#8b719025;color:inherit;font:inherit;cursor:pointer}.lc-app button.lc-primary{background:#d0adf3;color:#261733;border-color:#d0adf3;font-weight:650}.lc-app button:disabled{opacity:.45;cursor:default}.lc-app :focus-visible{outline:2px solid #d0adf3;outline-offset:3px}.lc-row{display:flex;flex-wrap:wrap;gap:9px;align-items:center}.lc-status{padding:12px 0;white-space:pre-wrap;min-height:45px}.lc-status[data-error=true]{color:#ffa7a7}.lc-app summary{cursor:pointer;font-weight:600}.lc-app a{color:#d4b7ff}.lc-proposal{display:flex;gap:9px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #81708e33}.lc-proposal input{width:auto;margin-top:4px}.lc-proposal small{display:block}.lc-provenance{overflow-wrap:anywhere;padding:9px 0;border-bottom:1px solid #81708e33}.lc-provenance blockquote{margin:4px 0 0;padding-left:12px;border-left:2px solid #8b7190;font-size:12px}.lc-app [hidden]{display:none!important}@media(max-width:450px){.lc-app{padding:14px}.lc-card{padding:13px}}`;
 function setup(ctx) {
   let closed = false, busy = false, verified = false, edited = false, result = null, revision = 0;
   const rpc = createRpc(ctx);
@@ -138,8 +156,12 @@ function setup(ctx) {
   clearKey.style.width = "auto";
   const clearLabel = el("label", " Clear saved Gelbooru key");
   clearLabel.prepend(clearKey);
+  const notes = el("textarea");
+  notes.rows = 4;
+  notes.maxLength = 2000;
+  notes.placeholder = "e.g. Femboys: weight trap at 1.4. Androids: add visible panel seams at the shoulders and concealed joints.";
   const save = button("Save settings", async () => {
-    await rpc.request("save", { connectionId: connection.value, gelUser: gelUser.value, gelKey: gelKey.value, clearGelKey: clearKey.checked });
+    await rpc.request("save", { connectionId: connection.value, gelUser: gelUser.value, gelKey: gelKey.value, clearGelKey: clearKey.checked, notes: notes.value });
     gelKey.value = "";
     clearKey.checked = false;
     await refresh();
@@ -148,7 +170,7 @@ function setup(ctx) {
   const refreshButton = button("Refresh connections", refresh);
   const credentialNotice = el("p");
   credentialNotice.className = "lc-muted";
-  settings.append(field("Generative connection", connection, "Uses the model saved in Lumiverse. Add or change models in Connections, then refresh here."), el("p", "Choose a fast generative text model that follows JSON instructions. Jev, Decisions and embedding models are not translators."), field("Gelbooru user ID (optional)", gelUser), field("Gelbooru API key (optional)", gelKey, "Stored in your extension storage on the Lumiverse server. Never returned to this panel. Sent only to Gelbooru over HTTPS."), clearLabel, credentialNotice, row(save, refreshButton));
+  settings.append(field("Generative connection", connection, "Uses the model saved in Lumiverse. Add or change models in Connections, then refresh here."), el("p", "Choose a fast generative text model that follows JSON instructions. Jev, Decisions and embedding models are not translators."), field("Gelbooru user ID (optional)", gelUser), field("Gelbooru API key (optional)", gelKey, "Stored in your extension storage on the Lumiverse server. Never returned to this panel. Sent only to Gelbooru over HTTPS."), clearLabel, credentialNotice, field("Your Anima notes (optional)", notes, "What you have learned works, in your own words. Saved with your settings and read on every translation and refinement. A weight is only ever applied when a note gives the number."), row(save, refreshButton));
   const input = card("01 / Describe");
   const source = el("textarea");
   source.rows = 7;
@@ -191,13 +213,14 @@ function setup(ctx) {
   const tagState = el("p", "Translate to verify tags.");
   tagState.className = "lc-muted";
   const verify = button("Verify edited tags", async () => {
-    const names = tags.value.split(/[\n,]/).map((v) => v.trim()).filter(Boolean);
-    const checks = await rpc.request("verify", { names });
+    const entered = splitTags(tags.value).map(parseWeighted);
+    const checks = await rpc.request("verify", { names: entered.map((t) => t.name) });
     const missing = checks.filter((r) => !r.tag).map((r) => r.requested);
     if (missing.length)
       throw new Error(`Unverified tags: ${missing.join(", ")}. Remove them or describe them in prose.`);
     const compatible = removeConflicts(checks.map((r) => ({ ...r.tag, evidence: "", traitId: "" })));
-    tags.value = [...new Set(compatible.map((r) => r.name))].join(", ");
+    const weights = new Map(checks.map((c, i) => [c.tag.name, entered[i].weight]));
+    tags.value = [...new Set(compatible.map((r) => r.name))].map((name) => formatWeighted({ name, weight: weights.get(name) })).join(", ");
     verified = true;
     provenance.replaceChildren();
     checks.forEach((c) => {
@@ -213,12 +236,24 @@ function setup(ctx) {
     notify(compatible.length < checks.length ? "Edited tags verified; conflicting tags removed. Preserve their precise relationship in prose." : "Edited tags verified. Rebuild the prompt when ready.");
     update();
   });
+  const copyText = async (value, what) => {
+    if (!value.trim())
+      throw new Error(`There is no ${what} to copy yet.`);
+    try {
+      await navigator.clipboard.writeText(value);
+      notify(`${what[0].toUpperCase() + what.slice(1)} copied.`);
+    } catch {
+      notify("Clipboard is unavailable here. Select the text and use your usual Copy shortcut.");
+    }
+  };
+  const copyTags = button("Copy tags", () => copyText(assemble(splitTags(tags.value), ""), "tags"));
+  const copyProse = button("Copy detail", () => copyText(prose.value, "detail"));
   const provenance = el("div");
   const issues = el("div");
   const sourceQuotes = el("div");
   const evidence = el("details");
   evidence.append(el("summary", "Tag sources & uncertainty"), provenance, issues, sourceQuotes);
-  review.append(field("Booru tags — comma separated", tags, "Canonical underscores are shown here; the assembled Anima prompt uses spaces."), tagState, verify, field("Natural-language detail", prose, "A short caption written from the extracted facts. Source passages are below. Edit freely; nothing the text leaves out is filled in."), evidence);
+  review.append(field("Booru tags — comma separated", tags, "Canonical underscores are shown here; the assembled Anima prompt uses spaces. Add emphasis as (tag:1.4)."), tagState, row(verify, copyTags), field("Natural-language detail", prose, "A short caption written from the extracted facts. Source passages are below. Edit freely; nothing the text leaves out is filled in."), copyProse, evidence);
   const output = card("03 / Use");
   const prompt = el("textarea");
   prompt.rows = 8;
@@ -226,7 +261,7 @@ function setup(ctx) {
   const rebuild = button("Rebuild from tags + detail", () => {
     if (tags.value.trim() && !verified)
       throw new Error("Verify edited tags before rebuilding.");
-    prompt.value = assemble(tags.value.split(/[\n,]/).map((v) => v.trim()).filter(Boolean), prose.value);
+    prompt.value = assemble(splitTags(tags.value), prose.value);
     notify("Prompt rebuilt.");
   });
   const copy = button("Copy prompt", async () => {
@@ -242,6 +277,71 @@ function setup(ctx) {
     }
   }, true);
   output.append(field("Editable Anima prompt", prompt, "Rebuild applies edits above and replaces this field. Copy always copies exactly what is shown."), row(rebuild, copy), el("p", "Tags are verified to exist, not measured for Anima image quality. No quality, score, safety or artist tags are added; add your own."));
+  const refine = card("04 / Refine");
+  const feedback = el("textarea");
+  feedback.rows = 3;
+  feedback.maxLength = 2000;
+  feedback.placeholder = "Generate an image, then say what came out wrong: “reads too masculine”, “eyes came out blue”, “no visible seams”.";
+  const reply = el("p");
+  const proposed = el("div");
+  let pending = [];
+  const suggest = button("Suggest changes", async () => {
+    if (!tags.value.trim() && !prose.value.trim())
+      throw new Error("Translate or enter a prompt first.");
+    if (!feedback.value.trim())
+      throw new Error("Say what the image got wrong first.");
+    const next = await rpc.request("refine", { connectionId: connection.value, tags: splitTags(tags.value), caption: prose.value, feedback: feedback.value, description: source.value, stated: stated.value });
+    pending = next.proposals;
+    reply.textContent = next.reply;
+    proposed.replaceChildren();
+    pending.forEach((p, i) => {
+      const line = el("label");
+      line.className = "lc-proposal";
+      const box = el("input");
+      box.type = "checkbox";
+      box.checked = true;
+      box.dataset.index = String(i);
+      const what = p.kind === "add" ? `Add ${formatWeighted({ name: p.tag, weight: p.weight })}` : p.kind === "remove" ? `Remove ${p.tag}` : p.kind === "weight" ? p.weight === 1 ? `Clear the weight on ${p.tag}` : `Weight ${formatWeighted({ name: p.tag, weight: p.weight })}` : "Replace the detail";
+      const body = el("span");
+      body.append(el("strong", what), document.createTextNode(p.why ? ` — ${p.why}` : ""));
+      if (p.kind === "caption")
+        body.append(el("blockquote", p.caption));
+      if (p.definition) {
+        const note = el("small", ` Danbooru: ${p.definition}`);
+        body.append(note);
+      }
+      line.append(box, body);
+      proposed.append(line);
+    });
+    notify([pending.length ? "Suggestions ready. Untick any you do not want, then apply." : "No changes were suggested.", ...next.notices].join(`
+`));
+    update();
+  }, true);
+  const apply = button("Apply selected", () => {
+    const chosen = Array.from(proposed.querySelectorAll("input")).filter((b) => b.checked).map((b) => pending[Number(b.dataset.index)]);
+    if (!chosen.length)
+      throw new Error("Tick at least one suggestion.");
+    let list = splitTags(tags.value).map(parseWeighted);
+    for (const p of chosen) {
+      if (p.kind === "remove")
+        list = list.filter((t) => t.name !== p.tag);
+      if (p.kind === "weight")
+        list = list.map((t) => t.name === p.tag ? p.weight === 1 ? { name: t.name } : { name: t.name, weight: p.weight } : t);
+      if (p.kind === "add" && !list.some((t) => t.name === p.tag))
+        list.push({ name: p.tag, weight: p.weight });
+      if (p.kind === "caption")
+        prose.value = p.caption;
+    }
+    tags.value = list.map((t) => formatWeighted(t)).join(", ");
+    edited = true;
+    if (verified || !tags.value.trim())
+      prompt.value = assemble(list, prose.value);
+    pending = [];
+    proposed.replaceChildren();
+    feedback.value = "";
+    notify(verified ? "Changes applied and the prompt rebuilt. Generate again to check." : "Changes applied to the tags and detail. Verify the edited tags, then rebuild.");
+  });
+  refine.append(field("What did the image get wrong?", feedback, "LumiCast cannot see the image. It works from what you say here, your description, your notes and the current tags."), row(suggest), reply, proposed, row(apply));
   const searchCard = el("details");
   searchCard.className = "lc-card";
   searchCard.append(el("summary", "Find a real tag"));
@@ -265,14 +365,14 @@ function setup(ctx) {
     notify("Search complete. Popularity is not an Anima quality score.");
   });
   searchCard.append(field("Tag name or prefix", query, "Metadata only. No images or posts are fetched."), search, found);
-  app.append(intro, settings, status, input, review, output, searchCard, el("p", "LumiCast 0.2.4 · Manual translator · Draft stays in this tab until reload."));
-  const controls = [translate, save, refreshButton, verify, rebuild, copy, search];
+  app.append(intro, settings, status, input, review, output, refine, searchCard, el("p", "LumiCast 0.3.0 · Manual translator · Draft stays in this tab until reload."));
+  const controls = [translate, save, refreshButton, verify, rebuild, copy, copyTags, copyProse, suggest, apply, search];
   function show() {
     if (!result)
       return;
     const view = result.views[scope.value];
     const replaced = edited;
-    tags.value = view.tags.map((t) => t.name).join(", ");
+    tags.value = view.tags.map((t) => formatWeighted(t)).join(", ");
     prose.value = view.prose;
     prompt.value = view.prompt;
     verified = true;
@@ -303,9 +403,12 @@ function setup(ctx) {
     for (const c of controls)
       c.disabled = busy;
     rebuild.disabled = busy || !verified && !!tags.value.trim();
+    apply.disabled = busy || !pending.length;
     copy.disabled = busy || !prompt.value.trim();
     cancel.hidden = !busy;
     connection.disabled = busy;
+    notes.readOnly = busy;
+    feedback.readOnly = busy;
     gelUser.disabled = busy;
     gelKey.disabled = busy;
     clearKey.disabled = busy;
@@ -366,6 +469,7 @@ function setup(ctx) {
     }
     connection.value = selected;
     gelUser.value = snapshot.settings.gelUser;
+    notes.value = snapshot.settings.notes;
     credentialNotice.textContent = snapshot.settings.hasGelKey ? "Gelbooru key saved." : "Danbooru works without credentials. Gelbooru requires its account API key.";
     if (!connection.value)
       settings.open = true;

@@ -7,22 +7,27 @@ export type Scope = 'character' | 'outfit' | 'scene';
 export const segmentOf = (group: Group): Scope => group === 'moment' ? 'scene' : group === 'outfit' ? 'outfit' : 'character';
 export const inScope = (group: Group, scope: Scope): boolean => scope === 'scene' || (group !== 'moment' && (scope === 'outfit' || group !== 'outfit'));
 export interface Trait { id: string; group: Group; evidence: string; tags: string[]; detail: string }
-export interface Extraction { traits: Trait[]; skipped: number }
+export interface Extraction { traits: Trait[]; skipped: number; weights: Map<string, number> }
 /** stated: facts the user asserts about the character ("femboy, android"), true even if the description never says them. */
-export interface TranslateOptions { scope?: Scope; stated?: string }
+export interface TranslateOptions { scope?: Scope; stated?: string; /** The user's standing prompting guidance, saved in settings. */ notes?: string }
+/** A prompt the user has generated from, and what they saw in the image. */
+export interface RefineInput { tags: string[]; caption: string; feedback: string; description?: string; stated?: string; notes?: string }
+/** One change the user can accept or decline. */
+export interface Proposal { kind: 'add' | 'remove' | 'weight' | 'caption'; tag?: string; weight?: number; caption?: string; why: string; definition?: string; url?: string }
+export interface Refinement { reply: string; proposals: Proposal[]; notices: string[]; model: string }
 export interface VerifiedTag {
   name: string; source: 'Danbooru' | 'Gelbooru'; wiki: string; url: string;
   aliasFrom?: string; count: number;
 }
-export interface TagRow extends VerifiedTag { evidence: string; traitId: string }
+export interface TagRow extends VerifiedTag { evidence: string; traitId: string; weight?: number }
 export interface Issue { kind: 'ambiguity' | 'contradiction'; evidence: string[]; message: string }
 export const SCOPES = ['character','outfit','scene'] as const;
 /** One translation seen at one scope. */
 export interface View { tags: TagRow[]; prose: string; prompt: string; notices: string[]; evidence: Trait[] }
 /** The requested scope's view at the top level, plus every scope so the panel can switch without another run. */
 export interface Translation extends View { issues: Issue[]; model: string; views: Record<Scope, View> }
-export interface Settings { connectionId: string; gelUser: string; gelKey: string }
-export interface PublicSettings { connectionId: string; gelUser: string; hasGelKey: boolean }
+export interface Settings { connectionId: string; gelUser: string; gelKey: string; notes: string }
+export interface PublicSettings { connectionId: string; gelUser: string; hasGelKey: boolean; notes: string }
 export interface Snapshot {
   connections: { id: string; name: string; provider: string; model: string; supported: boolean }[];
   settings: PublicSettings; permissions: boolean;
@@ -69,7 +74,24 @@ export function isCupSizeTag(name: string): boolean {
 export function isGenerative(model: string): boolean {
   return !!model.trim() && !/(?:\bjev\b|decisions?|embedding|rerank|moderation)/i.test(model);
 }
-export function assemble(names: string[], prose: string): string {
-  const tags = [...new Set(names.map(tagName))].map(n => /^score_\d+$/.test(n) ? n : n.replaceAll('_', ' '));
-  return [tags.join(', '), prose.trim()].filter(Boolean).join('\n\n');
+/** A tag with an optional emphasis weight, written "(tag:1.4)". */
+export interface Weighted { name: string; weight?: number }
+export function parseWeighted(v: unknown): Weighted {
+  const raw = text(v, 'tag', 120);
+  const m = raw.match(/^\(\s*(.+?)\s*:\s*(\d+(?:\.\d+)?)\s*\)$/);
+  if (!m) return {name: tagName(raw)};
+  const weight = Number(m[2]);
+  if (!(weight >= 0.1 && weight <= 3)) throw new Error('Use a tag weight between 0.1 and 3.');
+  return weight === 1 ? {name: tagName(m[1])} : {name: tagName(m[1]), weight};
+}
+/** Editor form keeps underscores; prompt form uses spaces, except score tags. */
+export function formatWeighted(tag: Weighted, prompt = false): string {
+  const name = prompt && !/^score_\d+$/.test(tag.name) ? tag.name.replaceAll('_', ' ') : tag.name;
+  return tag.weight ? `(${name}:${tag.weight})` : name;
+}
+export const splitTags = (value: string): string[] => value.split(/[\n,]/).map(v => v.trim()).filter(Boolean);
+export function assemble(tags: (string | Weighted)[], prose: string): string {
+  const unique = new Map<string, Weighted>();
+  for (const tag of tags.map(t => typeof t === 'string' ? parseWeighted(t) : {...t, name: tagName(t.name)})) if (!unique.has(tag.name)) unique.set(tag.name, tag);
+  return [[...unique.values()].map(t => formatWeighted(t, true)).join(', '), prose.trim()].filter(Boolean).join('\n\n');
 }

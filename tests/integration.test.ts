@@ -14,7 +14,7 @@ function harness(provider='openrouter',model='test/generative') {
     permissions:{has:()=>true},
     userStorage:{getJson:async(path:string,o:{fallback:unknown;userId?:string})=>storage.get(`${o.userId}:${path}`)??o.fallback,setJson:async(path:string,value:unknown,o:{userId?:string})=>{storage.set(`${o.userId}:${path}`,value);}},
     connections:{list:async()=>[{id:'c1',name:'Fast text',provider,model},{id:'c2',name:'Classifier',provider:'openrouter',model:'typesafe/jev-1.13'}],get:async(id:string,user?:string)=>{calls.push(['connection',id,user]);return id==='c1'?{id,name:'Fast text',provider,model}:null;}},
-    cors:async(url:string)=>{calls.push(['cors',url]);return{status:200,body:JSON.stringify(url.includes('/tags.json')?[{name:'red_hair',category:0,post_count:100}]:url.includes('/wiki_pages.json')?[{title:'red_hair',body:'Hair colored red.'}]:[])};},
+    cors:async(url:string)=>{calls.push(['cors',url]);return{status:200,body:JSON.stringify(url.includes('/tags.json')?[{name:new URL(url).searchParams.get('search[name]')??'red_hair',category:0,post_count:100}]:url.includes('/wiki_pages.json')?[{title:'red_hair',body:'Hair colored red.'}]:[])};},
     generate:{raw:async(input:{messages:{content:string}[];signal:AbortSignal;userId?:string;provider?:string;model?:string;connection_id?:string})=> {
       calls.push(['generation',input]);latestSignal=input.signal;
       // Mirror prepareRawCall: connection supplies credentials, input supplies model.
@@ -40,7 +40,7 @@ test('full panel → RPC → backend → editor smoke, copy and disposal',async(
   const buttons=()=>Array.from(h.root.querySelectorAll('button'));const b=(name:string)=>buttons().find(x=>x.textContent===name)!;
   await until(()=>!b('Translate').disabled);
   const select=h.root.querySelector('select')!;expect(select.options[2].disabled).toBe(true);select.value='c1';
-  const areas=Array.from(h.root.querySelectorAll('textarea'));areas[0].value='Short red hair.';b('Translate').click();
+  const areas=Array.from(h.root.querySelectorAll('textarea')).slice(1);areas[0].value='Short red hair.';b('Translate').click();
   await until(()=>!b('Translate').disabled);
   expect(areas[1].value).toBe('red_hair');expect(areas[2].value).toContain('Short red hair.');expect(areas[3].value).toBe('red hair\n\nShort red hair.');
   expect(h.calls.filter(v=>(v as unknown[])[0]==='generation').length).toBe(2);
@@ -53,7 +53,7 @@ test('provider error does not leak credentials and failed translation preserves 
   dom();const h=harness();cleanups.push(h.stop);const dispose=setup(h.ctx);cleanups.push(dispose);
   const translate=Array.from(h.root.querySelectorAll('button')).find(b=>b.textContent==='Translate')!;
   await until(()=>!translate.disabled);h.root.querySelector('select')!.value='c1';
-  const areas=Array.from(h.root.querySelectorAll('textarea'));areas[0].value='Short red hair.';areas[3].value='Keep this edit.';h.setFail();translate.click();await until(()=>!translate.disabled);
+  const areas=Array.from(h.root.querySelectorAll('textarea')).slice(1);areas[0].value='Short red hair.';areas[3].value='Keep this edit.';h.setFail();translate.click();await until(()=>!translate.disabled);
   expect(h.root.textContent).not.toContain('SECRET-DO-NOT-LEAK');expect(h.root.textContent).toContain('AUTHENTICATION');expect(h.root.textContent).toContain('trait extraction');expect(areas[3].value).toBe('Keep this edit.');
 });
 test('per-user settings and secret never echoed in snapshot',async()=> {
@@ -90,7 +90,7 @@ test('panel prompt omits narration and scene while the source passages stay visi
   h.setResponses([extraction,{drop:[],captions:{character:'Red hair.',outfit:'She wears a ribbon.'},issues:[]}]);
   const translate=Array.from(h.root.querySelectorAll('button')).find(b=>b.textContent==='Translate')!;
   await until(()=>!translate.disabled);h.root.querySelector('select')!.value='c1';
-  const areas=Array.from(h.root.querySelectorAll('textarea'));areas[0].value='Red hair, obviously! And a red hair ribbon.';translate.click();await until(()=>!translate.disabled);
+  const areas=Array.from(h.root.querySelectorAll('textarea')).slice(1);areas[0].value='Red hair, obviously! And a red hair ribbon.';translate.click();await until(()=>!translate.disabled);
   expect(areas[1].value).toBe('red_hair');expect(areas[2].value).toBe('Red hair.');expect(areas[3].value).toBe('red hair\n\nRed hair.');
   expect(h.root.querySelector('details:not(.lc-card)')?.textContent).toContain('Red hair, obviously!');expect(h.root.querySelector('details:not(.lc-card)')?.textContent).not.toContain('ribbon');
   const scope=h.root.querySelectorAll('select')[1];expect(scope.value).toBe('character');areas[2].value='my edit';areas[2].dispatchEvent(new Event('input'));scope.value='outfit';scope.dispatchEvent(new Event('change'));
@@ -101,6 +101,33 @@ test('direct DeepSeek adapter tolerates string evidence without discarding the p
   h.setResponses([{traits:[{id:'1',group:'hair',evidence:'Short red hair.',tags:['red_hair'],detail:'Short red hair'}]},{drop:[],captions:{character:'Short red hair.'},issues:[{kind:'ambiguity',evidence:'Short red hair.',message:'Age not specified.'}]}]);
   const translate=Array.from(h.root.querySelectorAll('button')).find(b=>b.textContent==='Translate')!;
   await until(()=>!translate.disabled);h.root.querySelector('select')!.value='c1';
-  const areas=Array.from(h.root.querySelectorAll('textarea'));areas[0].value='Short red hair.';translate.click();await until(()=>!translate.disabled);
+  const areas=Array.from(h.root.querySelectorAll('textarea')).slice(1);areas[0].value='Short red hair.';translate.click();await until(()=>!translate.disabled);
   expect(areas[1].value).toBe('red_hair');expect(areas[3].value).toBe('red hair\n\nShort red hair.');expect(h.root.textContent).not.toContain('Invalid uncertainty evidence');expect(h.root.textContent).toContain('missing-attribute note was ignored');
+});
+test('refine: typed feedback becomes verified, selectable changes; weights and notes carry through; copy buttons work',async()=> {
+  dom();const h=harness();cleanups.push(h.stop);const dispose=setup(h.ctx);cleanups.push(dispose);
+  const b=(name:string)=>Array.from(h.root.querySelectorAll('button')).find(x=>x.textContent===name)!;
+  await until(()=>!b('Translate').disabled);h.root.querySelector('select')!.value='c1';
+  const all=Array.from(h.root.querySelectorAll('textarea'));const [notes,source,tags,prose,prompt,feedback]=all;
+  notes.value='Redheads: weight red_hair at 1.4.';b('Save settings').click();await until(()=>!b('Translate').disabled);
+  h.root.querySelector('select')!.value='c1';
+  h.setResponses([{traits:[{id:'1',group:'hair',evidence:'Short red hair.',tags:['(red_hair:1.4)'],detail:'Short red hair'}]},{drop:[],captions:{character:'Short red hair.'},issues:[]},
+    {reply:'The hair read as orange.',remove:[{tag:'made_up',why:'x'}],weight:[{tag:'red_hair',weight:1.8,why:'still too weak'}],add:[{tag:'red_hair',why:'dup'},{tag:'short_hair',weight:null,why:'length was lost'}],caption:'Short, vivid red hair.'}]);
+  source.value='Short red hair.';b('Translate').click();await until(()=>!b('Translate').disabled);
+  expect(tags.value).toBe('(red_hair:1.4)');expect(prompt.value).toBe('(red hair:1.4)\n\nShort red hair.');
+  const sent=h.calls.filter(v=>(v as unknown[])[0]==='generation').map(v=>((v as unknown[])[1] as {messages:{content:string}[]}).messages[1].content);
+  expect(JSON.parse(sent[0]).notes).toBe('Redheads: weight red_hair at 1.4.');
+  let copied='';Object.defineProperty(navigator,'clipboard',{value:{writeText:async(value:string)=>{copied=value;}},configurable:true});
+  b('Copy tags').click();await until(()=>!b('Translate').disabled);expect(copied).toBe('(red hair:1.4)');
+  b('Copy detail').click();await until(()=>!b('Translate').disabled);expect(copied).toBe('Short red hair.');
+  expect(b('Apply selected').disabled).toBe(true);
+  feedback.value='Hair came out orange and long.';b('Suggest changes').click();await until(()=>!b('Translate').disabled);
+  const refineInput=JSON.parse(((h.calls.filter(v=>(v as unknown[])[0]==='generation').pop() as unknown[])[1] as {messages:{content:string}[]}).messages[1].content);
+  expect(refineInput.tags).toEqual(['(red_hair:1.4)']);expect(refineInput.feedback).toBe('Hair came out orange and long.');expect(refineInput.notes).toContain('Redheads');expect(refineInput.description).toBe('Short red hair.');
+  const boxes=Array.from(h.root.querySelectorAll('.lc-proposal input')) as HTMLInputElement[];
+  expect(Array.from(h.root.querySelectorAll('.lc-proposal strong')).map(n=>n.textContent)).toEqual(['Weight (red_hair:1.8)','Add short_hair','Replace the detail']);
+  expect(h.root.textContent).toContain('The hair read as orange.');expect(tags.value).toBe('(red_hair:1.4)');
+  boxes[2].checked=false;b('Apply selected').click();await until(()=>!b('Translate').disabled);
+  expect(tags.value).toBe('(red_hair:1.8), short_hair');expect(prose.value).toBe('Short red hair.');expect(prompt.value).toBe('(red hair:1.8), short hair\n\nShort red hair.');
+  expect(feedback.value).toBe('');expect(h.root.querySelectorAll('.lc-proposal').length).toBe(0);
 });
