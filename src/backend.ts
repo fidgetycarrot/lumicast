@@ -1,0 +1,85 @@
+import type { SpindleAPI } from 'lumiverse-spindle-types';
+import { BooruDictionary } from './dictionary';
+import { Translator } from './engine';
+import { isGenerative, record, text, type Settings, type Snapshot } from './contracts';
+
+const DEFAULTS: Settings = {connectionId:'',gelUser:'',gelKey:''};
+export function setupBackend(api: SpindleAPI) {
+  const users = new Map<string, { settings?:Settings; dictionary?:BooruDictionary; load?:Promise<void>; jobs:Map<string,AbortController> }>();
+  let closed = false;
+  const off = api.onFrontendMessage((payload, userId, frontendSessionId) => {
+    const r=record(payload);
+    if (closed || r.type !== 'lumicast:request' || typeof r.id !== 'string' || !/^[a-zA-Z0-9-]{1,100}$/.test(r.id)) return;
+    const key=userId ?? 'owner';
+    let state=users.get(key);
+    if (!state) {state={jobs:new Map()};users.set(key,state);}
+    const s=state;
+    const reply=(result?:unknown,error?:string) => {if (!closed) api.sendToFrontend({type:'lumicast:response',id:r.id,result,error},userId,{frontendSessionId});};
+    const session=frontendSessionId ?? 'main';
+    if (r.action === 'cancel') {s.jobs.get(session)?.abort();reply(true);return;}
+    void (async () => {
+      if (!api.permissions.has('generation') || !api.permissions.has('cors_proxy')) throw new Error('Grant LumiCast generation and CORS proxy permissions in Extensions.');
+      s.load ??= api.userStorage.getJson<Settings>('settings.json',{fallback:{...DEFAULTS},userId}).then(saved => {
+        const v=record(saved);
+        s.settings={connectionId:text(v.connectionId ?? '', 'connection',100),gelUser:text(v.gelUser ?? '', 'Gelbooru user',50),gelKey:text(v.gelKey ?? '', 'Gelbooru key',200)};
+      }).catch(() => {s.settings={...DEFAULTS};});
+      await s.load;
+      const settings=s.settings!;
+      const dictionary=() => s.dictionary ??= new BooruDictionary(async url=> {
+        const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.1.0 (tag metadata client)'}}));
+        if(typeof response.status!=='number'||typeof response.body!=='string')throw new Error('Invalid proxy response.');
+        return {status:response.status,body:response.body};
+      },{user:settings.gelUser,key:settings.gelKey});
+      if (r.action === 'snapshot') {
+        const connections=(await api.connections.list(userId)).map(c=>({id:c.id,name:c.name,provider:c.provider,model:c.model,supported:isGenerative(c.model)}));
+        return {connections,settings:{connectionId:settings.connectionId,gelUser:settings.gelUser,hasGelKey:!!settings.gelKey},permissions:true} satisfies Snapshot;
+      }
+      if (r.action === 'save') {
+        if (s.jobs.size) throw new Error('Wait for the current operation before changing settings.');
+        const v=record(r.input);
+        const next:Settings={connectionId:text(v.connectionId,'connection',100),gelUser:text(v.gelUser,'Gelbooru user',50),gelKey:v.clearGelKey===true ? '' : v.gelKey ? text(v.gelKey,'Gelbooru key',200) : settings.gelKey};
+        if (next.gelUser && !/^\d+$/.test(next.gelUser)) throw new Error('Gelbooru user ID must be numeric.');
+        if (next.connectionId && !await api.connections.get(next.connectionId,userId)) throw new Error('This connection is unavailable.');
+        await api.userStorage.setJson('settings.json',next,{userId});
+        s.settings=next;s.dictionary=undefined;
+        return true;
+      }
+      if (!['translate','search','verify'].includes(String(r.action))) throw new Error('Unknown LumiCast action.');
+      if (s.jobs.size) throw new Error('An operation is already running. Wait or cancel it first.');
+      const controller=new AbortController();s.jobs.set(session,controller);
+      const timer=setTimeout(()=>controller.abort(),240_000);
+      try {
+        const input=record(r.input);
+        if (r.action === 'search') return await dictionary().search(text(input.query,'tag search',100),controller.signal);
+        if (r.action === 'verify') {
+          if (!Array.isArray(input.names) || input.names.length > 32) throw new Error('Use at most 32 tags.');
+          const result=[];
+          for (const name of input.names) result.push({requested:text(name,'tag',100),tag:await dictionary().resolve(text(name,'tag',100),controller.signal)});
+          return result;
+        }
+        const connectionId=text(input.connectionId,'connection',100);
+        const connection=await api.connections.get(connectionId,userId);
+        if (!connection || !isGenerative(connection.model)) throw new Error('Select a saved generative text connection. Jev and Decisions models cannot write the translator output.');
+        const translator=new Translator(async (system,content,signal)=> {
+          let value:unknown;
+          try {value=await api.generate.raw({type:'raw',connection_id:connection.id,userId,messages:[{role:'system',content:system},{role:'user',content}],parameters:{max_tokens:6000},signal});}
+          catch {signal.throwIfAborted();throw new Error('The model request failed. Check the connection and provider status.');}
+          const response=record(value);
+          if (typeof response.content !== 'string' || !response.content.trim() || /length|max_tokens/.test(String(response.finish_reason ?? ''))) throw new Error('The model returned empty or truncated text. Choose another connection or shorten the description.');
+          return response.content;
+        },dictionary());
+        const result=await translator.translate(text(input.description,'description',12_000),controller.signal,`${connection.provider} / ${connection.model}`);
+        result.notices.push(...dictionary().notices);
+        return result;
+      } finally {clearTimeout(timer);s.jobs.delete(session);}
+    })().then(result=>reply(result)).catch(error=> {
+      // Provider errors may embed URLs, headers or keys. Never forward raw upstream errors.
+      const message=error instanceof Error ? error.message : '';
+      const trusted=/^(Grant LumiCast|Wait for|This connection|Gelbooru user|Unknown LumiCast|An operation|Use at most|Select a saved|The model |Invalid |Use a plain|Paste a |No explicit|Too many|Conflicting|Tag service|Tag lookup|Cyclic tag|Tag alias|Oversized|Unexpected)/.test(message);
+      reply(undefined,error instanceof Error && error.name==='AbortError' ? 'Operation cancelled or timed out. Your edits are preserved.' : trusted ? message : 'The operation failed. Check your connection, provider status and tag-service access. Your edits are preserved.');
+    });
+  });
+  return () => {closed=true;off();for(const s of users.values()) for(const c of s.jobs.values()) c.abort();users.clear();};
+}
+declare const spindle: SpindleAPI;
+if (typeof spindle !== 'undefined') setupBackend(spindle);

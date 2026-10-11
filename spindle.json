@@ -1,0 +1,13 @@
+{
+  "name": "LumiCast",
+  "identifier": "lumicast",
+  "version": "0.1.0",
+  "author": "fidgetycarrot",
+  "github": "https://github.com/fidgetycarrot/lumicast",
+  "homepage": "https://github.com/fidgetycarrot/lumicast#readme",
+  "description": "Translate pasted character appearances into faithful Anima prompts with verified booru tags and precise source wording.",
+  "permissions": ["generation", "cors_proxy"],
+  "entry_backend": "dist/backend.js",
+  "entry_frontend": "dist/frontend.js",
+  "minimum_lumiverse_version": "1.2.5"
+}

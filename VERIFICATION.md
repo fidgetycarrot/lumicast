@@ -1,0 +1,35 @@
+# Verification — October 11, 2026
+
+## Sources inspected
+
+- [Lumiverse](https://github.com/prolix-oc/Lumiverse/tree/b1a68d9e32e2a2480a0d5ae71422566845f2657b), version 1.2.5, commit `b1a68d9e32e2a2480a0d5ae71422566845f2657b`.
+- [Lumi Studio](https://github.com/fidgetycarrot/lumidraw-studio/tree/1a74a99d356f49d9992cd24bb3ff3389709cc45a), version 1.8.1, commit `1a74a99d356f49d9992cd24bb3ff3389709cc45a`: manifest and frontend/backend conventions only.
+- Accessible local Set Points 0.1.11 source: user/session-scoped messaging, saved connections and drawer conventions only.
+- SDK `lumiverse-spindle-types` 0.6.40, matching Lumiverse's pinned dependency.
+- [Official Anima model guidance](https://huggingface.co/circlestone-labs/Anima/blob/main/README.md), [Danbooru API](https://danbooru.donmai.us/wiki_pages/help:api), [Gelbooru API](https://gelbooru.com/index.php?page=wiki&s=view&id=18780).
+
+Verified real calls: `ui.registerDrawerTab`, `dom.addStyle`, `sendToBackend`, `onBackendMessage`, `onFrontendMessage`, `sendToFrontend` with `frontendSessionId`, `connections.list/get(userId)`, `generate.raw({type:'raw',connection_id,userId,messages,parameters,signal})`, `cors(url,init)`, `permissions.has`, `userStorage.getJson/setJson` with authenticated user scope.
+
+The host implementation confirms generation requires explicit `userId` for operator-scoped installs. The local installer reads `<DATA_DIR>/extensions/<identifier>/spindle.json` or its nested `repo` layout and registers it through Import Local.
+
+## Completed checks
+
+- TypeScript strict typecheck against the pinned SDK: passed.
+- 27 automated tests, 97 assertions: passed. Eight challenging description fixtures plus malformed JSON, fabricated evidence, unsupported model names, nonexistent/deprecated tags, alias/cache behavior, Gelbooru failure, edited tags, RPC expiry, cancellation, per-user secret isolation and failure preservation.
+- Production frontend/backend bundle build: passed.
+- Current Lumiverse `detectDangerousBackendCapabilities` scanner, extracted unchanged from the pinned source: backend accepted with zero declared capabilities.
+- Manifest entry existence and package structure checks: passed.
+- Real public Danbooru requests: exact `blue_eyes`, wiki definition, active `gray_hair → grey_hair` alias, `heterochromia` prefix search and nonexistent-tag rejection passed.
+- Bun's default HTTP client was challenged by Danbooru; an honest `LumiCast/0.1.0 (tag metadata client)` header succeeded and is used in production CORS requests.
+- Real Gelbooru request without credentials: HTTP 401. The extension's authenticated response parsing and fallback path were tested with controlled fixtures.
+- Browser-rendered standalone frontend preview: paste → Translate → editable tag, source wording and prompt fields visibly populated. This used a clearly labeled fixture response, not a live provider. Preview screenshot supplied separately.
+
+## Not completed
+
+- Installation and generation inside an authenticated live Lumiverse session. The local server responded with authentication required; no existing extension installation was changed.
+- Real paid provider generation: no provider key/authorized authenticated connection was supplied to this development run. Automated engine/UI tests use controlled model responses, so they validate handling rather than a model's linguistic accuracy.
+- Authenticated Gelbooru access with a real account key.
+- Actual Anima image rendering, fidelity benchmarking or model-specific tag performance. Dictionary count/existence does not establish image quality.
+- Older Lumiverse versions. The minimum is conservatively set to the inspected current version.
+
+The package is ready to install locally and includes live provider smoke instructions for these remaining checks. The initial local package was prepared before GitHub publication. Publication adds a new standalone repository; existing repositories/extensions were not modified. No PR is needed for an initial standalone repository.
