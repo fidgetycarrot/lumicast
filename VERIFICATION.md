@@ -68,3 +68,9 @@ Strict typecheck, 53 tests (345 assertions) and the production build passed. Cov
 
 Not done in this development run: no generation call was made with the new prompts on any provider, and Danbooru was not reachable from the build environment, so neither the prompts' behaviour on DeepSeek nor the example tags named in the extraction prompt were checked live. Tags the model proposes are verified at run time by the extension itself. The host backend scanner was not re-run. Treat the first translations in Lumiverse as the real test.
 
+## v0.2.1: one run, every scope
+
+In v0.2.0 the scope was applied before review, so each **Include** choice needed its own two generation calls, and three runs on the same description returned different tag sets (a build tag present in one view and absent in the next). v0.2.1 extracts, verifies and reviews everything once and returns a view per scope; the panel switches between them locally. The review call writes the caption in three pieces (character, outfit, scene) that the views join. Because the reviewer now sees outfit and scene traits, keeping them out of the character piece rests on its instructions rather than on filtered input.
+
+Strict typecheck, 54 tests (359 assertions) and the production build passed, including: all three views from two calls, identical shared tags across views, per-piece caption fallback, an empty view instead of a failed run, and switching in the panel after an edit without a further generation call. As before, no live provider or Danbooru call was made from the build environment.
+

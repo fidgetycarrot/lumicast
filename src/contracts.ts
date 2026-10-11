@@ -3,6 +3,8 @@ export const GROUPS = ['subject','body','hair','face','outfit','moment'] as cons
 export type Group = typeof GROUPS[number];
 /** character: body, hair and face only. outfit: plus clothing. scene: everything described. */
 export type Scope = 'character' | 'outfit' | 'scene';
+/** Each caption segment covers the groups its scope adds. */
+export const segmentOf = (group: Group): Scope => group === 'moment' ? 'scene' : group === 'outfit' ? 'outfit' : 'character';
 export const inScope = (group: Group, scope: Scope): boolean => scope === 'scene' || (group !== 'moment' && (scope === 'outfit' || group !== 'outfit'));
 export interface Trait { id: string; group: Group; evidence: string; tags: string[]; detail: string }
 export interface Extraction { traits: Trait[]; skipped: number }
@@ -13,10 +15,11 @@ export interface VerifiedTag {
 }
 export interface TagRow extends VerifiedTag { evidence: string; traitId: string }
 export interface Issue { kind: 'ambiguity' | 'contradiction'; evidence: string[]; message: string }
-export interface Translation {
-  tags: TagRow[]; prose: string; issues: Issue[]; notices: string[];
-  prompt: string; model: string; evidence: Trait[];
-}
+export const SCOPES = ['character','outfit','scene'] as const;
+/** One translation seen at one scope. */
+export interface View { tags: TagRow[]; prose: string; prompt: string; notices: string[]; evidence: Trait[] }
+/** The requested scope's view at the top level, plus every scope so the panel can switch without another run. */
+export interface Translation extends View { issues: Issue[]; model: string; views: Record<Scope, View> }
 export interface Settings { connectionId: string; gelUser: string; gelKey: string }
 export interface PublicSettings { connectionId: string; gelUser: string; hasGelKey: boolean }
 export interface Snapshot {

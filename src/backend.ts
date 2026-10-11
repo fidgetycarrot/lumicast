@@ -27,7 +27,7 @@ export function setupBackend(api: SpindleAPI) {
       await s.load;
       const settings=s.settings!;
       const dictionary=() => s.dictionary ??= new BooruDictionary(async url=> {
-        const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.2.0 (tag metadata client)'}}));
+        const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.2.1 (tag metadata client)'}}));
         if(typeof response.status!=='number'||typeof response.body!=='string')throw new Error('Invalid proxy response.');
         return {status:response.status,body:response.body};
       },{user:settings.gelUser,key:settings.gelKey});
@@ -76,7 +76,7 @@ export function setupBackend(api: SpindleAPI) {
         },dictionary());
         const scope=input.scope==='outfit'||input.scope==='scene'?input.scope:'character';
         const result=await translator.translate(text(input.description,'description',12_000),controller.signal,`${connection.provider} / ${connection.model}`,{scope});
-        result.notices.push(...dictionary().notices);
+        for(const view of [result,...Object.values(result.views)])view.notices.push(...dictionary().notices);
         return result;
       } finally {clearTimeout(timer);s.jobs.delete(session);}
     })().then(result=>reply(result)).catch(error=> {

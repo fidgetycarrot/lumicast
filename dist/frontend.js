@@ -106,7 +106,7 @@ function field(label, input, hint) {
 }
 var STYLES = `.lc-app{box-sizing:border-box;font:14px/1.55 system-ui,sans-serif;color:var(--lumiverse-text,#eee);padding:24px;max-width:860px;margin:auto}.lc-app *{box-sizing:border-box}.lc-app h1{font-size:32px;letter-spacing:-1px;margin:2px 0}.lc-app h2{font-size:18px;margin:0 0 12px}.lc-app p{margin:8px 0}.lc-kicker{color:#d4b7ff;font-size:11px;letter-spacing:2px;text-transform:uppercase}.lc-muted,.lc-app small{color:var(--lumiverse-text-muted,#b4adc1);font-size:12px}.lc-card{border:1px solid #81708e55;background:#83709c0a;border-radius:16px;padding:18px;margin-top:18px}.lc-field{display:flex;flex-direction:column;gap:7px;margin:12px 0}.lc-field>span{font-size:13px;font-weight:600}.lc-app textarea,.lc-app input,.lc-app select{width:100%;border:1px solid #9484a566;border-radius:9px;background:var(--lumiverse-bg,#211c29);color:inherit;padding:11px;font:inherit}.lc-app textarea{resize:vertical;min-height:95px;line-height:1.55}.lc-app button{border:1px solid #a18caf66;border-radius:9px;padding:9px 15px;background:#8b719025;color:inherit;font:inherit;cursor:pointer}.lc-app button.lc-primary{background:#d0adf3;color:#261733;border-color:#d0adf3;font-weight:650}.lc-app button:disabled{opacity:.45;cursor:default}.lc-app :focus-visible{outline:2px solid #d0adf3;outline-offset:3px}.lc-row{display:flex;flex-wrap:wrap;gap:9px;align-items:center}.lc-status{padding:12px 0;white-space:pre-wrap;min-height:45px}.lc-status[data-error=true]{color:#ffa7a7}.lc-app summary{cursor:pointer;font-weight:600}.lc-app a{color:#d4b7ff}.lc-provenance{overflow-wrap:anywhere;padding:9px 0;border-bottom:1px solid #81708e33}.lc-provenance blockquote{margin:4px 0 0;padding-left:12px;border-left:2px solid #8b7190;font-size:12px}.lc-app [hidden]{display:none!important}@media(max-width:450px){.lc-app{padding:14px}.lc-card{padding:13px}}`;
 function setup(ctx) {
-  let closed = false, busy = false, verified = false, result = null, revision = 0;
+  let closed = false, busy = false, verified = false, edited = false, result = null, revision = 0;
   const rpc = createRpc(ctx);
   const tab = ctx.ui.registerDrawerTab({ id: "translator", title: "LumiCast", shortName: "LumiCast", description: "Turn a written appearance into an Anima prompt", keywords: ["anima", "booru", "prompt", "translator"], iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 3H4v18h4M16 3h4v18h-4M9 8l3-3 3 3M9 16l3 3 3-3M12 5v14"/></svg>' });
   const removeStyle = ctx.dom.addStyle(STYLES);
@@ -160,37 +160,13 @@ function setup(ctx) {
     if (!source.value.trim())
       throw new Error("Paste a character description first.");
     const currentRevision = revision;
-    const next = await rpc.request("translate", { description: source.value, connectionId: connection.value, scope: scope.value });
+    const next = await rpc.request("translate", { description: source.value, connectionId: connection.value });
     if (revision !== currentRevision) {
       notify("The description changed during translation. Translate again to use the new wording.");
       return;
     }
     result = next;
-    tags.value = next.tags.map((t) => t.name).join(", ");
-    prose.value = next.prose;
-    prompt.value = next.prompt;
-    verified = true;
-    provenance.replaceChildren();
-    next.tags.forEach((t) => {
-      const item = el("div");
-      item.className = "lc-provenance";
-      const link = el("a", `${t.name} · ${t.source}${t.aliasFrom ? ` · alias: ${t.aliasFrom}` : ""}`);
-      link.href = t.url;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      item.append(link, el("blockquote", t.evidence));
-      provenance.append(item);
-    });
-    sourceQuotes.replaceChildren(el("p", "Passages the result was built from — for comparison, outside the assembled prompt."));
-    next.evidence.forEach((t) => sourceQuotes.append(el("blockquote", t.evidence)));
-    issues.replaceChildren();
-    next.issues.forEach((i) => issues.append(el("p", `${i.kind}: ${i.message}`), el("blockquote", i.evidence.join(" / "))));
-    if (!next.issues.length)
-      issues.append(el("p", "No unresolved ambiguity was reported."));
-    tagState.textContent = next.tags.length ? `${next.tags.length} tags, each a live Danbooru tag. ${next.model}.` : `No verified tags retained. Review the notices below. ${next.model}.`;
-    notify(["Translation ready. Review the tags and caption.", !gelUser.value ? "Gelbooru is not configured; verified tags use Danbooru." : "", ...next.notices].filter(Boolean).join(`
-`));
-    update();
+    show();
   }, true);
   const cancel = el("button", "Cancel");
   cancel.type = "button";
@@ -198,7 +174,7 @@ function setup(ctx) {
   cancel.addEventListener("click", () => {
     rpc.request("cancel").then(() => notify("Cancellation requested.")).catch((e) => notify(e.message, true));
   });
-  input.append(field("Character description", source, "Only this pasted description is sent to your selected provider. No chat history is read."), field("Include", scope, "Character only gives a prompt you can reuse in any scene. Clothing, pose and setting come from the scene prompt."), row(translate, cancel));
+  input.append(field("Character description", source, "Only this pasted description is sent to your selected provider. No chat history is read."), field("Include", scope, "Character only gives a prompt you can reuse in any scene. One translation covers all three; switch any time without another run."), row(translate, cancel));
   const review = card("02 / Review");
   const tags = el("textarea");
   tags.rows = 3;
@@ -285,8 +261,40 @@ function setup(ctx) {
     notify("Search complete. Popularity is not an Anima quality score.");
   });
   searchCard.append(field("Tag name or prefix", query, "Metadata only. No images or posts are fetched."), search, found);
-  app.append(intro, settings, status, input, review, output, searchCard, el("p", "LumiCast 0.2.0 · Manual translator · Draft stays in this tab until reload."));
+  app.append(intro, settings, status, input, review, output, searchCard, el("p", "LumiCast 0.2.1 · Manual translator · Draft stays in this tab until reload."));
   const controls = [translate, save, refreshButton, verify, rebuild, copy, search];
+  function show() {
+    if (!result)
+      return;
+    const view = result.views[scope.value];
+    const replaced = edited;
+    tags.value = view.tags.map((t) => t.name).join(", ");
+    prose.value = view.prose;
+    prompt.value = view.prompt;
+    verified = true;
+    edited = false;
+    provenance.replaceChildren();
+    view.tags.forEach((t) => {
+      const item = el("div");
+      item.className = "lc-provenance";
+      const link = el("a", `${t.name} · ${t.source}${t.aliasFrom ? ` · alias: ${t.aliasFrom}` : ""}`);
+      link.href = t.url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      item.append(link, el("blockquote", t.evidence));
+      provenance.append(item);
+    });
+    sourceQuotes.replaceChildren(el("p", "Passages the result was built from — for comparison, outside the assembled prompt."));
+    view.evidence.forEach((t) => sourceQuotes.append(el("blockquote", t.evidence)));
+    issues.replaceChildren();
+    result.issues.forEach((i) => issues.append(el("p", `${i.kind}: ${i.message}`), el("blockquote", i.evidence.join(" / "))));
+    if (!result.issues.length)
+      issues.append(el("p", "No unresolved ambiguity was reported."));
+    tagState.textContent = view.tags.length ? `${view.tags.length} tags, each a live Danbooru tag. ${result.model}.` : `No verified tags to show here. Review the notices below. ${result.model}.`;
+    notify([replaced ? "Fields reset from the translation; your manual edits were replaced." : "Translation ready. Review the tags and caption.", !gelUser.value ? "Gelbooru is not configured; verified tags use Danbooru." : "", ...view.notices].filter(Boolean).join(`
+`));
+    update();
+  }
   function update() {
     for (const c of controls)
       c.disabled = busy;
@@ -294,7 +302,6 @@ function setup(ctx) {
     copy.disabled = busy || !prompt.value.trim();
     cancel.hidden = !busy;
     connection.disabled = busy;
-    scope.disabled = busy;
     gelUser.disabled = busy;
     gelKey.disabled = busy;
     clearKey.disabled = busy;
@@ -364,17 +371,23 @@ function setup(ctx) {
       notify("Description changed. Translate again to refresh the result.");
   });
   scope.addEventListener("change", () => {
-    revision++;
-    if (result)
-      notify("Translate again to apply the new “Include” choice.");
+    if (!busy)
+      show();
   });
   tags.addEventListener("input", () => {
     verified = false;
+    edited = true;
     tagState.textContent = "Tags edited — verify existence before rebuilding. Clear all tags to use prose only.";
     update();
   });
-  prose.addEventListener("input", () => notify("Detail changed. Rebuild to apply it to the prompt."));
-  prompt.addEventListener("input", update);
+  prose.addEventListener("input", () => {
+    edited = true;
+    notify("Detail changed. Rebuild to apply it to the prompt.");
+  });
+  prompt.addEventListener("input", () => {
+    edited = true;
+    update();
+  });
   busy = true;
   update();
   refresh().then(() => notify("Paste an appearance and choose Translate.")).catch((e) => notify(e.message, true)).finally(() => {

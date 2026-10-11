@@ -13,7 +13,7 @@ function run(source:string,extraction:unknown,review:unknown,options?:TranslateO
 const hair={traits:[{id:'1',group:'hair',evidence:'red hair',tags:['red_hair'],detail:'Red hair'}]};
 
 for(const fixture of cases)test(fixture.name,async()=> {
-  const {result,calls}=await run(fixture.source,{traits:fixture.traits},{drop:fixture.drop??[],prose:fixture.caption??'',issues:fixture.issues??[]},{scope:fixture.scope});
+  const {result,calls}=await run(fixture.source,{traits:fixture.traits},{drop:fixture.drop??[],captions:{character:fixture.caption??''},issues:fixture.issues??[]},{scope:fixture.scope});
   expect(calls).toBe(2);expect(result.tags.map(t=>t.name)).toEqual(fixture.tags);
   if(fixture.prose)expect(result.prose).toBe(fixture.prose);
   if(fixture.absent)expect(result.prompt).not.toMatch(fixture.absent);
@@ -21,18 +21,29 @@ for(const fixture of cases)test(fixture.name,async()=> {
   expect(result.issues.length).toBe(fixture.issues?.length??0);
   expect(result.prompt).not.toMatch(/masterpiece|best quality|score_7|looking at viewer|beautiful/);
 });
-test('character scope is the default and says what it left out',async()=> {
+test('one run yields every scope; character is the default and says what it hides',async()=> {
   const fixture=cases.find(c=>c.name.includes('character only'))!;
-  const {result,inputs}=await run(fixture.source,{traits:fixture.traits},{drop:[],prose:fixture.caption,issues:[]});
+  const {result,calls}=await run(fixture.source,{traits:fixture.traits},{drop:[],captions:{character:fixture.caption,outfit:'She wears an oversized hoodie and thin leggings.',scene:'She looks bored, chin in her palm.'},issues:[]});
+  expect(calls).toBe(2);expect(result.prompt).toBe(result.views.character.prompt);
   expect(result.evidence.every(t=>inScope(t.group,'character'))).toBe(true);
-  expect(result.notices.join(' ')).toContain('6 clothing, pose or scene details were left out');
-  // The reviewer never sees out-of-scope traits, so it cannot write them into the caption.
-  expect(inputs[1]).not.toMatch(/hoodie|leggings|Skinner/);expect(JSON.parse(inputs[1]).candidates.map((c:{name:string})=>c.name)).not.toContain('hoodie');
-  expect(result.prompt).not.toMatch(narratedFiller);
+  expect(result.notices.join(' ')).toContain('6 clothing, pose or scene details are hidden');
+  expect(result.prompt).not.toMatch(narratedFiller);expect(result.prompt).not.toMatch(/hoodie|leggings|bored|solo/);
+  for(const scope of ['outfit','scene'] as const)expect(result.views[scope].tags.map(t=>t.name)).toEqual(cases.find(c=>c.scope===scope)!.tags);
+  expect(result.views.outfit.prose).toBe(`${fixture.caption} She wears an oversized hoodie and thin leggings.`);
+  expect(result.views.scene.prose).toBe(`${fixture.caption} She wears an oversized hoodie and thin leggings. She looks bored, chin in her palm.`);
+  expect(result.views.outfit.notices.join(' ')).toContain('4 pose or scene details are hidden');expect(result.views.scene.notices.join(' ')).not.toContain('hidden');
+  // Shared tags are identical across views: the scopes cannot disagree with each other.
+  expect(result.views.scene.tags.filter(t=>t.name!=='solo').slice(0,result.tags.length)).toEqual(result.tags);
 });
-test('scope with nothing in it explains itself instead of returning an empty prompt',async()=> {
-  await expect(run('A red scarf.',{traits:[{id:'1',group:'outfit',evidence:'A red scarf.',tags:['red_scarf'],detail:'A red scarf'}]},{})).rejects.toThrow('only clothing or scene details');
-  expect((await run('A red scarf.',{traits:[{id:'1',group:'outfit',evidence:'A red scarf.',tags:['red_scarf'],detail:'A red scarf'}]},{},{scope:'outfit'})).result.prompt).toBe('red scarf\n\nA red scarf.');
+test('a scope with nothing in it is an empty view with a notice, not a failed run',async()=> {
+  const {result}=await run('A red scarf.',{traits:[{id:'1',group:'outfit',evidence:'A red scarf.',tags:['red_scarf'],detail:'A red scarf'}]},{});
+  expect(result.prompt).toBe('');expect(result.notices.join(' ')).toContain('Nothing in this description is about the character');
+  expect(result.views.outfit.prompt).toBe('red scarf\n\nA red scarf.');
+});
+test('a caption segment missing or unusable falls back for that segment only',async()=> {
+  const traits=[{id:'1',group:'hair',evidence:'red hair',tags:[],detail:'Red hair'},{id:'2',group:'outfit',evidence:'a coat',tags:[],detail:'A long coat'}];
+  const {result}=await run('red hair and a coat',{traits},{captions:{character:'Vivid red hair.',outfit:7,scene:'She waves.'}});
+  expect(result.views.scene.prose).toBe('Vivid red hair. A long coat.');expect(result.views.scene.notices.join(' ')).toContain('no usable caption for part');expect(result.prose).toBe('Vivid red hair.');
 });
 test('tags follow identity order however the model ordered its traits',async()=> {
   const traits=[{id:'a',group:'outfit',evidence:'a coat',tags:['coat']},{id:'b',group:'hair',evidence:'red hair',tags:['red_hair']},{id:'c',group:'subject',evidence:'She',tags:['1girl']}];
@@ -52,7 +63,7 @@ test('retyped quotes and dashes still ground; duplicate ids, bad tags and legacy
   expect(parsed.traits[1].group).toBe('body');expect(parsed.traits[1].detail).toBe('She\'s "tiny"');
 });
 test('review can only drop: unknown names and attempts to add tags are ignored',async()=> {
-  const {result}=await run('red hair',hair,{drop:['blue_eyes',null],keep:['blue_eyes'],tags:['blue_eyes'],prose:'Red hair.'});
+  const {result}=await run('red hair',hair,{drop:['blue_eyes',null],keep:['blue_eyes'],tags:['blue_eyes'],captions:{character:'Red hair.'}});
   expect(result.tags.map(t=>t.name)).toEqual(['red_hair']);expect(result.prompt).toBe('red hair\n\nRed hair.');
 });
 test('unusable review output keeps verified tags and first-pass wording instead of failing',async()=> {
@@ -63,9 +74,9 @@ test('unusable review output keeps verified tags and first-pass wording instead 
   expect((await run('red hair',hair,'not json')).result.notices.join(' ')).toContain('review step returned unusable text');
 });
 test('caption citing a number the description never gave falls back to first-pass wording',async()=> {
-  const {result}=await run('red hair',hair,{drop:[],prose:'A 19-year-old with red_hair.'});
-  expect(result.prose).toBe('Red hair.');expect(result.notices.join(' ')).toContain('no usable caption');
-  expect((await run('red hair',hair,{prose:'Vivid red_hair worn loose.'})).result.prose).toBe('Vivid red hair worn loose.');
+  const {result}=await run('red hair',hair,{drop:[],captions:{character:'A 19-year-old with red_hair.'}});
+  expect(result.prose).toBe('Red hair.');expect(result.notices.join(' ')).toContain('no usable caption for part');
+  expect((await run('red hair',hair,{captions:{character:'Vivid red_hair worn loose.'}})).result.prose).toBe('Vivid red hair worn loose.');
 });
 test('extraction failure, cancellation and oversized input fail clearly',async()=> {
   await expect(run('red hair','not json',{})).rejects.toThrow('valid translator JSON');
@@ -81,7 +92,7 @@ test('provider failure during review is not swallowed as bad output',async()=> {
 test('stated cup size becomes one fixed breast-size tag that the model cannot override or drop',async()=> {
   for(const guess of ['b_cup','medium_breasts','large_breasts']) {
     const lookedUp:string[]=[];
-    const {result,inputs}=await run('B cup, slim waist.',{traits:[{id:'c',group:'body',evidence:'B cup, slim waist.',tags:[guess,'narrow_waist'],detail:'A slim waist'}]},{drop:['small_breasts'],prose:'A slim waist.'},undefined,{...dictionary,resolve:async name=>{lookedUp.push(name);return dictionary.resolve(name,signal());}});
+    const {result,inputs}=await run('B cup, slim waist.',{traits:[{id:'c',group:'body',evidence:'B cup, slim waist.',tags:[guess,'narrow_waist'],detail:'A slim waist'}]},{drop:['small_breasts'],captions:{character:'A slim waist.'}},undefined,{...dictionary,resolve:async name=>{lookedUp.push(name);return dictionary.resolve(name,signal());}});
     expect(lookedUp.sort()).toEqual(['narrow_waist','small_breasts']);expect(result.prompt).toBe('small breasts, narrow waist\n\nA slim waist.');
     expect(result.notices).toContain('B cup was converted to small_breasts.');expect(JSON.parse(inputs[1]).candidates.map((c:{name:string})=>c.name)).toEqual(['narrow_waist']);
   }
@@ -103,7 +114,7 @@ test('without a cup label a described size passes through review like any tag',a
   expect((await run('a small chest',{traits},{drop:['small_breasts']})).result.tags).toEqual([]);
 });
 test('dictionary outage leaves the caption and no unverified tags',async()=> {
-  const {result}=await run('red hair',hair,{prose:'Red hair.'},undefined,{...dictionary,resolve:async()=>{throw new Error('offline');}});
+  const {result}=await run('red hair',hair,{captions:{character:'Red hair.'}},undefined,{...dictionary,resolve:async()=>{throw new Error('offline');}});
   expect(result.prompt).toBe('Red hair.');expect(result.notices.join(' ')).toContain('tag service was unavailable');
 });
 test('nonexistent tags are named in a notice; aliases collapse to one canonical tag',async()=> {
@@ -115,7 +126,7 @@ test('candidate tags are capped and wiki text is trimmed before review',async()=
   const words=Array.from({length:12},(_,i)=>`w${i}`);const source=words.join(' ');
   const traits=words.map((w,i)=>({id:w,group:'body',evidence:w,tags:[0,1,2,3].map(n=>`tag_${i}_${n}`),detail:w}));
   const {result,inputs}=await run(source,{traits},{},undefined,{...dictionary,resolve:async name=>({name,source:'Danbooru',count:1,wiki:'x'.repeat(4000),url:''})});
-  expect(result.tags.length).toBe(32);expect(JSON.parse(inputs[1]).candidates.every((c:{definition:string})=>c.definition.length===300)).toBe(true);
+  expect(result.tags.length).toBe(40);expect(JSON.parse(inputs[1]).candidates.every((c:{definition:string})=>c.definition.length===300)).toBe(true);
 });
 test('conflicting global tags drop together',async()=> {
   const row=(name:string):TagRow=>({name,source:'Danbooru',count:1,wiki:'',url:'',traitId:'1',evidence:'x'});
@@ -127,17 +138,17 @@ test('conflicting global tags drop together',async()=> {
 test('genuine uncertainty withholds only the affected trait\'s tags',async()=> {
   const traits=[{id:'eyes',group:'face',evidence:'Blue or grey eyes.',tags:['blue_eyes'],detail:'Blue or grey eyes'},{id:'hair',group:'hair',evidence:'Red hair.',tags:['red_hair'],detail:'Red hair'}];
   for(const anchor of [{traitIds:['eyes']},{evidence:'Blue or grey eyes.'}]) {
-    const {result}=await run('Blue or grey eyes. Red hair.',{traits},{drop:[],prose:'Red hair. Blue or grey eyes.',issues:[{kind:'ambiguity',...anchor,message:'The source gives two eye-color alternatives.'}]});
+    const {result}=await run('Blue or grey eyes. Red hair.',{traits},{drop:[],captions:{character:'Red hair. Blue or grey eyes.'},issues:[{kind:'ambiguity',...anchor,message:'The source gives two eye-color alternatives.'}]});
     expect(result.tags.map(t=>t.name)).toEqual(['red_hair']);expect(result.prose).toContain('Blue or grey eyes');expect(result.issues[0].evidence).toEqual(['Blue or grey eyes.']);
   }
 });
 test('a malformed or invented uncertainty note no longer costs the whole result',async()=> {
   const traits=[{id:'hair',group:'hair',evidence:'Red hair.',tags:['red_hair'],detail:'Red hair'},{id:'face',group:'face',evidence:'A narrow face.',tags:['narrow_face'],detail:'A narrow face'}];
   const source='Red hair. A narrow face.';
-  const located=await run(source,{traits},{prose:source,issues:[{kind:'warning',evidence:['Red hair.'],message:'Review this interpretation.'}]});
+  const located=await run(source,{traits},{captions:{character:source},issues:[{kind:'warning',evidence:['Red hair.'],message:'Review this interpretation.'}]});
   expect(located.result.tags.map(t=>t.name)).toEqual(['narrow_face']);expect(located.result.issues).toEqual([]);expect(located.result.notices.join(' ')).toContain('malformed uncertainty note');
   for(const issue of [{kind:'ambiguity or contradiction',evidence:[],message:'A possible conflict.'},{kind:'contradiction',evidence:['blue eyes'],message:'Two colors.'},{kind:'ambiguity',evidence:['Red hair.'],message:'Age not specified.'}]) {
-    const {result}=await run(source,{traits},{prose:source,issues:[issue]});
+    const {result}=await run(source,{traits},{captions:{character:source},issues:[issue]});
     expect(result.tags.map(t=>t.name)).toEqual(['red_hair','narrow_face']);expect(result.issues).toEqual([]);expect(result.notices.length).toBeGreaterThan(0);
   }
 });

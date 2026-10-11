@@ -21,7 +21,7 @@ function harness(provider='openrouter',model='test/generative') {
       if(input.model!==model||input.provider!==provider||input.connection_id!=='c1')throw new Error('API error 400: missing or invalid model');
       if(fail)throw new Error('Invalid API key SECRET-DO-NOT-LEAK');
       if(block)await new Promise((_,reject)=>input.signal.addEventListener('abort',()=>reject(new DOMException('aborted','AbortError')),{once:true}));
-      return{content:JSON.stringify(responses ? responses.shift() : input.messages[0].content.includes('one trait per visual fact')?{traits:[{id:'t1',group:'hair',evidence:'Short red hair.',tags:['red_hair'],detail:'Short red hair'}]}:{drop:[],prose:'Short red hair.',issues:[]}),finish_reason:'stop'};
+      return{content:JSON.stringify(responses ? responses.shift() : input.messages[0].content.includes('one trait per visual fact')?{traits:[{id:'t1',group:'hair',evidence:'Short red hair.',tags:['red_hair'],detail:'Short red hair'}]}:{drop:[],captions:{character:'Short red hair.'},issues:[]}),finish_reason:'stop'};
     }},
     onFrontendMessage:(fn:typeof handler)=>{handler=fn;return()=>{handler=undefined;};},
     sendToFrontend:(payload:unknown,user?:string,options?:{frontendSessionId?:string})=>{replies.push({payload,user,session:options?.frontendSessionId});if(user==='u1'&&options?.frontendSessionId==='s1')listeners.forEach(fn=>fn(payload));},
@@ -87,18 +87,18 @@ test('direct DeepSeek v4 pro passes the saved provider/model on both raw calls',
 test('panel prompt omits narration and scene while the source passages stay visible; Include widens it',async()=> {
   dom();const h=harness();cleanups.push(h.stop);const dispose=setup(h.ctx);cleanups.push(dispose);
   const extraction={traits:[{id:'1',group:'hair',evidence:'Red hair, obviously!',tags:['red_hair'],detail:'Red hair'},{id:'2',group:'outfit',evidence:'a red hair ribbon',tags:['red_hair'],detail:'A ribbon'}]};
-  h.setResponses([extraction,{drop:[],prose:'Red hair.',issues:[]},extraction,{drop:[],prose:'Red hair and a ribbon.',issues:[]}]);
+  h.setResponses([extraction,{drop:[],captions:{character:'Red hair.',outfit:'She wears a ribbon.'},issues:[]}]);
   const translate=Array.from(h.root.querySelectorAll('button')).find(b=>b.textContent==='Translate')!;
   await until(()=>!translate.disabled);h.root.querySelector('select')!.value='c1';
   const areas=Array.from(h.root.querySelectorAll('textarea'));areas[0].value='Red hair, obviously! And a red hair ribbon.';translate.click();await until(()=>!translate.disabled);
   expect(areas[1].value).toBe('red_hair');expect(areas[2].value).toBe('Red hair.');expect(areas[3].value).toBe('red hair\n\nRed hair.');
   expect(h.root.querySelector('details:not(.lc-card)')?.textContent).toContain('Red hair, obviously!');expect(h.root.querySelector('details:not(.lc-card)')?.textContent).not.toContain('ribbon');
-  const scope=h.root.querySelectorAll('select')[1];expect(scope.value).toBe('character');scope.value='outfit';translate.click();await until(()=>!translate.disabled);
-  expect(areas[2].value).toBe('Red hair and a ribbon.');expect(h.root.querySelector('details:not(.lc-card)')?.textContent).toContain('ribbon');
+  const scope=h.root.querySelectorAll('select')[1];expect(scope.value).toBe('character');areas[2].value='my edit';areas[2].dispatchEvent(new Event('input'));scope.value='outfit';scope.dispatchEvent(new Event('change'));
+  expect(areas[2].value).toBe('Red hair. She wears a ribbon.');expect(h.calls.filter(v=>(v as unknown[])[0]==='generation').length).toBe(2);expect(h.root.textContent).toContain('manual edits were replaced');expect(h.root.querySelector('details:not(.lc-card)')?.textContent).toContain('ribbon');
 });
 test('direct DeepSeek adapter tolerates string evidence without discarding the panel result',async()=> {
   dom();const h=harness('deepseek','deepseek-v4-pro');cleanups.push(h.stop);const dispose=setup(h.ctx);cleanups.push(dispose);
-  h.setResponses([{traits:[{id:'1',group:'hair',evidence:'Short red hair.',tags:['red_hair'],detail:'Short red hair'}]},{drop:[],prose:'Short red hair.',issues:[{kind:'ambiguity',evidence:'Short red hair.',message:'Age not specified.'}]}]);
+  h.setResponses([{traits:[{id:'1',group:'hair',evidence:'Short red hair.',tags:['red_hair'],detail:'Short red hair'}]},{drop:[],captions:{character:'Short red hair.'},issues:[{kind:'ambiguity',evidence:'Short red hair.',message:'Age not specified.'}]}]);
   const translate=Array.from(h.root.querySelectorAll('button')).find(b=>b.textContent==='Translate')!;
   await until(()=>!translate.disabled);h.root.querySelector('select')!.value='c1';
   const areas=Array.from(h.root.querySelectorAll('textarea'));areas[0].value='Short red hair.';translate.click();await until(()=>!translate.disabled);
