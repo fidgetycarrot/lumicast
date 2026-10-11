@@ -86,3 +86,7 @@ Some facts that decide how a character should look are never written in a descri
 
 Typecheck, 56 tests and the build passed with controlled responses. How a live model maps a stated type to tags, and which of those tags exist on Danbooru, was not tested here.
 
+## v0.2.4: canonical spelling for the feminine-male type tag
+
+A live run in Lumiverse showed the tag source line `trap · Danbooru · alias: otoko_no_ko`: the model proposed `otoko_no_ko`, and Danbooru's alias table resolved it to `trap`. Danbooru's live tag is therefore `trap`, the reverse of what the v0.2.2 notes and prompts assumed. The alias handling produced the right tag regardless. v0.2.4 names `trap` in the prompts, the README and the fixtures, and the provider smoke fixture now requires `trap`, which a live lookup can return, where it previously required a name that only ever appears as an alias. Typecheck, 56 tests and the build passed.
+

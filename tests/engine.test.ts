@@ -46,11 +46,11 @@ test('a caption segment missing or unusable falls back for that segment only',as
   expect(result.views.scene.prose).toBe('Vivid red hair. A long coat.');expect(result.views.scene.notices.join(' ')).toContain('no usable caption for part');expect(result.prose).toBe('Vivid red hair.');
 });
 test('stated character type is quotable evidence, reaches the model, and is absent by default',async()=> {
-  const traits=[{id:'1',group:'subject',evidence:'femboy',tags:['otoko_no_ko'],detail:'A feminine-presenting young man'},{id:'2',group:'hair',evidence:'silver hair',tags:['silver_hair'],detail:'Silver hair'}];
+  const traits=[{id:'1',group:'subject',evidence:'femboy',tags:['trap'],detail:'A feminine-presenting young man'},{id:'2',group:'hair',evidence:'silver hair',tags:['silver_hair'],detail:'Silver hair'}];
   const without=await run('He has silver hair.',{traits},{});
   expect(without.result.tags.map(t=>t.name)).toEqual(['silver_hair']);expect(JSON.parse(without.inputs[0])).toEqual({description:'He has silver hair.'});
   const withType=await run('He has silver hair.',{traits},{captions:{character:'A feminine-presenting young man with silver hair.'}},{stated:' femboy, android '});
-  expect(withType.result.prompt).toBe('otoko no ko, silver hair\n\nA feminine-presenting young man with silver hair.');
+  expect(withType.result.prompt).toBe('trap, silver hair\n\nA feminine-presenting young man with silver hair.');
   expect(JSON.parse(withType.inputs[0]).stated).toBe('femboy, android');expect(withType.result.notices.join(' ')).not.toContain('left out');
   await expect(run('x',{traits},{},{stated:'y'.repeat(301)})).rejects.toThrow('Invalid character type');
   expect((await run('Silver hair.',{traits:[traits[1]]},{},{stated:'she is a D cup'})).result.tags.map(t=>t.name)).toEqual(['silver_hair','large_breasts']);
