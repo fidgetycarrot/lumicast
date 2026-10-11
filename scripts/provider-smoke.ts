@@ -8,7 +8,7 @@ const endpoint=new URL(process.env.LUMICAST_SMOKE_URL ?? 'https://openrouter.ai/
 if(!key||!model||!isGenerative(model))throw new Error('Set LUMICAST_SMOKE_API_KEY and LUMICAST_SMOKE_MODEL to a generative text model.');
 if(endpoint.protocol!=='https:'&&!(['localhost','127.0.0.1'].includes(endpoint.hostname)&&endpoint.protocol==='http:'))throw new Error('Use HTTPS, or localhost for a local test provider.');
 const dictionary=new BooruDictionary(async url=> {
-  const r=await fetch(url,{signal:AbortSignal.timeout(15_000),redirect:'error',headers:{Accept:'application/json','User-Agent':'LumiCast/0.1.3 (tag metadata client)'}});
+  const r=await fetch(url,{signal:AbortSignal.timeout(15_000),redirect:'error',headers:{Accept:'application/json','User-Agent':'LumiCast/0.2.0 (tag metadata client)'}});
   return{status:r.status,body:await r.text()};
 });
 const engine=new Translator(async(system,input,signal)=> {
@@ -22,16 +22,15 @@ console.log(`Runs ${cases.length} synthetic descriptions; up to ${cases.length*2
 let failed=0;
 for(const fixture of cases) {
   try {
-    const result=await engine.translate(fixture.source,AbortSignal.timeout(240_000),model);
-    // These are hard grounding checks, not a measurement of Anima image fidelity.
+    const result=await engine.translate(fixture.source,AbortSignal.timeout(240_000),model,{scope:fixture.scope});
+    // Hard checks only. A live model may reasonably choose other tags than the
+    // fixture's, so tags and caption are printed for you to judge by eye.
     if(!result.prompt.trim())throw new Error('Empty prompt.');
-    // A fully covered fact can be absent from prose. Literal evidence remains
-    // outside the assembled prompt; overlap checks do not prove completeness.
-    for(const trait of fixture.traits)if(!result.evidence.some(t=>t.evidence.includes(trait.evidence)||trait.evidence.includes(t.evidence)))throw new Error('A fixture detail was not represented in the extracted evidence.');
+    if(fixture.absent?.test(result.prompt))throw new Error('Narration, a measurement or out-of-scope detail reached the prompt.');
     if(fixture.name.includes('sparse')&&result.issues.length)throw new Error('Sparse input produced uncertainty.');
-    if(fixture.name.includes('negation')&&result.tags.some(t=>t.name==='wolf_ears'))throw new Error('Metaphor became anatomy.');
-    if(fixture.name.includes('personality-heavy')&&(result.tags.some(t=>/(?:cup|breasts)/.test(t.name))||/know-it-all|you know\?|psych major/i.test(result.prompt)))throw new Error('Narration or a measurement became a visual tag.');
-    console.log(`PASS: ${fixture.name} (${result.tags.length} tags, ${result.issues.length} issues)`);
-  }catch{failed++;console.log(`FAIL: ${fixture.name}. Inspect with your provider; response and credentials are not logged.`);}
+    if(fixture.name.includes('metaphor')&&result.tags.some(t=>t.name==='wolf_ears'))throw new Error('Metaphor became anatomy.');
+    if(fixture.name.includes('contradiction')&&result.tags.some(t=>/_hair$/.test(t.name)))throw new Error('A contradiction was resolved by guessing.');
+    console.log(`PASS: ${fixture.name}\n  tags: ${result.tags.map(t=>t.name).join(', ')}\n  caption: ${result.prose}`);
+  }catch(error){failed++;console.log(`FAIL: ${fixture.name}: ${error instanceof Error&&!/HTTP|key/i.test(error.message)?error.message:'request failed'}`);}
 }
 if(failed)throw new Error(`${failed} provider smoke cases need review.`);

@@ -2,29 +2,27 @@
 
 ## In Lumiverse after installation
 
-Select a saved generative text connection and try the nine synthetic descriptions in `tests/fixtures.ts`, plus your usual OOC-generated descriptions from different presets:
+Select a saved generative text connection and try the synthetic descriptions in `tests/fixtures.ts`, plus your usual OOC-generated descriptions from different presets:
 
 | Description | Required behavior |
 |---|---|
-| Broad ribcage, softly defined waist, barely upturned nose, blue eyes | Keep subtle qualifiers in prose; do not replace them with exaggerated body tags. |
-| Left amber eye, right blue eye, black hair with thin white temple streak | Preserve side assignment and narrow streak. Avoid global competing eye/hair colors. |
-| Humanoid with translucent ear fins, faint silver speckles beneath olive skin | Keep unusual anatomy and texture; do not invent species, gender, outfit or pose. |
-| Wolfish grin, not wolf ears; shoulder-length hair | Do not emit wolf ears or extreme hair lengths. |
-| Short red hair | Do not request age, gender, eye color or missing attributes. |
-| Entirely black hair and entirely white hair | Report the actual contradiction with quotes, preserve wording, and do not choose a winner. |
-| Mara with blue eyes/green coat; Sol with brown eyes/red scarf | Preserve subject ownership; no invented composition or globally mixed attributes. |
-| Eyes blue or grey; narrator cannot tell | Report only the real color ambiguity. |
-| Chatty narrator, compact frame, B cup, near-black hair in a clip, oversized sleeves, visibly wet leggings | Use concise visual clauses; omit jokes/biography, preserve all qualifiers and visible states without guessing causes; do not turn cup size into a booru tag. |
+| Broad ribcage, softly defined waist, barely upturned nose, blue eyes | `blue_eyes` as a tag; the subtle proportions in the caption, not as exaggerated body tags. |
+| Left amber eye, right blue eye, black hair with thin white temple streak | Side assignment and the narrow streak survive in the caption; no competing global eye colours. |
+| Humanoid with translucent ear fins, faint silver speckles beneath olive skin | Unusual anatomy and texture kept; no invented species, gender, outfit or pose. |
+| Wolfish grin, not wolf ears; shoulder-length hair | No `wolf_ears`; `medium_hair`. |
+| Short red hair | `red_hair`, `short_hair`; no request for age, gender or eye colour. |
+| Entirely black hair and entirely white hair | The contradiction is reported; neither colour is tagged. |
+| Mara with blue eyes/green coat; Sol with brown eyes/red scarf | Ownership stays in the caption; no globally mixed colour tags. |
+| Eyes blue or grey; narrator cannot tell | Only the real colour ambiguity is reported. |
+| Chatty narrator mid-scene: petite frame, B cup, near-black shoulder-length hair in a claw clip, grey eyes, bored, oversized hoodie, wet leggings | **Character only:** `1girl`, build, `small_breasts`, hair colour and length, eye colour; a caption with no narrator voice, cup letter, clothing, clip, pose or wetness. **Character and outfit:** adds the hoodie and leggings tags. **Everything:** adds `solo`, hair-up, expression, pose and wet clothing. |
 
-Also check that an unsupported/malformed optional uncertainty note produces a notice and source fallback instead of aborting the entire translation. Genuine uncertainty should still remove affected tags and preserve exact wording.
+Also check: a nonexistent tag is named in a notice instead of failing the run; change tags → rebuild disabled until verified; clear tags → caption-only rebuild; edit final prompt → copy exact text; stop provider access → previous edits preserved; Cancel → no replacement output; close/reopen tab → no duplicate tab/listeners; reload → settings retained, draft and Include choice reset.
 
-Also check: change tags → rebuild disabled until verified; nonexistent tag → clear failure; clear tags → prose-only rebuild; edit final prompt → copy exact text; stop provider access → previous edits preserved; Cancel → no replacement output; close/reopen tab → no duplicate tab/listeners; reload → settings retained, draft cleared.
-
-If a model misses a quote/detail, invents a trait, or raises missing-attribute uncertainty, try a stronger generative connection. Two calls by the same model reduce errors but do not establish a guarantee.
+If a model files a lasting trait under the scene (or the reverse), misses a detail, or invents one, try a stronger generative connection. Two calls by the same model reduce errors but do not establish a guarantee.
 
 ## Optional live provider smoke
 
-This was **not run during development**: no provider credentials were supplied. It uses the production engine and dictionary directly, not an authenticated Lumiverse session. It makes up to **18 paid calls** over nine synthetic inputs, without automatic retries. It does not generate images.
+This was **not run during development**: no provider credentials were supplied. It uses the production engine and dictionary directly, not an authenticated Lumiverse session. It makes up to **22 paid calls** over eleven synthetic inputs, without automatic retries. It does not generate images.
 
 Supply environment variables using your normal secret-handling method, without putting real keys in committed files:
 
@@ -38,4 +36,4 @@ Then run:
 bun run scripts/provider-smoke.ts
 ```
 
-The script checks source-quote overlap for fixture details, sparse input does not become uncertainty, a wolfish grin does not become wolf ears, and obvious narrator filler/cup tags do not survive the chatty case. These are partial checks: quote overlap cannot establish semantic completeness or faithful paraphrasing. Compare original quotes, compact detail and tags in the extension. It reports case names and counts without printing credentials or provider response bodies. Passing this test is not a visual Anima benchmark.
+The script fails a case only on hard errors: an empty prompt, narrator filler, a cup letter or out-of-scope detail in the prompt, uncertainty on sparse input, a wolfish grin becoming wolf ears, or a contradiction resolved by guessing. It prints each case's tags and caption so you can judge the rest by eye, since a live model may reasonably choose different tags from the fixtures. It never prints credentials or raw provider responses. Passing this test is not a visual Anima benchmark.

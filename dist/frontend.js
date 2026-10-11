@@ -10,6 +10,7 @@ function tagName(v) {
     throw new Error("Use a plain booru tag name, without weights or wildcards.");
   return name;
 }
+var BREAST_SIZE = /^(?:flat_chest|(?:small|medium|large|huge|gigantic)_breasts)$/;
 function assemble(names, prose) {
   const tags = [...new Set(names.map(tagName))].map((n) => /^score_\d+$/.test(n) ? n : n.replaceAll("_", " "));
   return [tags.join(", "), prose.trim()].filter(Boolean).join(`
@@ -23,7 +24,8 @@ function removeConflicts(rows) {
     /^(?:black|white|grey|gray|brown|blonde|red|blue|green|purple|pink|orange|silver)_hair$/,
     /^(?:short|medium|long|very_long)_hair$/,
     /^(?:blue|green|brown|red|yellow|purple|pink|grey|gray|black|white)_eyes$/,
-    /^(?:1girl|1boy|1other)$/
+    /^(?:1girl|1boy|1other)$/,
+    BREAST_SIZE
   ];
   const excluded = new Set;
   for (const family of families) {
@@ -114,7 +116,7 @@ function setup(ctx) {
   const intro = el("header");
   const kicker = el("div", "DESCRIPTION → ANIMA");
   kicker.className = "lc-kicker";
-  intro.append(kicker, el("h1", "LumiCast"), el("p", "Keep the character you described."), el("p", "Verified tags for clear traits. Compact prose for the details tags cannot capture."));
+  intro.append(kicker, el("h1", "LumiCast"), el("p", "Turn a written character into a reusable Anima prompt."), el("p", "Real booru tags for everything a tag exists for, and a short caption for what tags cannot say."));
   const status = el("div");
   status.className = "lc-status";
   status.setAttribute("role", "status");
@@ -151,12 +153,14 @@ function setup(ctx) {
   const source = el("textarea");
   source.rows = 7;
   source.maxLength = 12000;
-  source.placeholder = "Paste the character’s appearance. Subtle traits, asymmetry and unusual anatomy are welcome.";
+  source.placeholder = "Paste the character’s appearance. Narrator voice and scene detail are fine; they are filtered out.";
+  const scope = el("select");
+  scope.append(option("Character only — body, hair and face", "character"), option("Character and outfit", "outfit"), option("Everything — outfit, pose, expression and scene", "scene"));
   const translate = button("Translate", async () => {
     if (!source.value.trim())
       throw new Error("Paste a character description first.");
     const currentRevision = revision;
-    const next = await rpc.request("translate", { description: source.value, connectionId: connection.value });
+    const next = await rpc.request("translate", { description: source.value, connectionId: connection.value, scope: scope.value });
     if (revision !== currentRevision) {
       notify("The description changed during translation. Translate again to use the new wording.");
       return;
@@ -177,14 +181,14 @@ function setup(ctx) {
       item.append(link, el("blockquote", t.evidence));
       provenance.append(item);
     });
-    sourceQuotes.replaceChildren(el("p", "Original visual details — retained for comparison, outside the assembled prompt."));
+    sourceQuotes.replaceChildren(el("p", "Passages the result was built from — for comparison, outside the assembled prompt."));
     next.evidence.forEach((t) => sourceQuotes.append(el("blockquote", t.evidence)));
     issues.replaceChildren();
     next.issues.forEach((i) => issues.append(el("p", `${i.kind}: ${i.message}`), el("blockquote", i.evidence.join(" / "))));
     if (!next.issues.length)
       issues.append(el("p", "No unresolved ambiguity was reported."));
-    tagState.textContent = next.tags.length ? `${next.tags.length} tags checked against live metadata and reviewed for meaning. ${next.model}.` : `No verified tags retained. Review the notices below. ${next.model}.`;
-    notify(["Translation ready. Review the compact detail and tags.", !gelUser.value ? "Gelbooru is not configured; verified tags use Danbooru." : "", ...next.notices].filter(Boolean).join(`
+    tagState.textContent = next.tags.length ? `${next.tags.length} tags, each a live Danbooru tag. ${next.model}.` : `No verified tags retained. Review the notices below. ${next.model}.`;
+    notify(["Translation ready. Review the tags and caption.", !gelUser.value ? "Gelbooru is not configured; verified tags use Danbooru." : "", ...next.notices].filter(Boolean).join(`
 `));
     update();
   }, true);
@@ -194,7 +198,7 @@ function setup(ctx) {
   cancel.addEventListener("click", () => {
     rpc.request("cancel").then(() => notify("Cancellation requested.")).catch((e) => notify(e.message, true));
   });
-  input.append(field("Character description", source, "Only this pasted description is sent to your selected provider. No chat history is read."), row(translate, cancel));
+  input.append(field("Character description", source, "Only this pasted description is sent to your selected provider. No chat history is read."), field("Include", scope, "Character only gives a prompt you can reuse in any scene. Clothing, pose and setting come from the scene prompt."), row(translate, cancel));
   const review = card("02 / Review");
   const tags = el("textarea");
   tags.rows = 3;
@@ -203,7 +207,7 @@ function setup(ctx) {
   const prose = el("textarea");
   prose.rows = 6;
   prose.maxLength = 16000;
-  prose.placeholder = "Compact visual details beyond the tags";
+  prose.placeholder = "A short caption for what the tags cannot say";
   const tagState = el("p", "Translate to verify tags.");
   tagState.className = "lc-muted";
   const verify = button("Verify edited tags", async () => {
@@ -234,7 +238,7 @@ function setup(ctx) {
   const sourceQuotes = el("div");
   const evidence = el("details");
   evidence.append(el("summary", "Tag sources & uncertainty"), provenance, issues, sourceQuotes);
-  review.append(field("Booru tags — comma separated", tags, "Canonical underscores are shown here; the assembled Anima prompt uses spaces."), tagState, verify, field("Natural-language detail", prose, "Reviewed visual clauses preserve nuance without repeating fully covered tags. Original quotes are below. Edit freely; no absent attributes are filled in."), evidence);
+  review.append(field("Booru tags — comma separated", tags, "Canonical underscores are shown here; the assembled Anima prompt uses spaces."), tagState, verify, field("Natural-language detail", prose, "A short caption written from the extracted facts. Source passages are below. Edit freely; nothing the text leaves out is filled in."), evidence);
   const output = card("03 / Use");
   const prompt = el("textarea");
   prompt.rows = 8;
@@ -257,7 +261,7 @@ function setup(ctx) {
       notify("Clipboard is unavailable here. The prompt is selected; use your usual Copy shortcut.");
     }
   }, true);
-  output.append(field("Editable Anima prompt", prompt, "Rebuild applies edits above and replaces this field. Copy always copies exactly what is shown."), row(rebuild, copy), el("p", "Tag existence is verified, not measured Anima image quality. No quality, score, safety, artist or scene defaults are added."));
+  output.append(field("Editable Anima prompt", prompt, "Rebuild applies edits above and replaces this field. Copy always copies exactly what is shown."), row(rebuild, copy), el("p", "Tags are verified to exist, not measured for Anima image quality. No quality, score, safety or artist tags are added; add your own."));
   const searchCard = el("details");
   searchCard.className = "lc-card";
   searchCard.append(el("summary", "Find a real tag"));
@@ -281,7 +285,7 @@ function setup(ctx) {
     notify("Search complete. Popularity is not an Anima quality score.");
   });
   searchCard.append(field("Tag name or prefix", query, "Metadata only. No images or posts are fetched."), search, found);
-  app.append(intro, settings, status, input, review, output, searchCard, el("p", "LumiCast 0.1.3 · Manual translator · Draft stays in this tab until reload."));
+  app.append(intro, settings, status, input, review, output, searchCard, el("p", "LumiCast 0.2.0 · Manual translator · Draft stays in this tab until reload."));
   const controls = [translate, save, refreshButton, verify, rebuild, copy, search];
   function update() {
     for (const c of controls)
@@ -290,6 +294,7 @@ function setup(ctx) {
     copy.disabled = busy || !prompt.value.trim();
     cancel.hidden = !busy;
     connection.disabled = busy;
+    scope.disabled = busy;
     gelUser.disabled = busy;
     gelKey.disabled = busy;
     clearKey.disabled = busy;
@@ -357,6 +362,11 @@ function setup(ctx) {
     revision++;
     if (result)
       notify("Description changed. Translate again to refresh the result.");
+  });
+  scope.addEventListener("change", () => {
+    revision++;
+    if (result)
+      notify("Translate again to apply the new “Include” choice.");
   });
   tags.addEventListener("input", () => {
     verified = false;

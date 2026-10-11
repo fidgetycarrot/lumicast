@@ -42,7 +42,7 @@ export function setup(ctx:SpindleFrontendContext) {
   const removeStyle=ctx.dom.addStyle(STYLES);
   const app=el('div');app.className='lc-app';tab.root.append(app);
   const intro=el('header');const kicker=el('div','DESCRIPTION → ANIMA');kicker.className='lc-kicker';
-  intro.append(kicker,el('h1','LumiCast'),el('p','Keep the character you described.'),el('p','Verified tags for clear traits. Compact prose for the details tags cannot capture.'));
+  intro.append(kicker,el('h1','LumiCast'),el('p','Turn a written character into a reusable Anima prompt.'),el('p','Real booru tags for everything a tag exists for, and a short caption for what tags cannot say.'));
   const status=el('div');status.className='lc-status';status.setAttribute('role','status');status.setAttribute('aria-live','polite');
   const settings=el('details');settings.className='lc-card';settings.append(el('summary','Connection & tag services'));
   const connection=el('select');connection.setAttribute('aria-label','Generative connection');
@@ -58,11 +58,12 @@ export function setup(ctx:SpindleFrontendContext) {
   const credentialNotice=el('p');credentialNotice.className='lc-muted';
   settings.append(field('Generative connection',connection,'Uses the model saved in Lumiverse. Add or change models in Connections, then refresh here.'),el('p','Choose a fast generative text model that follows JSON instructions. Jev, Decisions and embedding models are not translators.'),field('Gelbooru user ID (optional)',gelUser),field('Gelbooru API key (optional)',gelKey,'Stored in your extension storage on the Lumiverse server. Never returned to this panel. Sent only to Gelbooru over HTTPS.'),clearLabel,credentialNotice,row(save,refreshButton));
   const input=card('01 / Describe');
-  const source=el('textarea');source.rows=7;source.maxLength=12_000;source.placeholder='Paste the character’s appearance. Subtle traits, asymmetry and unusual anatomy are welcome.';
+  const source=el('textarea');source.rows=7;source.maxLength=12_000;source.placeholder='Paste the character’s appearance. Narrator voice and scene detail are fine; they are filtered out.';
+  const scope=el('select');scope.append(option('Character only — body, hair and face','character'),option('Character and outfit','outfit'),option('Everything — outfit, pose, expression and scene','scene'));
   const translate=button('Translate',async()=> {
     if(!source.value.trim())throw new Error('Paste a character description first.');
     const currentRevision=revision;
-    const next=await rpc.request<Translation>('translate',{description:source.value,connectionId:connection.value});
+    const next=await rpc.request<Translation>('translate',{description:source.value,connectionId:connection.value,scope:scope.value});
     if(revision!==currentRevision) {notify('The description changed during translation. Translate again to use the new wording.');return;}
     result=next;tags.value=next.tags.map(t=>t.name).join(', ');prose.value=next.prose;prompt.value=next.prompt;verified=true;
     provenance.replaceChildren();
@@ -70,19 +71,19 @@ export function setup(ctx:SpindleFrontendContext) {
       const item=el('div');item.className='lc-provenance';const link=el('a',`${t.name} · ${t.source}${t.aliasFrom ? ` · alias: ${t.aliasFrom}` : ''}`);link.href=t.url;link.target='_blank';link.rel='noopener noreferrer';
       item.append(link,el('blockquote',t.evidence));provenance.append(item);
     });
-    sourceQuotes.replaceChildren(el('p','Original visual details — retained for comparison, outside the assembled prompt.'));
+    sourceQuotes.replaceChildren(el('p','Passages the result was built from — for comparison, outside the assembled prompt.'));
     next.evidence.forEach(t=>sourceQuotes.append(el('blockquote',t.evidence)));
     issues.replaceChildren();next.issues.forEach(i=>issues.append(el('p',`${i.kind}: ${i.message}`),el('blockquote',i.evidence.join(' / '))));
     if(!next.issues.length)issues.append(el('p','No unresolved ambiguity was reported.'));
-    tagState.textContent=next.tags.length ? `${next.tags.length} tags checked against live metadata and reviewed for meaning. ${next.model}.` : `No verified tags retained. Review the notices below. ${next.model}.`;
-    notify(['Translation ready. Review the compact detail and tags.',!gelUser.value ? 'Gelbooru is not configured; verified tags use Danbooru.' : '',...next.notices].filter(Boolean).join('\n'));
+    tagState.textContent=next.tags.length ? `${next.tags.length} tags, each a live Danbooru tag. ${next.model}.` : `No verified tags retained. Review the notices below. ${next.model}.`;
+    notify(['Translation ready. Review the tags and caption.',!gelUser.value ? 'Gelbooru is not configured; verified tags use Danbooru.' : '',...next.notices].filter(Boolean).join('\n'));
     update();
   },true);
   const cancel=el('button','Cancel');cancel.type='button';cancel.hidden=true;cancel.addEventListener('click',()=>{void rpc.request('cancel').then(()=>notify('Cancellation requested.')).catch(e=>notify(e.message,true));});
-  input.append(field('Character description',source,'Only this pasted description is sent to your selected provider. No chat history is read.'),row(translate,cancel));
+  input.append(field('Character description',source,'Only this pasted description is sent to your selected provider. No chat history is read.'),field('Include',scope,'Character only gives a prompt you can reuse in any scene. Clothing, pose and setting come from the scene prompt.'),row(translate,cancel));
   const review=card('02 / Review');
   const tags=el('textarea');tags.rows=3;tags.maxLength=4000;tags.placeholder='Verified booru tags appear here';
-  const prose=el('textarea');prose.rows=6;prose.maxLength=16_000;prose.placeholder='Compact visual details beyond the tags';
+  const prose=el('textarea');prose.rows=6;prose.maxLength=16_000;prose.placeholder='A short caption for what the tags cannot say';
   const tagState=el('p','Translate to verify tags.');tagState.className='lc-muted';
   const verify=button('Verify edited tags',async()=> {
     const names=tags.value.split(/[\n,]/).map(v=>v.trim()).filter(Boolean);
@@ -96,7 +97,7 @@ export function setup(ctx:SpindleFrontendContext) {
   });
   const provenance=el('div');const issues=el('div');const sourceQuotes=el('div');
   const evidence=el('details');evidence.append(el('summary','Tag sources & uncertainty'),provenance,issues,sourceQuotes);
-  review.append(field('Booru tags — comma separated',tags,'Canonical underscores are shown here; the assembled Anima prompt uses spaces.'),tagState,verify,field('Natural-language detail',prose,'Reviewed visual clauses preserve nuance without repeating fully covered tags. Original quotes are below. Edit freely; no absent attributes are filled in.'),evidence);
+  review.append(field('Booru tags — comma separated',tags,'Canonical underscores are shown here; the assembled Anima prompt uses spaces.'),tagState,verify,field('Natural-language detail',prose,'A short caption written from the extracted facts. Source passages are below. Edit freely; nothing the text leaves out is filled in.'),evidence);
   const output=card('03 / Use');const prompt=el('textarea');prompt.rows=8;prompt.maxLength=24_000;
   const rebuild=button('Rebuild from tags + detail',()=> {
     if(tags.value.trim()&&!verified)throw new Error('Verify edited tags before rebuilding.');
@@ -106,7 +107,7 @@ export function setup(ctx:SpindleFrontendContext) {
     if(!prompt.value.trim())throw new Error('There is no prompt to copy yet.');
     try{await navigator.clipboard.writeText(prompt.value);notify('Prompt copied.');}catch{prompt.focus();prompt.select();notify('Clipboard is unavailable here. The prompt is selected; use your usual Copy shortcut.');}
   },true);
-  output.append(field('Editable Anima prompt',prompt,'Rebuild applies edits above and replaces this field. Copy always copies exactly what is shown.'),row(rebuild,copy),el('p','Tag existence is verified, not measured Anima image quality. No quality, score, safety, artist or scene defaults are added.'));
+  output.append(field('Editable Anima prompt',prompt,'Rebuild applies edits above and replaces this field. Copy always copies exactly what is shown.'),row(rebuild,copy),el('p','Tags are verified to exist, not measured for Anima image quality. No quality, score, safety or artist tags are added; add your own.'));
   const searchCard=el('details');searchCard.className='lc-card';searchCard.append(el('summary','Find a real tag'));
   const query=el('input');query.maxLength=100;const found=el('div');
   const search=button('Search Danbooru',async()=> {
@@ -116,15 +117,16 @@ export function setup(ctx:SpindleFrontendContext) {
     notify('Search complete. Popularity is not an Anima quality score.');
   });
   searchCard.append(field('Tag name or prefix',query,'Metadata only. No images or posts are fetched.'),search,found);
-  app.append(intro,settings,status,input,review,output,searchCard,el('p','LumiCast 0.1.3 · Manual translator · Draft stays in this tab until reload.'));
+  app.append(intro,settings,status,input,review,output,searchCard,el('p','LumiCast 0.2.0 · Manual translator · Draft stays in this tab until reload.'));
   const controls=[translate,save,refreshButton,verify,rebuild,copy,search];
-  function update(){for(const c of controls)c.disabled=busy;rebuild.disabled=busy||(!verified&&!!tags.value.trim());copy.disabled=busy||!prompt.value.trim();cancel.hidden=!busy;connection.disabled=busy;gelUser.disabled=busy;gelKey.disabled=busy;clearKey.disabled=busy;tags.readOnly=busy;prose.readOnly=busy;prompt.readOnly=busy;source.readOnly=busy;}
+  function update(){for(const c of controls)c.disabled=busy;rebuild.disabled=busy||(!verified&&!!tags.value.trim());copy.disabled=busy||!prompt.value.trim();cancel.hidden=!busy;connection.disabled=busy;scope.disabled=busy;gelUser.disabled=busy;gelKey.disabled=busy;clearKey.disabled=busy;tags.readOnly=busy;prose.readOnly=busy;prompt.readOnly=busy;source.readOnly=busy;}
   function notify(message:string,error=false){if(closed)return;status.textContent=message;status.dataset.error=String(error);}
   function row(...children:HTMLElement[]){const n=el('div');n.className='lc-row';n.append(...children);return n;}
   function card(title:string){const n=el('section');n.className='lc-card';n.append(el('h2',title));return n;}
   function button(label:string,action:()=>void|Promise<void>,primary=false){const b=el('button',label);b.type='button';if(primary)b.className='lc-primary';b.addEventListener('click',()=>{if(busy||closed)return;busy=true;update();notify('Working…');void Promise.resolve().then(action).catch(e=>notify(e instanceof Error?e.message:'The operation failed.',true)).finally(()=>{busy=false;if(!closed)update();});});return b;}
   async function refresh(){const snapshot=await rpc.request<Snapshot>('snapshot');if(closed)return;const selected=connection.value||snapshot.settings.connectionId;connection.replaceChildren();connection.append(option('Select a generative connection',''));for(const c of snapshot.connections){const o=option(`${c.name} · ${c.provider} / ${c.model}${c.supported?'':' (not generative)'}`,c.id);o.disabled=!c.supported;connection.append(o);}connection.value=selected;gelUser.value=snapshot.settings.gelUser;credentialNotice.textContent=snapshot.settings.hasGelKey?'Gelbooru key saved.':'Danbooru works without credentials. Gelbooru requires its account API key.';if(!connection.value)settings.open=true;}
   source.addEventListener('input',()=>{revision++;if(result)notify('Description changed. Translate again to refresh the result.');});
+  scope.addEventListener('change',()=>{revision++;if(result)notify('Translate again to apply the new “Include” choice.');});
   tags.addEventListener('input',()=>{verified=false;tagState.textContent='Tags edited — verify existence before rebuilding. Clear all tags to use prose only.';update();});
   prose.addEventListener('input',()=>notify('Detail changed. Rebuild to apply it to the prompt.'));
   prompt.addEventListener('input',update);

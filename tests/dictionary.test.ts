@@ -48,3 +48,8 @@ test('cup labels cannot be verified manually or appear in tag search',async()=> 
   for(const name of ['B cup','B-cup','cup_b','ddd_cup'])expect(await d.resolve(name,signal())).toBeNull();
   expect(seen).toEqual([]);expect((await d.search('b',signal())).map(t=>t.name)).toEqual(['tea_cup']);
 });
+test('a live tag skips the alias lookup: two requests, not three',async()=> {
+  const seen:string[]=[];
+  const d=new BooruDictionary(async url=>{seen.push(new URL(url).pathname);return{status:200,body:JSON.stringify(url.includes('/tags.json')?[{name:'blue_eyes',category:0,post_count:1}]:url.includes('/wiki_pages.json')?[{title:'blue_eyes',body:'Blue eyes.'}]:[])};},undefined,0);
+  expect((await d.resolve('blue_eyes',signal()))?.wiki).toBe('Blue eyes.');expect(seen).toEqual(['/tags.json','/wiki_pages.json']);
+});

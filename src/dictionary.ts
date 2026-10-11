@@ -76,18 +76,25 @@ export class BooruDictionary implements TagDictionary {
   async resolve(raw: string, signal: AbortSignal): Promise<VerifiedTag | null> {
     if (isCupSizeTag(tagName(raw))) return null;
     const requested = tagName(raw); let canonical = requested;
-    const visited = new Set<string>();
-    for (let hop=0;hop<4;hop++) {
-      if (visited.has(canonical)) throw new Error('Cyclic tag alias.');
-      visited.add(canonical);
-      const aliases = await this.dan('tag_aliases', {'search[antecedent_name]':canonical,'search[status]':'active'}, signal);
-      const alias = (Array.isArray(aliases) ? aliases : []).map(record).find(r => r.antecedent_name === canonical && r.status === 'active');
-      if (!alias) break;
-      canonical = tagName(alias.consequent_name);
-      if (hop === 3) throw new Error('Tag alias chain too long.');
+    const live = async (name: string) => {
+      const rows = await this.dan('tags', {'search[name]':name}, signal);
+      return (Array.isArray(rows) ? rows : []).map(r => this.valid(r,'Danbooru')).find(r => r?.name === name) ?? null;
+    };
+    // A live tag is already canonical, so the alias table is consulted only on a miss.
+    let result = await live(requested);
+    if (!result) {
+      const visited = new Set<string>();
+      for (let hop=0;hop<4;hop++) {
+        if (visited.has(canonical)) throw new Error('Cyclic tag alias.');
+        visited.add(canonical);
+        const aliases = await this.dan('tag_aliases', {'search[antecedent_name]':canonical,'search[status]':'active'}, signal);
+        const alias = (Array.isArray(aliases) ? aliases : []).map(record).find(r => r.antecedent_name === canonical && r.status === 'active');
+        if (!alias) break;
+        canonical = tagName(alias.consequent_name);
+        if (hop === 3) throw new Error('Tag alias chain too long.');
+      }
+      if (canonical !== requested) result = await live(canonical);
     }
-    const rows = await this.dan('tags', {'search[name]':canonical}, signal);
-    let result = (Array.isArray(rows) ? rows : []).map(r => this.valid(r,'Danbooru')).find(r => r?.name === canonical) ?? null;
     if (result) {
       try {
         const wikis = await this.dan('wiki_pages', {'search[title]':canonical}, signal);

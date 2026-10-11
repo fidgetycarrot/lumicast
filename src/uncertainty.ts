@@ -3,22 +3,21 @@ import {record, text, type Issue, type Trait} from './contracts';
 export interface UncertaintyReview {
   issues: Issue[];
   blockedTraits: Set<string>;
-  withholdAll: boolean;
   notices: string[];
 }
 
 const ABSENT_ATTRIBUTE = /\b(?:not (?:given|specified|described|mentioned|provided)|unspecified|not stated|unknown (?:age|gender|hair|eye)|missing (?:details?|information|description|attributes?)|need.*(?:age|gender|hair|eye)|(?:age|gender|hair|eye).*missing|does(?: not|n't) (?:specify|describe|mention|provide))\b/i;
 
-/** Optional model annotations cannot invalidate grounded extraction. If a
- * malformed note might flag a conflict, withhold its affected approvals. */
-export function reviewUncertainty(value: unknown, source: string, traits: Trait[]): UncertaintyReview {
-  const result: UncertaintyReview = {issues:[],blockedTraits:new Set(),withholdAll:false,notices:[]};
+/** Optional model annotations never invalidate a translation. A malformed note
+ * withholds tags only for the traits it can be traced to; an untraceable one is
+ * dropped, because one stray note from a small model should not cost every tag. */
+export function reviewUncertainty(value: unknown, source: string, traits: Pick<Trait,'id'|'evidence'>[]): UncertaintyReview {
+  const result: UncertaintyReview = {issues:[],blockedTraits:new Set(),notices:[]};
   const byId = new Map(traits.map(t => [t.id,t]));
   let malformed = false, absent = false;
   const notes = value === undefined || value === null ? [] : Array.isArray(value) ? value : [value];
-  if (notes.length > 12) {
-    result.withholdAll = true; malformed = true;
-  } else for (const value of notes) {
+  if (notes.length > 12) malformed = true;
+  else for (const value of notes) {
     const note = record(value);
     const kind = typeof note.kind === 'string' ? note.kind.trim().toLowerCase() : '';
     const quotes: string[] = []; let invalidAnchor = false;
@@ -57,15 +56,9 @@ export function reviewUncertainty(value: unknown, source: string, traits: Trait[
       continue;
     }
     malformed = true;
-    const affected = traits.filter(t => quotes.some(q => q.includes(t.evidence) || t.evidence.includes(q)));
-    affected.forEach(t => result.blockedTraits.add(t.id));
-    // No trustworthy anchor means the suspect note cannot be localized.
-    // Fail closed on approvals, but still return the exact source details.
-    if (invalidAnchor || !affected.length) result.withholdAll = true;
+    traits.filter(t => quotes.some(q => q.includes(t.evidence) || t.evidence.includes(q))).forEach(t => result.blockedTraits.add(t.id));
   }
-  if (malformed) result.notices.push(result.withholdAll
-    ? 'Some uncertainty notes could not be grounded. Review approvals were withheld; exact source details are retained.'
-    : 'An unsupported uncertainty note was omitted. Its affected tags and compact wording were withheld; exact source details are retained.');
+  if (malformed) result.notices.push('A malformed uncertainty note from the model was ignored. Tags for any trait it pointed at were withheld.');
   if (absent) result.notices.push('A missing-attribute note was ignored. Unmentioned attributes are not filled in.');
   return result;
 }
