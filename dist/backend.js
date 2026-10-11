@@ -326,7 +326,7 @@ The app can be asked for the character alone, so the split between lasting facts
 evidence is a short continuous passage copied character for character from the description (or from "stated" or "notes") that states the fact.
 
 tags holds 0 to 4 real Danbooru tags, lowercase with underscores, that an experienced tagger would put on a picture showing this fact. Be generous: every tag is checked against the live Danbooru tag list afterwards and names that do not exist are discarded, so a reasonable guess costs nothing. Each tag must still be something the text says, either outright or as the plain sum of facts it states. The usual vocabulary:
-- subject: 1girl, 1boy or 1other from the stated gender or pronouns, plus solo when one character is described. Begin with a subject trait whenever the text shows who the character is.
+- subject: 1girl or 1boy from the stated gender or the pronouns used for the character, plus solo when one character is described. The count tag follows gender, not species or presentation: a male android, elf or monster is 1boy, a feminine-looking male character is 1boy, and so is anyone the text calls he. Use 1other only for a character the text gives no gender and no gendered pronoun, or for a creature that is not humanoid. Begin with a subject trait whenever the text shows who the character is.
 - subject, type tags: Danbooru has tags that name a kind of character, and they steer the image more than any single body tag, so always look for one. Add it as its own subject trait, quoting the passage that establishes it. Kind of being: android, robot, cyborg, elf, demon_girl, catgirl, furry, monster_girl. Presentation: trap (Danbooru's current name for what was otoko_no_ko) for a character the text says is male while describing a deliberately feminine body, face or styling; androgynous when the text presents the character as hard to read as either; tomboy, muscular_female, mature_female, old_man. A type tag needs the text to state the facts that make it up (for trap, both that the character is male and that the look is feminine). A slim man is not trap, and a job or personality never makes a type.
 - body: petite, skinny, slim, muscular, toned, plump, curvy, tall_female, narrow_waist, wide_hips, narrow_hips, thick_thighs, long_legs, dark_skin, tan, pale_skin, freckles, flat_chest, small_breasts, medium_breasts, large_breasts.
 - hair: always give colour (black_hair, brown_hair, blonde_hair), length (short_hair, medium_hair, long_hair, very_long_hair) and any cut or style (bangs, blunt_bangs, sidelocks, wavy_hair, curly_hair, ponytail, twintails, braid, hair_bun). Shoulder length is medium_hair. A qualified colour takes the plain tag: near-black hair is black_hair.
@@ -606,6 +606,8 @@ class Translator {
     const bald = names.includes("bald") || /\bbald\b/.test(words("hair"));
     if (!sheet.countTag)
       gaps.push({ kind: "missing", what: "man, woman or other", note: "Lumi Studio\u2019s Count tag will be empty." });
+    else if (sheet.countTag === "1other")
+      gaps.push({ kind: "vague", what: "man, woman or other", note: "The count tag came out as 1other, which image models draw less reliably for humanoids. Change it to 1boy or 1girl if this character reads as one." });
     if (!bald && !names.some((n) => / hair$/.test(n) && COLOUR.test(n)) && !COLOUR.test(words("hair")))
       gaps.push({ kind: "missing", what: "hair colour", note: "The image model will pick one, and not the same one each time." });
     if (!bald && !names.some((n) => / hair$/.test(n) && LENGTH.test(n)) && !LENGTH.test(words("hair")))
@@ -754,7 +756,7 @@ function setupBackend(api) {
       await s.load;
       const settings = s.settings;
       const dictionary = () => s.dictionary ??= new BooruDictionary(async (url) => {
-        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.4.1 (tag metadata client)" } }));
+        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.4.2 (tag metadata client)" } }));
         if (typeof response.status !== "number" || typeof response.body !== "string")
           throw new Error("Invalid proxy response.");
         return { status: response.status, body: response.body };

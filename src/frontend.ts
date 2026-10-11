@@ -173,7 +173,7 @@ export function setup(ctx:SpindleFrontendContext) {
     notify('Search complete. Popularity is not an Anima quality score.');
   });
   searchCard.append(field('Tag name or prefix',query,'Metadata only. No images or posts are fetched.'),search,found);
-  app.append(intro,settings,status,input,review,sheetCard,output,refine,searchCard,el('p','LumiCast 0.4.1 · Manual translator · Draft stays in this tab until reload.'));
+  app.append(intro,settings,status,input,review,sheetCard,output,refine,searchCard,el('p','LumiCast 0.4.2 · Manual translator · Draft stays in this tab until reload.'));
   const controls=[translate,save,refreshButton,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
   // Every scope comes back from one translation, so changing Include only re-renders.
   function show(){

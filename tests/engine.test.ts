@@ -251,3 +251,7 @@ test('gaps: missing anchors come from plain checks, vague traits from review, an
   const bald=await run('A bald man with a scarred jaw.',{traits:[{id:'s',group:'subject',evidence:'A bald man',tags:['1boy','bald'],detail:'A bald man'}]},{});
   expect(bald.result.gaps.map(g=>g.what)).toEqual(['eye colour']);
 });
+test('1other is flagged for a second look, never silently changed',async()=> {
+  const {result}=await run('The android has silver hair cut short and amber eyes.',{traits:[{id:'s',group:'subject',evidence:'The android',tags:['1other','android'],detail:'An android'},{id:'h',group:'hair',evidence:'silver hair cut short',tags:['silver_hair','short_hair'],detail:'Short silver hair'},{id:'e',group:'face',evidence:'amber eyes',tags:[],detail:'Amber eyes'}]},{});
+  expect(result.sheet.countTag).toBe('1other');expect(result.gaps).toEqual([{kind:'vague',what:'man, woman or other',note:expect.stringContaining('1boy or 1girl')}]);
+});

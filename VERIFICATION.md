@@ -110,3 +110,7 @@ A sheet for one character carried a lip phrase with no colours, because the sour
 
 The colour and length word lists are finite, so an unusual colour word stated only in prose could be reported as not stated. Typecheck, 64 tests (442 assertions) and the build passed, with controlled responses only.
 
+## v0.4.2: count tag for humanoids
+
+A live run tagged a male android `1other`, and the user reports that Anima draws humanoids less reliably with that tag. The extraction prompt now ties the count tag to stated gender and pronouns and reserves `1other` for characters with neither, or for non-humanoid creatures. The tag is not overridden in code, since pronouns in a description can belong to someone else; a remaining `1other` is listed under "Worth pinning down". Typecheck, 65 tests and the build passed with controlled responses.
+
