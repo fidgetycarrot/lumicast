@@ -215,12 +215,12 @@ test('Lumi Studio sheet: fields the character editor takes, with phrases only fo
   const fixture=cases.find(c=>c.name.startsWith('type tags'))!;
   const {result}=await run(fixture.source,{traits:fixture.traits},{drop:[],captions:{},sheet:{
     subject:'Adult male android.',
-    character:['Short hair','engineered hourglass silhouette, narrow shoulders','He has pale polymer skin.','silver_hair','a 99cm waist','x'.repeat(81)],
+    character:['Short hair','engineered hourglass silhouette, narrow shoulders','He has pale polymer skin.','silver_hair','a 99cm waist','x'.repeat(81),'very narrow waist','wide flared hips','choppy silver-white hair','a','b','c'],
     outfit:['sheer black thigh-high stockings','no shoes'],
   }},{scope:'character',notes:'Weight trap at 1.4.'});
   expect(result.sheet).toEqual({
     countTag:'1boy',subject:'adult male android',always:'android, trap',
-    appearance:'narrow waist, wide hips, silver hair, short hair, engineered hourglass silhouette, narrow shoulders, pale polymer skin',
+    appearance:'narrow waist, wide hips, silver hair, short hair, engineered hourglass silhouette, narrow shoulders, pale polymer skin, choppy silver-white hair, a, b',
     outfit:'thighhighs, black thighhighs, no shoes, sheer black thigh-high stockings',
   });
   // The sheet does not depend on the Include choice, and never carries solo or scene detail.

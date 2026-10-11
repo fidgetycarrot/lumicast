@@ -26,7 +26,7 @@ test('Gelbooru spelling preferred only after alias equivalence and live exact ma
 });
 test('bad Gelbooru credentials keep Danbooru with clear notice',async()=> {
   const d=new BooruDictionary(async url=>new URL(url).hostname==='gelbooru.com'?{status:401,body:'secret-test-key'}:{status:200,body:JSON.stringify(url.includes('/tags.json')?[{name:'blue_eyes',category:0,post_count:1}]:[])},{user:'1',key:'secret-test-key'},0);
-  expect((await d.resolve('blue_eyes',signal()))?.source).toBe('Danbooru');expect([...d.notices].join(' ')).not.toContain('secret-test-key');expect(d.notices.size).toBe(1);
+  expect((await d.resolve('blue_eyes',signal()))?.source).toBe('Danbooru');expect([...d.notices].join(' ')).not.toContain('secret-test-key');expect(d.notices.size).toBe(1);expect([...d.notices][0]).toContain('HTTP 401: it rejected the user ID or API key');
 });
 test('deprecated, nonexistent and artist tags cannot auto-verify',async()=> {
   for(const row of [null,{name:'x',category:1,post_count:1},{name:'x',category:0,post_count:1,is_deprecated:true},{name:'x',category:0,post_count:0}]) {

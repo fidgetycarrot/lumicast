@@ -1,4 +1,6 @@
-# LumiCast 0.4.2
+# LumiCast 0.4.3
+
+**v0.4.3 tightens the sheet and reports why Gelbooru failed.** Phrases that only restate a tag are dropped and the cap is six per field. A failed Gelbooru lookup now shows its HTTP status, once.
 
 **v0.4.2 keeps `1other` for characters with no stated gender.** The count tag now follows gender, not species: a male android is `1boy`. If `1other` still comes out, "Worth pinning down" says so.
 
@@ -35,7 +37,7 @@ Prebuilt `dist/` files are committed for Lumiverse installation. If the tab does
 
 Requires **Lumiverse 1.2.5 or later**. Compatibility was checked against the current 1.2.5 source and SDK 0.6.40; older versions have not been verified.
 
-1. Unzip `lumicast-0.4.2-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
+1. Unzip `lumicast-0.4.3-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
 2. On the machine running your Lumiverse **server**, copy that folder into `<DATA_DIR>/extensions/`. The server's default DATA_DIR is `./data`, relative to where Lumiverse runs. For Docker, copy into the volume mounted as the server's data directory. Do not copy it into another extension's folder.
 3. As the Lumiverse owner/admin, open **Extensions**, open its add menu, and choose **Import Local**. Enable LumiCast and grant `generation` and `cors_proxy`. If the tab does not appear, reload Lumiverse.
 4. Open **LumiCast** in the sidebar drawer or find it in the command palette. Expand **Connection & tag services**, choose a saved generative connection, and save.
@@ -81,10 +83,10 @@ Card **03** lays the result out for Lumi Studio 1.8.1's character editor. It is 
 | Count tag | `1girl`, `1boy` or `1other`. |
 | Stable subject phrase | Two to five words for who this is, such as `adult male android`. |
 | Always include | The type tags, such as `android, trap`. |
-| Permanent appearance tags | Verified body, hair and face tags, then up to eight short phrases for what no tag says (`choppy silver-white hair`). |
+| Permanent appearance tags | Verified body, hair and face tags, then up to six short phrases for what no tag says (`choppy silver-white hair`). |
 | Default outfit tags | Verified clothing tags, then short clothing phrases. Skip it for a character whose clothes follow the story. |
 
-Tags are written with spaces and keep any weight. Phrases come from the review call, which is told to skip anything a kept tag already covers; they are lower-cased, split at any comma, stripped of a leading pronoun, and dropped if they repeat a tag or cite a number the description never gave. Pose, expression, setting and `solo` never appear here. Refine applies its tag changes to these fields as well; a newly added tag lands in Permanent appearance tags.
+Tags are written with spaces and keep any weight. Phrases come from the review call, which is told to skip anything a kept tag already covers; they are lower-cased, split at any comma, stripped of a leading pronoun, and dropped if they repeat a tag, restate one with a single extra word (`pale porcelain skin` beside `pale skin`), or cite a number the description never gave. Pose, expression, setting and `solo` never appear here. Refine applies its tag changes to these fields as well; a newly added tag lands in Permanent appearance tags.
 
 This is a copy-and-paste handoff. LumiCast does not write to Lumi Studio, and the field mapping was read from Lumi Studio 1.8.1's code, not confirmed by generating through it.
 

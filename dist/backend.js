@@ -119,7 +119,7 @@ class BooruDictionary {
       if (response.status !== 200) {
         this.unavailable.set(url.hostname, Date.now() + 30000);
         if (url.hostname === "gelbooru.com")
-          this.notices.add("Gelbooru lookup failed. Check its credentials or service availability; Danbooru spellings are used where available.");
+          this.notices.add(`Gelbooru lookup failed (HTTP ${Number(response.status) || "unknown"}: ${response.status === 401 ? "it rejected the user ID or API key" : response.status === 403 ? "it refused the request, which is usually bot protection and not your key" : response.status === 429 ? "too many requests" : "service problem"}). Danbooru spellings are used where available.`);
         throw new Error("Tag service unavailable or authentication required.");
       }
       if (response.body.length > 500000)
@@ -320,7 +320,7 @@ group says what kind of fact it is:
 - "hair": colour, length, texture, cut, and a style the text presents as how they usually wear it.
 - "face": eyes, facial features, facial hair, glasses, piercings, lasting makeup.
 - "outfit": clothing, shoes and accessories they are wearing.
-- "moment": anything true only in this scene: pose, expression, gesture, where they are, what a garment or the body is doing right now (wet, torn, flushed), and hair that is only arranged this way at the moment (shoved into a clip for today, messy from the scene).
+- "moment": anything true only in this scene: pose, expression, gesture, where they are, what a garment or the body is doing right now (wet, torn, flushed, blushing, sweating, dirty, anything dried or spilled on the skin), and hair that is only arranged this way at the moment (shoved into a clip for today, messy from the scene).
 The app can be asked for the character alone, so the split between lasting facts and "moment" matters: when unsure whether something is how the character always looks, choose "moment".
 
 evidence is a short continuous passage copied character for character from the description (or from "stated" or "notes") that states the fact.
@@ -351,7 +351,7 @@ var REVIEW = `You finish an Anima image prompt for one character. The input JSON
 
 Return only JSON: {"drop":[],"captions":{"character":"","outfit":"","scene":""},"sheet":{"subject":"","character":[],"outfit":[]},"vague":[],"issues":[]}
 
-drop lists the candidate tag names that must not be used. A tag stays when a tagger looking at a faithful picture of this character would apply it. Drop one only when its wiki meaning differs from what the text describes, when it comes from a metaphor, joke, negation or comparison instead of something visible, when it names clothing the text says is no longer worn, when it exaggerates the text (large_breasts for modest curves), when it contradicts another trait or a better candidate, or when it would hand one character's trait to another. A plain tag whose nuance is carried in a caption stays: black_hair is right for near-black hair. A type tag such as android or trap stays when the traits together state what its definition requires, even though no single quote uses the word. When unsure, keep the tag.
+drop lists the candidate tag names that must not be used. A tag stays when a tagger looking at a faithful picture of this character would apply it. Drop one only when its wiki meaning differs from what the text describes even though the words look alike (wide-eyed is a startled expression, not wide-set eyes), when it comes from a metaphor, joke, negation or comparison instead of something visible, when it names clothing the text says is no longer worn, when it exaggerates the text (large_breasts for modest curves), when it contradicts another trait or a better candidate, or when it would hand one character's trait to another. A plain tag whose nuance is carried in a caption stays: black_hair is right for near-black hair. A type tag such as android or trap stays when the traits together state what its definition requires, even though no single quote uses the word. When unsure, keep the tag.
 
 captions holds three short pieces of plain caption text. The app shows the first alone, the first two together, or all three, so each must read correctly on its own and must stay inside its own traits:
 - "character": one or two sentences, under 50 words, from the traits whose group is subject, body, hair or face, in that order: who and what they are (every subject trait, including the kind of character), their build, then hair, then face. This piece is reused in every scene, so it must not mention clothing, accessories, pose, expression, setting or anything from an outfit or moment trait.
@@ -361,7 +361,7 @@ Use "" for a piece that has no traits. Write from the trait details alone; a quo
 
 sheet is the same character laid out for an image tool that saves characters as comma-separated fields and reuses them in every scene. That tool splits on commas and writes its own sentences, so nothing here may be a sentence.
 - "subject": the plainest noun phrase for who this is, two to five lowercase words, with an age word first when the text gives an age: "adult woman", "young adult man", "adult male android". No name, no build, no hair.
-- "character": up to 8 short phrases for the lasting look (body, hair, face) that the kept tags do not already say. Each is two to seven lowercase words with no comma, no pronoun and no full stop, and stands alone: "choppy silver-white hair", "violet-pink gradient eyes", "pale porcelain skin". Skip a fact a kept tag fully covers (no "short hair" beside short_hair), but keep a phrase that adds a colour, texture or placement the tag lacks. Nothing about clothing, pose or setting.
+- "character": up to 6 short phrases for the lasting look (body, hair, face) that the kept tags do not already say. This sheet is pasted into prompts that may hold several characters, so every phrase has to earn its place by changing what gets drawn. Each is two to seven lowercase words with no comma, no pronoun and no full stop, and stands alone: "choppy silver-white hair", "violet-pink gradient eyes", "pale porcelain skin". Skip a fact a kept tag fully covers (no "short hair" beside short_hair), and skip a phrase that only restates a tag more strongly ("pale porcelain skin" beside pale_skin, "disproportionately long legs" beside long_legs, "thick weighted lashes" beside thick_eyelashes). Keep a phrase that adds a colour, texture or placement the tag lacks. Nothing about clothing, pose or setting.
 - "outfit": the same, for the outfit traits only: "torn sheer black thighhighs", "chrome led collar".
 Use [] where there is nothing to add.
 
@@ -582,7 +582,15 @@ class Translator {
     const said = (list) => new Set(list.split(",").map((v) => v.replace(/^\((.+?):[\d.]+\)$/, "$1").trim().toLowerCase()).filter(Boolean));
     const phrases = (value, tagList) => {
       const have = said(tagList);
-      return (Array.isArray(value) ? value : []).slice(0, 12).flatMap((v) => typeof v === "string" ? v.split(/[,;\n]+/) : []).map((v) => v.replace(/_/g, " ").replace(/\s+/g, " ").replace(/[.!?]+$/, "").trim().toLowerCase().replace(/^(?:(?:he|she|they|it) (?:has|have|wears?|is|are)|his|her|their|its) /, "")).filter((v, i, a) => v && v.length <= 80 && a.indexOf(v) === i && !have.has(v) && (v.match(/\d+/g) ?? []).every((n) => grounded.includes(n))).slice(0, 8);
+      const wordsOf = (v) => v.split(/[^a-z0-9]+/).filter(Boolean);
+      const restates = (phrase) => {
+        const p = wordsOf(phrase);
+        return [...have].some((tag) => {
+          const t = wordsOf(tag);
+          return t.length > 1 && t.every((w) => p.includes(w)) && p.length - t.length <= 1;
+        });
+      };
+      return (Array.isArray(value) ? value : []).slice(0, 12).flatMap((v) => typeof v === "string" ? v.split(/[,;\n]+/) : []).map((v) => v.replace(/_/g, " ").replace(/\s+/g, " ").replace(/[.!?]+$/, "").trim().toLowerCase().replace(/^(?:(?:he|she|they|it) (?:has|have|wears?|is|are)|his|her|their|its) /, "")).filter((v, i, a) => v && v.length <= 80 && a.indexOf(v) === i && !have.has(v) && !restates(v) && (v.match(/\d+/g) ?? []).every((n) => grounded.includes(n))).slice(0, 6);
     };
     const groupOf = (row) => traits.find((t) => t.id === row.traitId)?.group;
     const COUNT = /^(?:1girl|1boy|1other)$/;
@@ -756,7 +764,7 @@ function setupBackend(api) {
       await s.load;
       const settings = s.settings;
       const dictionary = () => s.dictionary ??= new BooruDictionary(async (url) => {
-        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.4.2 (tag metadata client)" } }));
+        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.4.3 (tag metadata client)" } }));
         if (typeof response.status !== "number" || typeof response.body !== "string")
           throw new Error("Invalid proxy response.");
         return { status: response.status, body: response.body };
@@ -827,8 +835,8 @@ function setupBackend(api) {
         }
         const scope = input.scope === "outfit" || input.scope === "scene" ? input.scope : "character";
         const result = await translator.translate(text(input.description, "description", 12000), controller.signal, label, { scope, stated: text(input.stated ?? "", "known facts", 300), notes: settings.notes });
-        for (const view of [result, ...Object.values(result.views)])
-          view.notices.push(...dictionary().notices);
+        for (const list of new Set([result.notices, ...Object.values(result.views).map((v) => v.notices)]))
+          list.push(...[...dictionary().notices].filter((n) => !list.includes(n)));
         return result;
       } finally {
         clearTimeout(timer);

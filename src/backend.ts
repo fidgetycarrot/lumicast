@@ -27,7 +27,7 @@ export function setupBackend(api: SpindleAPI) {
       await s.load;
       const settings=s.settings!;
       const dictionary=() => s.dictionary ??= new BooruDictionary(async url=> {
-        const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.4.2 (tag metadata client)'}}));
+        const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.4.3 (tag metadata client)'}}));
         if(typeof response.status!=='number'||typeof response.body!=='string')throw new Error('Invalid proxy response.');
         return {status:response.status,body:response.body};
       },{user:settings.gelUser,key:settings.gelKey});
@@ -82,7 +82,8 @@ export function setupBackend(api: SpindleAPI) {
         }
         const scope=input.scope==='outfit'||input.scope==='scene'?input.scope:'character';
         const result=await translator.translate(text(input.description,'description',12_000),controller.signal,label,{scope,stated:text(input.stated ?? '','known facts',300),notes:settings.notes});
-        for(const view of [result,...Object.values(result.views)])view.notices.push(...dictionary().notices);
+        // result.notices is the selected view's own array, so add service notices once per distinct array.
+        for(const list of new Set([result.notices,...Object.values(result.views).map(v=>v.notices)]))list.push(...[...dictionary().notices].filter(n=>!list.includes(n)));
         return result;
       } finally {clearTimeout(timer);s.jobs.delete(session);}
     })().then(result=>reply(result)).catch(error=> {

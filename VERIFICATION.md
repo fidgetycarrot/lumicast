@@ -114,3 +114,9 @@ The colour and length word lists are finite, so an unusual colour word stated on
 
 A live run tagged a male android `1other`, and the user reports that Anima draws humanoids less reliably with that tag. The extraction prompt now ties the count tag to stated gender and pronouns and reserves `1other` for characters with neither, or for non-humanoid creatures. The tag is not overridden in code, since pronouns in a description can belong to someone else; a remaining `1other` is listed under "Worth pinning down". Typecheck, 65 tests and the build passed with controlled responses.
 
+## v0.4.3: Gelbooru status, duplicate notice, tighter sheet
+
+A live run with saved Gelbooru credentials showed "Gelbooru lookup failed" twice. The duplicate was a bug: the selected view's notice array is shared with the top-level result, so service notices were appended to it twice. The failure itself is the first real evidence about authenticated Gelbooru access, which earlier notes list as never exercised; its cause is unknown because the notice discarded the HTTP status. v0.4.3 reports the status and what it usually means. No Gelbooru request was made from the build environment, so the cause is still undiagnosed.
+
+The same run produced nineteen appearance entries, several restating a tag. Sheet phrases are now dropped when they are a kept tag plus at most one extra word, the cap is six, and the prompts name that pattern. Extraction is also told that flushing, blushing and anything dried on the skin belong to the scene, and review that a tag must match in meaning and not only in wording. Typecheck, 65 tests and the build passed with controlled responses.
+

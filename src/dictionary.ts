@@ -41,7 +41,8 @@ export class BooruDictionary implements TagDictionary {
       signal.throwIfAborted();
       if (response.status !== 200) {
         this.unavailable.set(url.hostname,Date.now()+30_000);
-        if(url.hostname==='gelbooru.com')this.notices.add('Gelbooru lookup failed. Check its credentials or service availability; Danbooru spellings are used where available.');
+        // The status is the only safe detail to surface, and the one that tells a bad key from a blocked request.
+        if(url.hostname==='gelbooru.com')this.notices.add(`Gelbooru lookup failed (HTTP ${Number(response.status)||'unknown'}: ${response.status===401?'it rejected the user ID or API key':response.status===403?'it refused the request, which is usually bot protection and not your key':response.status===429?'too many requests':'service problem'}). Danbooru spellings are used where available.`);
         throw new Error('Tag service unavailable or authentication required.');
       }
       if (response.body.length > 500_000) throw new Error('Oversized tag response.');
