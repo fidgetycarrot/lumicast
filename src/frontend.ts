@@ -116,7 +116,7 @@ export function setup(ctx:SpindleFrontendContext) {
     notify('Search complete. Popularity is not an Anima quality score.');
   });
   searchCard.append(field('Tag name or prefix',query,'Metadata only. No images or posts are fetched.'),search,found);
-  app.append(intro,settings,status,input,review,output,searchCard,el('p','LumiCast 0.1.2 · Manual translator · Draft stays in this tab until reload.'));
+  app.append(intro,settings,status,input,review,output,searchCard,el('p','LumiCast 0.1.3 · Manual translator · Draft stays in this tab until reload.'));
   const controls=[translate,save,refreshButton,verify,rebuild,copy,search];
   function update(){for(const c of controls)c.disabled=busy;rebuild.disabled=busy||(!verified&&!!tags.value.trim());copy.disabled=busy||!prompt.value.trim();cancel.hidden=!busy;connection.disabled=busy;gelUser.disabled=busy;gelKey.disabled=busy;clearKey.disabled=busy;tags.readOnly=busy;prose.readOnly=busy;prompt.readOnly=busy;source.readOnly=busy;}
   function notify(message:string,error=false){if(closed)return;status.textContent=message;status.dataset.error=String(error);}

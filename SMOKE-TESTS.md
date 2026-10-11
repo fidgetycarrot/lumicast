@@ -16,6 +16,8 @@ Select a saved generative text connection and try the nine synthetic description
 | Eyes blue or grey; narrator cannot tell | Report only the real color ambiguity. |
 | Chatty narrator, compact frame, B cup, near-black hair in a clip, oversized sleeves, visibly wet leggings | Use concise visual clauses; omit jokes/biography, preserve all qualifiers and visible states without guessing causes; do not turn cup size into a booru tag. |
 
+Also check that an unsupported/malformed optional uncertainty note produces a notice and source fallback instead of aborting the entire translation. Genuine uncertainty should still remove affected tags and preserve exact wording.
+
 Also check: change tags → rebuild disabled until verified; nonexistent tag → clear failure; clear tags → prose-only rebuild; edit final prompt → copy exact text; stop provider access → previous edits preserved; Cancel → no replacement output; close/reopen tab → no duplicate tab/listeners; reload → settings retained, draft cleared.
 
 If a model misses a quote/detail, invents a trait, or raises missing-attribute uncertainty, try a stronger generative connection. Two calls by the same model reduce errors but do not establish a guarantee.

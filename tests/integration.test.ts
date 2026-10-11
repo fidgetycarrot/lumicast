@@ -93,3 +93,11 @@ test('compact panel prompt omits narration while preserving original source quot
   expect(areas[1].value).toBe('red_hair');expect(areas[2].value).toBe('');expect(areas[3].value).toBe('red hair');
   expect(h.root.querySelector('details:not(.lc-card)')?.textContent).toContain('Red hair, obviously!');
 });
+test('direct DeepSeek adapter tolerates string evidence without discarding the panel result',async()=> {
+  dom();const h=harness('deepseek','deepseek-v4-pro');cleanups.push(h.stop);const dispose=setup(h.ctx);cleanups.push(dispose);
+  h.setResponses([{traits:[{id:'1',evidence:'Short red hair.',tag:'red_hair',detail:'Short red hair'}]},{keep:['red_hair'],safeDetails:['1'],covered:[],issues:[{kind:'ambiguity',evidence:'Short red hair.',message:'Age not specified.'}]}]);
+  const translate=Array.from(h.root.querySelectorAll('button')).find(b=>b.textContent==='Translate')!;
+  await until(()=>!translate.disabled);h.root.querySelector('select')!.value='c1';
+  const areas=Array.from(h.root.querySelectorAll('textarea'));areas[0].value='Short red hair.';translate.click();await until(()=>!translate.disabled);
+  expect(areas[1].value).toBe('red_hair');expect(areas[3].value).toBe('red hair\n\nShort red hair.');expect(h.root.textContent).not.toContain('Invalid uncertainty evidence');expect(h.root.textContent).toContain('missing-attribute note was ignored');
+});

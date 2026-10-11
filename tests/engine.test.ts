@@ -22,10 +22,11 @@ test('audit cannot introduce a new tag',async()=> {
   let n=0;const engine=new Translator(async()=>JSON.stringify(++n===1?{traits:[{id:'1',evidence:'red hair',tag:'red_hair'}]}:{keep:['blue_eyes'],issues:[]}),dictionary);
   await expect(engine.translate('red hair',new AbortController().signal,'model')).rejects.toThrow('unverified tag');
 });
-test('invented uncertainty or absent-attribute checklist rejected',async()=> {
+test('invented uncertainty or absent-attribute checklist cannot become displayed issues',async()=> {
   for(const issue of [{kind:'ambiguity',evidence:['red hair'],message:'Age not specified.'},{kind:'contradiction',evidence:['blue eyes'],message:'Two colors.'}]) {
     let n=0;const engine=new Translator(async()=>JSON.stringify(++n===1?{traits:[{id:'1',evidence:'red hair',tag:null}]}:{keep:[],issues:[issue]}),dictionary);
-    await expect(engine.translate('red hair',new AbortController().signal,'model')).rejects.toThrow();
+    const result=await engine.translate('red hair',new AbortController().signal,'model');
+    expect(result.issues).toEqual([]);expect(result.prompt).toBe('red hair.');expect(result.notices.length).toBeGreaterThan(0);
   }
 });
 test('dictionary outage retains source wording without unverified tags',async()=> {
@@ -78,4 +79,22 @@ test('reviewer sees original quotes and proposed detail, while tag-only facts av
     return JSON.stringify({keep:['red_hair'],safeDetails:['1'],covered:['1'],issues:[]});
   },dictionary);
   const result=await engine.translate('Red hair.',new AbortController().signal,'model');expect(result.prose).toBe('');expect(result.prompt).toBe('red hair');expect(result.evidence[0].evidence).toBe('Red hair.');
+});
+test('string evidence no longer aborts review; genuine uncertainty still withholds affected tag and prose approval',async()=> {
+  let n=0;const source='Blue or grey eyes. Red hair.';
+  const engine=new Translator(async()=>JSON.stringify(++n===1?{traits:[{id:'eyes',evidence:'Blue or grey eyes.',tag:'blue_eyes',detail:'Blue eyes'},{id:'hair',evidence:'Red hair.',tag:'red_hair',detail:'Red hair'}]}:{keep:['blue_eyes','red_hair'],safeDetails:['eyes','hair'],covered:['eyes','hair'],issues:[{kind:'ambiguity',evidence:'Blue or grey eyes.',message:'The source gives two eye-color alternatives.'}]}),dictionary);
+  const result=await engine.translate(source,new AbortController().signal,'model');
+  expect(result.tags.map(t=>t.name)).toEqual(['red_hair']);expect(result.prose).toBe('Blue or grey eyes.');expect(result.issues[0].evidence).toEqual(['Blue or grey eyes.']);
+});
+test('unsupported note with known evidence withholds only affected approvals',async()=> {
+  let n=0;const source='Red hair. A narrow face.';
+  const engine=new Translator(async()=>JSON.stringify(++n===1?{traits:[{id:'hair',evidence:'Red hair.',tag:'red_hair',detail:'Bright red hair'},{id:'face',evidence:'A narrow face.',tag:null,detail:'A narrow face'}]}:{keep:['red_hair'],safeDetails:['hair','face'],covered:['hair'],issues:[{kind:'warning',evidence:['Red hair.'],message:'Review this interpretation.'}]}),dictionary);
+  const result=await engine.translate(source,new AbortController().signal,'model');
+  expect(result.tags).toEqual([]);expect(result.prose).toBe(source);expect(result.issues).toEqual([]);expect(result.notices.join(' ')).toContain('unsupported uncertainty note');
+});
+test('unlocatable malformed note returns grounded source-only fallback instead of accepting suspect approvals',async()=> {
+  let n=0;const source='Red hair.';
+  const engine=new Translator(async()=>JSON.stringify(++n===1?{traits:[{id:'hair',evidence:source,tag:'red_hair',detail:'Red hair and blue eyes'}]}:{keep:['red_hair'],safeDetails:['hair'],covered:['hair'],issues:[{kind:'ambiguity or contradiction',evidence:[],message:'A possible conflict.'}]}),dictionary);
+  const result=await engine.translate(source,new AbortController().signal,'model');
+  expect(result.tags).toEqual([]);expect(result.prompt).toBe(source);expect(result.issues).toEqual([]);expect(result.notices.join(' ')).toContain('approvals were withheld');
 });

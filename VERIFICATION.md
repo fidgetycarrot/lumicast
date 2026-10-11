@@ -15,7 +15,7 @@ The host implementation confirms generation requires explicit `userId` for opera
 ## Completed checks
 
 - TypeScript strict typecheck against the pinned SDK: passed.
-- 37 automated tests, 213 assertions: passed. Nine challenging description fixtures plus malformed JSON, fabricated evidence, unsupported model names, nonexistent/deprecated tags, alias/cache behavior, Gelbooru failure, edited tags, RPC expiry, cancellation, per-user secret isolation and failure preservation.
+- 46 automated tests, 283 assertions: passed. Nine challenging description fixtures plus malformed JSON, fabricated evidence, unsupported model names, nonexistent/deprecated tags, alias/cache behavior, Gelbooru failure, edited tags, RPC expiry, cancellation, per-user secret isolation and failure preservation.
 - Production frontend/backend bundle build: passed.
 - Current Lumiverse `detectDangerousBackendCapabilities` scanner, extracted unchanged from the pinned source: backend accepted with zero declared capabilities.
 - Manifest entry existence and package structure checks: passed.
@@ -47,3 +47,13 @@ The v0.1.1 engine assembled every extracted quote into the prompt, even when tag
 New controlled regressions cover chatty narration with repeated frame descriptors, cup measurement, approximate hair length, clip/loose strands, soft adult facial features, oversized sleeves and visibly wet clothing without inferred causes; unapproved/invented paraphrases; invalid coverage IDs; restoring prose after conflict removal; bare cup measurements incorrectly proposed as visual size tags; and UI source-quote retention outside the assembled prompt. These validate the engine's handling of supplied model responses. They do not demonstrate a live model's accuracy on the user's original description.
 
 Typecheck, all 37 tests (213 assertions), production build, current host backend scanner and package layout checks passed. Real paid generation with the revised prompts remains untested by this development run. The user's original character name and explicit story excerpt are not included in the public fixtures; the new fixture is synthetic.
+
+## v0.1.3 correction
+
+The v0.1.2 parser threw `Invalid uncertainty evidence.` for any note with a category other than the two literal allowed values, a non-array quote, or an evidence array outside a one-to-four length. The user's reported message establishes a failure in that guard; the original provider response was not available, so its exact offending field is not known. Controlled reproductions cover each shape rather than assuming one cause.
+
+v0.1.3 requests existing trait IDs for genuine issues and uses an empty issues list in the schema example, avoiding the previous placeholder value `ambiguity or contradiction`. It normalizes single quotes/issue objects and kind casing while still grounding evidence. Malformed notes withhold affected tag and compact-detail approvals; unlocatable failures withhold all review approvals and retain exact extracted details. Missing-attribute annotations are ignored. No paid retry, extra generation call, or unsafe acceptance of unverified tags was added.
+
+Strict typecheck, 46 tests (283 assertions), production build, host backend scanner and package layout checks passed. Regression coverage includes direct DeepSeek adapter/UI handling of a quote returned as a string, trait-ID references, all previous fatal uncertainty shapes, fabricated anchors, missing-attribute filtering, real contradictions involving visible absence, localized/global fallback, and preserving source details when approvals are withheld. These use controlled responses and do not establish the revised prompts' live DeepSeek accuracy.
+
+Public tag verification was not repeated for v0.1.3; the dictionary logic is unchanged from the preceding release and its controlled tests pass. The live metadata checks listed above refer to the v0.1.2 run.

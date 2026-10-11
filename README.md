@@ -1,6 +1,6 @@
-# LumiCast 0.1.2
+# LumiCast 0.1.3
 
-**v0.1.2 compacts personality-heavy descriptions:** the model proposes neutral visual clauses, a second review checks them against literal source quotes, and fully tag-covered facts need not repeat in prose. Cup-size labels remain measurements rather than invented booru tags. The v0.1.1 provider/model request fix is included. Update LumiCast in Extensions and reload if needed.
+**v0.1.3 fixes uncertainty-note validation failures:** review now references grounded trait IDs and accepts common legacy quote formats. Malformed optional notes no longer discard a grounded extraction; suspect tag/prose approvals are withheld with a notice. The compact-description and provider-request fixes are included. Update LumiCast in Extensions and reload if needed.
 
 A new standalone Lumiverse Spindle extension. Paste a character appearance, translate it, review verified booru tags and compact visual detail, edit the assembled Anima prompt, and copy it. Original source quotes remain available for comparison.
 
@@ -21,7 +21,7 @@ Prebuilt `dist/` files are committed for Lumiverse installation. If the tab does
 
 Requires **Lumiverse 1.2.5 or later**. Compatibility was checked against the current 1.2.5 source and SDK 0.6.40; older versions have not been verified.
 
-1. Unzip `lumicast-0.1.2-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
+1. Unzip `lumicast-0.1.3-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
 2. On the machine running your Lumiverse **server**, copy that folder into `<DATA_DIR>/extensions/`. The server's default DATA_DIR is `./data`, relative to where Lumiverse runs. For Docker, copy into the volume mounted as the server's data directory. Do not copy it into another extension's folder.
 3. As the Lumiverse owner/admin, open **Extensions**, open its add menu, and choose **Import Local**. Enable LumiCast and grant `generation` and `cors_proxy`. If the tab does not appear, reload Lumiverse.
 4. Open **LumiCast** in the sidebar drawer or find it in the command palette. Expand **Connection & tag services**, choose a saved generative connection, and save.
@@ -44,7 +44,7 @@ Jev, Decisions, embedding, reranking and moderation models are blocked by recogn
 1. The generative model extracts visible traits with literal, continuous source quotes, compact neutral paraphrases and at most 24 candidate tags. It is instructed to strip narrator personality, jokes, repetition and nonvisual biography while preserving concrete pose, expression, clothing conditions and subtle visual qualifiers. Unmentioned attributes are not requested or filled in.
 2. The dictionary resolves active Danbooru aliases, checks exact live tags, rejects deprecated/nonexistent/artist/copyright/character entries, and fetches wiki definitions where available. Search lists real general/meta tags by prefix, without fetching images or posts.
 3. A second generative review checks tag meaning against the quote and available definition, and separately checks compact detail against the original source. Popularity or existence is not treated as proof of Anima suitability. Ambiguous, exaggerated, metaphorical and contradictory tags should be dropped. Basic tags can accompany precise prose qualifiers. A deterministic guard also removes incompatible global hair, eye and subject tags together.
-4. Only approved paraphrases enter the compact prose. A fact can be omitted from prose only when the review says its entire visual content is covered by a retained tag assigned to that fact. Unknown, untagged, unapproved or conflicted facts retain their detail; an unapproved paraphrase falls back to the literal quote with a notice. All extracted quotes stay outside the assembled prompt under **Tag sources & uncertainty**. Subtle proportions, asymmetry, texture, negation, measurements and character ownership must remain represented. A lookup failure preserves prose and adds a notice. An invalid AI response leaves previous edits intact.
+4. Only approved paraphrases enter the compact prose. A fact can be omitted from prose only when the review says its entire visual content is covered by a retained tag assigned to that fact. Unknown, untagged, unapproved or conflicted facts retain their detail; an unapproved paraphrase falls back to the literal quote with a notice. All extracted quotes stay outside the assembled prompt under **Tag sources & uncertainty**. Subtle proportions, asymmetry, texture, negation, measurements and character ownership must remain represented. A lookup failure preserves prose and adds a notice. Invalid required extraction or review approvals leave previous edits intact. Optional uncertainty-note failures are handled separately as described below.
 5. Canonical names use underscores in the editor. The assembled prompt uses lowercase tags with spaces, preserving `score_*` spelling if manually supplied. Tags and prose are separated by a blank line. No positive quality, safety, artist, lighting, pose, outfit or scene defaults are added.
 
 Cup labels such as `B cup` are retained as natural-language measurements, not accepted as `b_cup` tags. The engine also blocks proposed visual breast-size tags when their sole evidence is a bare cup measurement. No automatic cup-to-visual-size conversion is made. This does not stop a genuinely described visual proportion from being reviewed independently.
@@ -52,6 +52,14 @@ Cup labels such as `B cup` are retained as natural-language measurements, not ac
 This follows the [official Anima model guidance](https://huggingface.co/circlestone-labs/Anima/blob/main/README.md), which supports tags, natural language and combinations, and prefers Gelbooru spellings where they differ. Appropriate image quality or safety prefixes can be added intentionally in the editable final prompt for the Anima variant you use.
 
 **Verification means dictionary existence plus an AI meaning review, not measured Anima image fidelity.** AI can still miss a trait or misinterpret a quote. Compare the output with your pasted description. Grounding checks reject fabricated source quotes and new unverified audit tags, but cannot prove semantic entailment or exhaustive extraction. Genuine uncertainty remains visible with source evidence; absent attributes are not an attribute-completion task.
+
+## Uncertainty notes
+
+The review prompt asks for actual ambiguities/contradictions by referencing existing grounded trait IDs, rather than copying source quotes a second time. No uncertainty is required for absent attributes, approximate wording, or a cup measurement that cannot be converted into a visual size tag.
+
+Legacy quotes remain supported: a single quote becomes a one-item list, kind casing is normalized, and a single issue object is accepted. Quotes must occur literally in the source, or refer to known trait IDs whose quotes were already grounded. Up to 12 notes and 32 anchors per note are accepted. Missing/null issue lists mean no notes.
+
+Unsupported categories, invalid quotes/references and malformed notes are omitted from displayed uncertainty. Their affected tag and compact-prose approvals are withheld, restoring exact source wording. If an invalid note cannot be localized reliably, all review approvals are withheld and the result uses the extracted source details with a notice. Missing-attribute notes are ignored without filling anything in. This recovery adds no paid request or retry. Required tag/compact-detail review fields remain validated; unverified tags and unsupported coverage IDs are still rejected.
 
 ## Gelbooru
 
@@ -91,6 +99,7 @@ bun run smoke:live
 
 - `contracts.ts`: provider-neutral inputs, output DTOs, dictionary interface and Anima assembly.
 - `engine.ts`: source grounding, modular generative extraction/review and conflict guards.
+- `uncertainty.ts`: bounded annotation normalization, evidence validation and conservative recovery.
 - `dictionary.ts`: allowlisted booru metadata transport, alias resolution, caching and credential isolation.
 - `backend.ts`: Spindle adapter, user/session routing, settings, permission checks and cancellation.
 - `frontend.ts`: drawer UI, bounded RPC, editable fields and clipboard handling.
