@@ -1,4 +1,6 @@
-# LumiCast 0.3.0
+# LumiCast 0.4.0
+
+**v0.4.0 outputs Lumi Studio's character sheet.** Every translation now fills five fields named and formatted the way Lumi Studio's character editor takes them (Count tag, Stable subject phrase, Always include, Permanent appearance tags, Default outfit tags), each with its own copy button. They are comma-separated lists with no sentences, because Lumi Studio splits those fields on commas and writes its own sentence for each character. The sentence-style prompt remains, as the standalone prompt for use without Lumi Studio.
 
 **v0.3.0 adds a feedback loop.** Generate an image, tell LumiCast in words what came out wrong, and it proposes changes you can accept one by one. It also adds saved notes for what you have learned works, emphasis weights in the tags box, and copy buttons for the tags and the detail.
 
@@ -29,7 +31,7 @@ Prebuilt `dist/` files are committed for Lumiverse installation. If the tab does
 
 Requires **Lumiverse 1.2.5 or later**. Compatibility was checked against the current 1.2.5 source and SDK 0.6.40; older versions have not been verified.
 
-1. Unzip `lumicast-0.3.0-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
+1. Unzip `lumicast-0.4.0-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
 2. On the machine running your Lumiverse **server**, copy that folder into `<DATA_DIR>/extensions/`. The server's default DATA_DIR is `./data`, relative to where Lumiverse runs. For Docker, copy into the volume mounted as the server's data directory. Do not copy it into another extension's folder.
 3. As the Lumiverse owner/admin, open **Extensions**, open its add menu, and choose **Import Local**. Enable LumiCast and grant `generation` and `cors_proxy`. If the tab does not appear, reload Lumiverse.
 4. Open **LumiCast** in the sidebar drawer or find it in the command palette. Expand **Connection & tag services**, choose a saved generative connection, and save.
@@ -65,6 +67,22 @@ Each translation makes **two generation calls** and a series of tag lookups, and
 4. **Review and caption.** The second call sees the traits and the verified tags with the start of each wiki definition. It can remove tags (wrong meaning, exaggeration, metaphor) but cannot add any, and it writes the caption in three pieces: the character, the outfit, and the scene. The panel joins the pieces the chosen **Include** calls for. The character piece is instructed to mention no clothing, pose or setting; that is an instruction to the model, not a guarantee, so read it. If the answer is unusable, the verified tags are kept unreviewed and the caption is assembled from the first-pass clauses, with a notice. A piece that is missing, or cites a number the description never gave, is replaced the same way on its own.
 5. **Guards.** Two hair colours, hair lengths, eye colours, subject counts or breast sizes are removed together. A trait named in a genuine contradiction or ambiguity loses its tags and stays in the caption. A malformed uncertainty note is ignored, withholding tags only for a trait it can be traced to; a note about a missing attribute is discarded.
 6. **Assembly.** Tags are ordered subject, body, hair, face, outfit, moment. Canonical names use underscores in the editor; the assembled prompt uses lowercase tags with spaces, preserving `score_*` spelling if manually supplied. Tags and caption are separated by a blank line. No quality, safety, artist or lighting tags are added; add the prefix your Anima variant wants in the editable final prompt.
+
+### Lumi Studio character sheet
+
+Card **03** lays the result out for Lumi Studio 1.8.1's character editor. It is the same for every **Include** choice.
+
+| Field | Filled with |
+|---|---|
+| Count tag | `1girl`, `1boy` or `1other`. |
+| Stable subject phrase | Two to five words for who this is, such as `adult male android`. |
+| Always include | The type tags, such as `android, trap`. |
+| Permanent appearance tags | Verified body, hair and face tags, then up to eight short phrases for what no tag says (`choppy silver-white hair`). |
+| Default outfit tags | Verified clothing tags, then short clothing phrases. Skip it for a character whose clothes follow the story. |
+
+Tags are written with spaces and keep any weight. Phrases come from the review call, which is told to skip anything a kept tag already covers; they are lower-cased, split at any comma, stripped of a leading pronoun, and dropped if they repeat a tag or cite a number the description never gave. Pose, expression, setting and `solo` never appear here. Refine applies its tag changes to these fields as well; a newly added tag lands in Permanent appearance tags.
+
+This is a copy-and-paste handoff. LumiCast does not write to Lumi Studio, and the field mapping was read from Lumi Studio 1.8.1's code, not confirmed by generating through it.
 
 ### Refining from a generated image
 

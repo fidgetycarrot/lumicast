@@ -98,3 +98,9 @@ The Anima guidance in the refinement prompt paraphrases the model card read on O
 
 Strict typecheck, 61 tests (422 assertions) and the production build passed, including a panel test from translation through suggestion, selection and rebuild. All use controlled responses: no refinement was run against a live provider, and no image was generated.
 
+## v0.4.0: Lumi Studio character sheet
+
+Lumi Studio 1.8.1 (`fidgetycarrot/lumidraw-studio`, commit `1a74a99`) was read to see what a saved character must look like. Its character editor has separate Count tag, Stable subject phrase, Always include, Permanent appearance tags and Default outfit tags fields; `coreTags` splits those values on commas, semicolons and newlines but not on full stops; and `coreIdentityFor` builds each character's introduction from the prompt name, the subject phrase and scene position, and refuses to generate when a saved identity collides with banned tags. LumiCast's sentence captions would therefore be cut at their commas into fragments spanning sentence boundaries. Only that identity path was traced in the compiled bundle; how every fragment is rendered in the final prompt was not.
+
+v0.4.0 adds a `sheet` to each translation with those five fields, built from the verified tags by group plus short phrases the review call writes for what no tag covers. Typecheck, 63 tests (433 assertions) and the build passed. Nothing was pasted into or generated through Lumi Studio in this run, and Lumi Studio itself was not modified.
+

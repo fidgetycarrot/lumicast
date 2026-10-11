@@ -25,6 +25,23 @@ function formatWeighted(tag, prompt = false) {
   const name = prompt && !/^score_\d+$/.test(tag.name) ? tag.name.replaceAll("_", " ") : tag.name;
   return tag.weight ? `(${name}:${tag.weight})` : name;
 }
+function editList(value, changes, addHere = false) {
+  const key = (s) => s.replace(/^\((.+?):\s*[\d.]+\)$/, "$1").trim().toLowerCase().replace(/[\s_]+/g, " ");
+  let items = value.split(/[,;\n]+/).map((v) => v.trim()).filter(Boolean);
+  for (const c of changes) {
+    if (!c.tag)
+      continue;
+    const name = key(c.tag);
+    const written = formatWeighted({ name: c.tag, weight: c.weight === 1 ? undefined : c.weight }, true);
+    if (c.kind === "remove")
+      items = items.filter((i) => key(i) !== name);
+    if (c.kind === "weight")
+      items = items.map((i) => key(i) === name ? written : i);
+    if (c.kind === "add" && addHere && !items.some((i) => key(i) === name))
+      items.push(written);
+  }
+  return items.join(", ");
+}
 var splitTags = (value) => value.split(/[\n,]/).map((v) => v.trim()).filter(Boolean);
 function assemble(tags, prose) {
   const unique = new Map;
@@ -254,7 +271,28 @@ function setup(ctx) {
   const evidence = el("details");
   evidence.append(el("summary", "Tag sources & uncertainty"), provenance, issues, sourceQuotes);
   review.append(field("Booru tags — comma separated", tags, "Canonical underscores are shown here; the assembled Anima prompt uses spaces. Add emphasis as (tag:1.4)."), tagState, row(verify, copyTags), field("Natural-language detail", prose, "A short caption written from the extracted facts. Source passages are below. Edit freely; nothing the text leaves out is filled in."), copyProse, evidence);
-  const output = card("03 / Use");
+  const sheetCard = card("03 / Lumi Studio character sheet");
+  sheetCard.append(el("p", "One field per box in Lumi Studio’s character editor. Comma-separated, no sentences, the same for every Include choice."));
+  const sheetField = (label, key, hint, long = false) => {
+    const box = long ? el("textarea") : el("input");
+    if (long)
+      box.rows = 3;
+    box.dataset.sheet = key;
+    box.addEventListener("input", () => {
+      edited = true;
+    });
+    const copyField = button(`Copy ${label.toLowerCase()}`, () => copyText(box.value, label.toLowerCase()));
+    sheetCard.append(field(label, box, hint), copyField);
+    return { box, copyField };
+  };
+  const sheet = {
+    countTag: sheetField("Count tag", "countTag", "Lumi Studio keeps the count in its own field."),
+    subject: sheetField("Stable subject phrase", "subject", "Lumi Studio builds its own sentence around this."),
+    always: sheetField("Always include", "always", "The type tags that define the character."),
+    appearance: sheetField("Permanent appearance tags", "appearance", "Verified tags first, then short phrases for what no tag says.", true),
+    outfit: sheetField("Default outfit tags", "outfit", "Clothing from the description. Leave it out for a character whose clothes change with the story.", true)
+  };
+  const output = card("04 / Standalone prompt");
   const prompt = el("textarea");
   prompt.rows = 8;
   prompt.maxLength = 24000;
@@ -276,8 +314,8 @@ function setup(ctx) {
       notify("Clipboard is unavailable here. The prompt is selected; use your usual Copy shortcut.");
     }
   }, true);
-  output.append(field("Editable Anima prompt", prompt, "Rebuild applies edits above and replaces this field. Copy always copies exactly what is shown."), row(rebuild, copy), el("p", "Tags are verified to exist, not measured for Anima image quality. No quality, score, safety or artist tags are added; add your own."));
-  const refine = card("04 / Refine");
+  output.append(el("p", "For pasting straight into an image tool without Lumi Studio."), field("Editable Anima prompt", prompt, "Rebuild applies edits above and replaces this field. Copy always copies exactly what is shown."), row(rebuild, copy), el("p", "Tags are verified to exist, not measured for Anima image quality. No quality, score, safety or artist tags are added; add your own."));
+  const refine = card("05 / Refine");
   const feedback = el("textarea");
   feedback.rows = 3;
   feedback.maxLength = 2000;
@@ -332,6 +370,10 @@ function setup(ctx) {
       if (p.kind === "caption")
         prose.value = p.caption;
     }
+    sheet.always.box.value = editList(sheet.always.box.value, chosen);
+    sheet.outfit.box.value = editList(sheet.outfit.box.value, chosen);
+    const elsewhere = new Set([...splitTags(sheet.always.box.value), ...splitTags(sheet.outfit.box.value), sheet.countTag.box.value].map((v) => v.replace(/^\((.+?):[\d.]+\)$/, "$1").trim().toLowerCase().replace(/_/g, " ")));
+    sheet.appearance.box.value = editList(sheet.appearance.box.value, chosen.filter((p) => p.kind !== "add" || !elsewhere.has(p.tag.replace(/_/g, " "))), true);
     tags.value = list.map((t) => formatWeighted(t)).join(", ");
     edited = true;
     if (verified || !tags.value.trim())
@@ -365,13 +407,15 @@ function setup(ctx) {
     notify("Search complete. Popularity is not an Anima quality score.");
   });
   searchCard.append(field("Tag name or prefix", query, "Metadata only. No images or posts are fetched."), search, found);
-  app.append(intro, settings, status, input, review, output, refine, searchCard, el("p", "LumiCast 0.3.0 · Manual translator · Draft stays in this tab until reload."));
-  const controls = [translate, save, refreshButton, verify, rebuild, copy, copyTags, copyProse, suggest, apply, search];
+  app.append(intro, settings, status, input, review, sheetCard, output, refine, searchCard, el("p", "LumiCast 0.4.0 · Manual translator · Draft stays in this tab until reload."));
+  const controls = [translate, save, refreshButton, verify, rebuild, copy, copyTags, copyProse, suggest, apply, search, ...Object.values(sheet).map((f) => f.copyField)];
   function show() {
     if (!result)
       return;
     const view = result.views[scope.value];
     const replaced = edited;
+    for (const key of Object.keys(sheet))
+      sheet[key].box.value = result.sheet[key];
     tags.value = view.tags.map((t) => formatWeighted(t)).join(", ");
     prose.value = view.prose;
     prompt.value = view.prompt;
@@ -412,6 +456,8 @@ function setup(ctx) {
     gelUser.disabled = busy;
     gelKey.disabled = busy;
     clearKey.disabled = busy;
+    for (const f of Object.values(sheet))
+      f.box.readOnly = busy;
     stated.readOnly = busy;
     tags.readOnly = busy;
     prose.readOnly = busy;

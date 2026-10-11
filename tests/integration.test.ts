@@ -42,19 +42,19 @@ test('full panel → RPC → backend → editor smoke, copy and disposal',async(
   const select=h.root.querySelector('select')!;expect(select.options[2].disabled).toBe(true);select.value='c1';
   const areas=Array.from(h.root.querySelectorAll('textarea')).slice(1);areas[0].value='Short red hair.';b('Translate').click();
   await until(()=>!b('Translate').disabled);
-  expect(areas[1].value).toBe('red_hair');expect(areas[2].value).toContain('Short red hair.');expect(areas[3].value).toBe('red hair\n\nShort red hair.');
+  expect(areas[1].value).toBe('red_hair');expect(areas[2].value).toContain('Short red hair.');expect(areas[5].value).toBe('red hair\n\nShort red hair.');
   expect(h.calls.filter(v=>(v as unknown[])[0]==='generation').length).toBe(2);
   expect(h.replies.every(r=>r.user==='u1'&&r.session==='s1')).toBe(true);
   areas[1].value='blue_eyes';areas[1].dispatchEvent(new Event('input'));expect(b('Rebuild from tags + detail').disabled).toBe(true);
   let copied='';Object.defineProperty(navigator,'clipboard',{value:{writeText:async(value:string)=>{copied=value;}},configurable:true});
-  areas[3].value='My edited final prompt.';areas[3].dispatchEvent(new Event('input'));b('Copy prompt').click();await until(()=>!b('Copy prompt').disabled);expect(copied).toBe('My edited final prompt.');
+  areas[5].value='My edited final prompt.';areas[5].dispatchEvent(new Event('input'));b('Copy prompt').click();await until(()=>!b('Copy prompt').disabled);expect(copied).toBe('My edited final prompt.');
 });
 test('provider error does not leak credentials and failed translation preserves edits',async()=> {
   dom();const h=harness();cleanups.push(h.stop);const dispose=setup(h.ctx);cleanups.push(dispose);
   const translate=Array.from(h.root.querySelectorAll('button')).find(b=>b.textContent==='Translate')!;
   await until(()=>!translate.disabled);h.root.querySelector('select')!.value='c1';
-  const areas=Array.from(h.root.querySelectorAll('textarea')).slice(1);areas[0].value='Short red hair.';areas[3].value='Keep this edit.';h.setFail();translate.click();await until(()=>!translate.disabled);
-  expect(h.root.textContent).not.toContain('SECRET-DO-NOT-LEAK');expect(h.root.textContent).toContain('AUTHENTICATION');expect(h.root.textContent).toContain('trait extraction');expect(areas[3].value).toBe('Keep this edit.');
+  const areas=Array.from(h.root.querySelectorAll('textarea')).slice(1);areas[0].value='Short red hair.';areas[5].value='Keep this edit.';h.setFail();translate.click();await until(()=>!translate.disabled);
+  expect(h.root.textContent).not.toContain('SECRET-DO-NOT-LEAK');expect(h.root.textContent).toContain('AUTHENTICATION');expect(h.root.textContent).toContain('trait extraction');expect(areas[5].value).toBe('Keep this edit.');
 });
 test('per-user settings and secret never echoed in snapshot',async()=> {
   dom();const h=harness();cleanups.push(h.stop);const rpc=createRpc(h.ctx);cleanups.push(()=>rpc.destroy());
@@ -91,7 +91,7 @@ test('panel prompt omits narration and scene while the source passages stay visi
   const translate=Array.from(h.root.querySelectorAll('button')).find(b=>b.textContent==='Translate')!;
   await until(()=>!translate.disabled);h.root.querySelector('select')!.value='c1';
   const areas=Array.from(h.root.querySelectorAll('textarea')).slice(1);areas[0].value='Red hair, obviously! And a red hair ribbon.';translate.click();await until(()=>!translate.disabled);
-  expect(areas[1].value).toBe('red_hair');expect(areas[2].value).toBe('Red hair.');expect(areas[3].value).toBe('red hair\n\nRed hair.');
+  expect(areas[1].value).toBe('red_hair');expect(areas[2].value).toBe('Red hair.');expect(areas[5].value).toBe('red hair\n\nRed hair.');
   expect(h.root.querySelector('details:not(.lc-card)')?.textContent).toContain('Red hair, obviously!');expect(h.root.querySelector('details:not(.lc-card)')?.textContent).not.toContain('ribbon');
   const scope=h.root.querySelectorAll('select')[1];expect(scope.value).toBe('character');areas[2].value='my edit';areas[2].dispatchEvent(new Event('input'));scope.value='outfit';scope.dispatchEvent(new Event('change'));
   expect(areas[2].value).toBe('Red hair. She wears a ribbon.');expect(h.calls.filter(v=>(v as unknown[])[0]==='generation').length).toBe(2);expect(h.root.textContent).toContain('manual edits were replaced');expect(h.root.querySelector('details:not(.lc-card)')?.textContent).toContain('ribbon');
@@ -102,19 +102,22 @@ test('direct DeepSeek adapter tolerates string evidence without discarding the p
   const translate=Array.from(h.root.querySelectorAll('button')).find(b=>b.textContent==='Translate')!;
   await until(()=>!translate.disabled);h.root.querySelector('select')!.value='c1';
   const areas=Array.from(h.root.querySelectorAll('textarea')).slice(1);areas[0].value='Short red hair.';translate.click();await until(()=>!translate.disabled);
-  expect(areas[1].value).toBe('red_hair');expect(areas[3].value).toBe('red hair\n\nShort red hair.');expect(h.root.textContent).not.toContain('Invalid uncertainty evidence');expect(h.root.textContent).toContain('missing-attribute note was ignored');
+  expect(areas[1].value).toBe('red_hair');expect(areas[5].value).toBe('red hair\n\nShort red hair.');expect(h.root.textContent).not.toContain('Invalid uncertainty evidence');expect(h.root.textContent).toContain('missing-attribute note was ignored');
 });
 test('refine: typed feedback becomes verified, selectable changes; weights and notes carry through; copy buttons work',async()=> {
   dom();const h=harness();cleanups.push(h.stop);const dispose=setup(h.ctx);cleanups.push(dispose);
   const b=(name:string)=>Array.from(h.root.querySelectorAll('button')).find(x=>x.textContent===name)!;
   await until(()=>!b('Translate').disabled);h.root.querySelector('select')!.value='c1';
-  const all=Array.from(h.root.querySelectorAll('textarea'));const [notes,source,tags,prose,prompt,feedback]=all;
+  const all=Array.from(h.root.querySelectorAll('textarea'));const [notes,source,tags,prose,appearance,outfit,prompt,feedback]=all;
   notes.value='Redheads: weight red_hair at 1.4.';b('Save settings').click();await until(()=>!b('Translate').disabled);
   h.root.querySelector('select')!.value='c1';
   h.setResponses([{traits:[{id:'1',group:'hair',evidence:'Short red hair.',tags:['(red_hair:1.4)'],detail:'Short red hair'}]},{drop:[],captions:{character:'Short red hair.'},issues:[]},
     {reply:'The hair read as orange.',remove:[{tag:'made_up',why:'x'}],weight:[{tag:'red_hair',weight:1.8,why:'still too weak'}],add:[{tag:'red_hair',why:'dup'},{tag:'short_hair',weight:null,why:'length was lost'}],caption:'Short, vivid red hair.'}]);
   source.value='Short red hair.';b('Translate').click();await until(()=>!b('Translate').disabled);
   expect(tags.value).toBe('(red_hair:1.4)');expect(prompt.value).toBe('(red hair:1.4)\n\nShort red hair.');
+  const sheetValue=(key:string)=>(h.root.querySelector(`[data-sheet="${key}"]`) as HTMLInputElement).value;
+  expect(appearance.value).toBe('(red hair:1.4)');expect(outfit.value).toBe('');expect(sheetValue('countTag')).toBe('');
+  b('Copy permanent appearance tags').click();await until(()=>!b('Translate').disabled);
   const sent=h.calls.filter(v=>(v as unknown[])[0]==='generation').map(v=>((v as unknown[])[1] as {messages:{content:string}[]}).messages[1].content);
   expect(JSON.parse(sent[0]).notes).toBe('Redheads: weight red_hair at 1.4.');
   let copied='';Object.defineProperty(navigator,'clipboard',{value:{writeText:async(value:string)=>{copied=value;}},configurable:true});
@@ -130,4 +133,5 @@ test('refine: typed feedback becomes verified, selectable changes; weights and n
   boxes[2].checked=false;b('Apply selected').click();await until(()=>!b('Translate').disabled);
   expect(tags.value).toBe('(red_hair:1.8), short_hair');expect(prose.value).toBe('Short red hair.');expect(prompt.value).toBe('(red hair:1.8), short hair\n\nShort red hair.');
   expect(feedback.value).toBe('');expect(h.root.querySelectorAll('.lc-proposal').length).toBe(0);
+  expect(appearance.value).toBe('(red hair:1.8), short hair');
 });

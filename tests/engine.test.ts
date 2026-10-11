@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test';
 import { Translator, parseExtraction, removeConflicts } from '../src/engine';
-import { assemble, cupSize, formatWeighted, inScope, isGenerative, parseWeighted, type TagDictionary, type TagRow, type TranslateOptions } from '../src/contracts';
+import { assemble, cupSize, editList, formatWeighted, inScope, isGenerative, parseWeighted, type TagDictionary, type TagRow, type TranslateOptions } from '../src/contracts';
 import { cases, narratedFiller } from './fixtures';
 const dictionary:TagDictionary={resolve:async name=>({name,source:'Danbooru',count:10,wiki:`Definition of ${name}`,url:'https://danbooru.donmai.us/wiki_pages/'+name}),search:async()=>[]};
 const signal=()=>new AbortController().signal;
@@ -210,4 +210,26 @@ test('refine handles vague feedback, empty input and bad output without inventin
   await expect(refineWith({}, {tags:['(trap:9)']})).rejects.toThrow('between 0.1 and 3');
   const offline=await refineWith({add:[{tag:'purple_eyes',why:'x'}]},{},{...dictionary,resolve:async()=>{throw new Error('offline');}});
   expect(offline.result.proposals).toEqual([]);expect(offline.result.notices.join(' ')).toContain('tag service was unavailable');
+});
+test('Lumi Studio sheet: fields the character editor takes, with phrases only for what tags do not say',async()=> {
+  const fixture=cases.find(c=>c.name.startsWith('type tags'))!;
+  const {result}=await run(fixture.source,{traits:fixture.traits},{drop:[],captions:{},sheet:{
+    subject:'Adult male android.',
+    character:['Short hair','engineered hourglass silhouette, narrow shoulders','He has pale polymer skin.','silver_hair','a 99cm waist','x'.repeat(81)],
+    outfit:['sheer black thigh-high stockings','no shoes'],
+  }},{scope:'character',notes:'Weight trap at 1.4.'});
+  expect(result.sheet).toEqual({
+    countTag:'1boy',subject:'adult male android',always:'android, trap',
+    appearance:'narrow waist, wide hips, silver hair, short hair, engineered hourglass silhouette, narrow shoulders, pale polymer skin',
+    outfit:'thighhighs, black thighhighs, no shoes, sheer black thigh-high stockings',
+  });
+  // The sheet does not depend on the Include choice, and never carries solo or scene detail.
+  expect((await run(fixture.source,{traits:fixture.traits},{},{scope:'scene'})).result.sheet).toEqual({countTag:'1boy',subject:'',always:'android, trap',appearance:'narrow waist, wide hips, silver hair, short hair',outfit:'thighhighs, black thighhighs, no shoes'});
+  const weighted=await run('He is a femboy with silver hair.',{traits:[{id:'1',group:'subject',evidence:'femboy',tags:['1boy','(trap:1.4)'],detail:'A feminine young man'}]},{},{notes:'Weight trap at 1.4.'});
+  expect(weighted.result.sheet.always).toBe('(trap:1.4)');expect(weighted.result.sheet.countTag).toBe('1boy');
+});
+test('sheet fields take the same tag edits as the tags box',()=> {
+  const changes=[{kind:'remove',tag:'blue_eyes'},{kind:'weight',tag:'silver_hair',weight:1.5},{kind:'weight',tag:'trap',weight:1},{kind:'add',tag:'panel_lines'},{kind:'caption'}];
+  expect(editList('silver hair, Blue Eyes, (trap:1.4), choppy silver-white hair',changes,true)).toBe('(silver hair:1.5), trap, choppy silver-white hair, panel lines');
+  expect(editList('thighhighs',changes)).toBe('thighhighs');expect(editList('',changes)).toBe('');
 });

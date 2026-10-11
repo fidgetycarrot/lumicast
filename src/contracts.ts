@@ -25,7 +25,9 @@ export const SCOPES = ['character','outfit','scene'] as const;
 /** One translation seen at one scope. */
 export interface View { tags: TagRow[]; prose: string; prompt: string; notices: string[]; evidence: Trait[] }
 /** The requested scope's view at the top level, plus every scope so the panel can switch without another run. */
-export interface Translation extends View { issues: Issue[]; model: string; views: Record<Scope, View> }
+/** The result laid out as Lumi Studio's character sheet fields: comma-separated, spaces for underscores, no sentences. */
+export interface Sheet { countTag: string; subject: string; always: string; appearance: string; outfit: string }
+export interface Translation extends View { issues: Issue[]; model: string; views: Record<Scope, View>; sheet: Sheet }
 export interface Settings { connectionId: string; gelUser: string; gelKey: string; notes: string }
 export interface PublicSettings { connectionId: string; gelUser: string; hasGelKey: boolean; notes: string }
 export interface Snapshot {
@@ -88,6 +90,19 @@ export function parseWeighted(v: unknown): Weighted {
 export function formatWeighted(tag: Weighted, prompt = false): string {
   const name = prompt && !/^score_\d+$/.test(tag.name) ? tag.name.replaceAll('_', ' ') : tag.name;
   return tag.weight ? `(${name}:${tag.weight})` : name;
+}
+/** Apply tag changes to one comma-separated sheet field, matching names whether written with spaces or underscores. */
+export function editList(value: string, changes: {kind: string; tag?: string; weight?: number}[], addHere = false): string {
+  const key = (s: string) => s.replace(/^\((.+?):\s*[\d.]+\)$/, '$1').trim().toLowerCase().replace(/[\s_]+/g, ' ');
+  let items = value.split(/[,;\n]+/).map(v => v.trim()).filter(Boolean);
+  for (const c of changes) {
+    if (!c.tag) continue;
+    const name = key(c.tag); const written = formatWeighted({name: c.tag, weight: c.weight === 1 ? undefined : c.weight}, true);
+    if (c.kind === 'remove') items = items.filter(i => key(i) !== name);
+    if (c.kind === 'weight') items = items.map(i => key(i) === name ? written : i);
+    if (c.kind === 'add' && addHere && !items.some(i => key(i) === name)) items.push(written);
+  }
+  return items.join(', ');
 }
 export const splitTags = (value: string): string[] => value.split(/[\n,]/).map(v => v.trim()).filter(Boolean);
 export function assemble(tags: (string | Weighted)[], prose: string): string {

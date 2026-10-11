@@ -1,5 +1,5 @@
 import type { SpindleFrontendContext } from 'lumiverse-spindle-types';
-import { assemble, formatWeighted, parseWeighted, splitTags, type Proposal, type Refinement, type Scope, type Snapshot, type Translation, type VerifiedTag } from './contracts';
+import { assemble, editList, formatWeighted, parseWeighted, splitTags, type Proposal, type Refinement, type Scope, type Snapshot, type Translation, type VerifiedTag } from './contracts';
 import { removeConflicts } from './engine';
 
 export function createRpc(ctx: Pick<SpindleFrontendContext,'sendToBackend'|'onBackendMessage'>, timeout=250_000) {
@@ -97,7 +97,24 @@ export function setup(ctx:SpindleFrontendContext) {
   const provenance=el('div');const issues=el('div');const sourceQuotes=el('div');
   const evidence=el('details');evidence.append(el('summary','Tag sources & uncertainty'),provenance,issues,sourceQuotes);
   review.append(field('Booru tags — comma separated',tags,'Canonical underscores are shown here; the assembled Anima prompt uses spaces. Add emphasis as (tag:1.4).'),tagState,row(verify,copyTags),field('Natural-language detail',prose,'A short caption written from the extracted facts. Source passages are below. Edit freely; nothing the text leaves out is filled in.'),copyProse,evidence);
-  const output=card('03 / Use');const prompt=el('textarea');prompt.rows=8;prompt.maxLength=24_000;
+  // Field names and order match Lumi Studio's character sheet so each can be pasted straight across.
+  const sheetCard=card('03 / Lumi Studio character sheet');
+  sheetCard.append(el('p','One field per box in Lumi Studio’s character editor. Comma-separated, no sentences, the same for every Include choice.'));
+  const sheetField=(label:string,key:'countTag'|'subject'|'always'|'appearance'|'outfit',hint:string,long=false)=> {
+    const box=long?el('textarea'):el('input');if(long)(box as HTMLTextAreaElement).rows=3;box.dataset.sheet=key;
+    box.addEventListener('input',()=>{edited=true;});
+    const copyField=button(`Copy ${label.toLowerCase()}`,()=>copyText(box.value,label.toLowerCase()));
+    sheetCard.append(field(label,box,hint),copyField);
+    return {box,copyField};
+  };
+  const sheet={
+    countTag:sheetField('Count tag','countTag','Lumi Studio keeps the count in its own field.'),
+    subject:sheetField('Stable subject phrase','subject','Lumi Studio builds its own sentence around this.'),
+    always:sheetField('Always include','always','The type tags that define the character.'),
+    appearance:sheetField('Permanent appearance tags','appearance','Verified tags first, then short phrases for what no tag says.',true),
+    outfit:sheetField('Default outfit tags','outfit','Clothing from the description. Leave it out for a character whose clothes change with the story.',true),
+  };
+  const output=card('04 / Standalone prompt');const prompt=el('textarea');prompt.rows=8;prompt.maxLength=24_000;
   const rebuild=button('Rebuild from tags + detail',()=> {
     if(tags.value.trim()&&!verified)throw new Error('Verify edited tags before rebuilding.');
     prompt.value=assemble(splitTags(tags.value),prose.value);notify('Prompt rebuilt.');
@@ -106,8 +123,8 @@ export function setup(ctx:SpindleFrontendContext) {
     if(!prompt.value.trim())throw new Error('There is no prompt to copy yet.');
     try{await navigator.clipboard.writeText(prompt.value);notify('Prompt copied.');}catch{prompt.focus();prompt.select();notify('Clipboard is unavailable here. The prompt is selected; use your usual Copy shortcut.');}
   },true);
-  output.append(field('Editable Anima prompt',prompt,'Rebuild applies edits above and replaces this field. Copy always copies exactly what is shown.'),row(rebuild,copy),el('p','Tags are verified to exist, not measured for Anima image quality. No quality, score, safety or artist tags are added; add your own.'));
-  const refine=card('04 / Refine');
+  output.append(el('p','For pasting straight into an image tool without Lumi Studio.'),field('Editable Anima prompt',prompt,'Rebuild applies edits above and replaces this field. Copy always copies exactly what is shown.'),row(rebuild,copy),el('p','Tags are verified to exist, not measured for Anima image quality. No quality, score, safety or artist tags are added; add your own.'));
+  const refine=card('05 / Refine');
   const feedback=el('textarea');feedback.rows=3;feedback.maxLength=2000;feedback.placeholder='Generate an image, then say what came out wrong: “reads too masculine”, “eyes came out blue”, “no visible seams”.';
   const reply=el('p');const proposed=el('div');let pending:Proposal[]=[];
   const suggest=button('Suggest changes',async()=> {
@@ -135,6 +152,10 @@ export function setup(ctx:SpindleFrontendContext) {
       if(p.kind==='add'&&!list.some(t=>t.name===p.tag))list.push({name:p.tag!,weight:p.weight});
       if(p.kind==='caption')prose.value=p.caption!;
     }
+    // The sheet gets the same tag changes; a new tag lands in the appearance field for you to move if it is clothing.
+    sheet.always.box.value=editList(sheet.always.box.value,chosen);sheet.outfit.box.value=editList(sheet.outfit.box.value,chosen);
+    const elsewhere=new Set([...splitTags(sheet.always.box.value),...splitTags(sheet.outfit.box.value),sheet.countTag.box.value].map(v=>v.replace(/^\((.+?):[\d.]+\)$/,'$1').trim().toLowerCase().replace(/_/g,' ')));
+    sheet.appearance.box.value=editList(sheet.appearance.box.value,chosen.filter(p=>p.kind!=='add'||!elsewhere.has(p.tag!.replace(/_/g,' '))),true);
     // Added tags were verified when they were suggested; the rest keep their earlier status.
     tags.value=list.map(t=>formatWeighted(t)).join(', ');edited=true;
     if(verified||!tags.value.trim())prompt.value=assemble(list,prose.value);
@@ -151,12 +172,13 @@ export function setup(ctx:SpindleFrontendContext) {
     notify('Search complete. Popularity is not an Anima quality score.');
   });
   searchCard.append(field('Tag name or prefix',query,'Metadata only. No images or posts are fetched.'),search,found);
-  app.append(intro,settings,status,input,review,output,refine,searchCard,el('p','LumiCast 0.3.0 · Manual translator · Draft stays in this tab until reload.'));
-  const controls=[translate,save,refreshButton,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search];
+  app.append(intro,settings,status,input,review,sheetCard,output,refine,searchCard,el('p','LumiCast 0.4.0 · Manual translator · Draft stays in this tab until reload.'));
+  const controls=[translate,save,refreshButton,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
   // Every scope comes back from one translation, so changing Include only re-renders.
   function show(){
     if(!result)return;
     const view=result.views[scope.value as Scope];const replaced=edited;
+    for(const key of Object.keys(sheet) as (keyof typeof sheet)[])sheet[key].box.value=result.sheet[key];
     tags.value=view.tags.map(t=>formatWeighted(t)).join(', ');prose.value=view.prose;prompt.value=view.prompt;verified=true;edited=false;
     provenance.replaceChildren();
     view.tags.forEach(t=> {
@@ -171,7 +193,7 @@ export function setup(ctx:SpindleFrontendContext) {
     notify([replaced?'Fields reset from the translation; your manual edits were replaced.':'Translation ready. Review the tags and caption.',!gelUser.value ? 'Gelbooru is not configured; verified tags use Danbooru.' : '',...view.notices].filter(Boolean).join('\n'));
     update();
   }
-  function update(){for(const c of controls)c.disabled=busy;rebuild.disabled=busy||(!verified&&!!tags.value.trim());apply.disabled=busy||!pending.length;copy.disabled=busy||!prompt.value.trim();cancel.hidden=!busy;connection.disabled=busy;notes.readOnly=busy;feedback.readOnly=busy;gelUser.disabled=busy;gelKey.disabled=busy;clearKey.disabled=busy;stated.readOnly=busy;tags.readOnly=busy;prose.readOnly=busy;prompt.readOnly=busy;source.readOnly=busy;}
+  function update(){for(const c of controls)c.disabled=busy;rebuild.disabled=busy||(!verified&&!!tags.value.trim());apply.disabled=busy||!pending.length;copy.disabled=busy||!prompt.value.trim();cancel.hidden=!busy;connection.disabled=busy;notes.readOnly=busy;feedback.readOnly=busy;gelUser.disabled=busy;gelKey.disabled=busy;clearKey.disabled=busy;for(const f of Object.values(sheet))f.box.readOnly=busy;stated.readOnly=busy;tags.readOnly=busy;prose.readOnly=busy;prompt.readOnly=busy;source.readOnly=busy;}
   function notify(message:string,error=false){if(closed)return;status.textContent=message;status.dataset.error=String(error);}
   function row(...children:HTMLElement[]){const n=el('div');n.className='lc-row';n.append(...children);return n;}
   function card(title:string){const n=el('section');n.className='lc-card';n.append(el('h2',title));return n;}
