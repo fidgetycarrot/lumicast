@@ -1,7 +1,8 @@
-import type { SpindleAPI } from 'lumiverse-spindle-types';
+import type { SpindleAPI, GenerationRequestDTO } from 'lumiverse-spindle-types';
 import { BooruDictionary } from './dictionary';
 import { Translator } from './engine';
 import { isGenerative, record, text, type Settings, type Snapshot } from './contracts';
+import { generationError, ModelRequestError } from './generation-errors';
 
 const DEFAULTS: Settings = {connectionId:'',gelUser:'',gelKey:''};
 export function setupBackend(api: SpindleAPI) {
@@ -26,7 +27,7 @@ export function setupBackend(api: SpindleAPI) {
       await s.load;
       const settings=s.settings!;
       const dictionary=() => s.dictionary ??= new BooruDictionary(async url=> {
-        const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.1.0 (tag metadata client)'}}));
+        const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.1.1 (tag metadata client)'}}));
         if(typeof response.status!=='number'||typeof response.body!=='string')throw new Error('Invalid proxy response.');
         return {status:response.status,body:response.body};
       },{user:settings.gelUser,key:settings.gelKey});
@@ -60,10 +61,15 @@ export function setupBackend(api: SpindleAPI) {
         const connectionId=text(input.connectionId,'connection',100);
         const connection=await api.connections.get(connectionId,userId);
         if (!connection || !isGenerative(connection.model)) throw new Error('Select a saved generative text connection. Jev and Decisions models cannot write the translator output.');
+        let modelCalls=0;
         const translator=new Translator(async (system,content,signal)=> {
           let value:unknown;
-          try {value=await api.generate.raw({type:'raw',connection_id:connection.id,userId,messages:[{role:'system',content:system},{role:'user',content}],parameters:{max_tokens:6000},signal});}
-          catch {signal.throwIfAborted();throw new Error('The model request failed. Check the connection and provider status.');}
+          const stage=++modelCalls===1?'trait extraction':'tag meaning review';
+          // The host resolves credentials from connection_id, but raw generation
+          // still uses input.model. SDK 0.6.40 omits these documented raw fields.
+          const request:GenerationRequestDTO & {provider:string;model:string}={type:'raw',connection_id:connection.id,provider:connection.provider,model:connection.model,userId,messages:[{role:'system',content:system},{role:'user',content}],parameters:{max_tokens:6000},signal};
+          try {value=await api.generate.raw(request);}
+          catch(error) {signal.throwIfAborted();throw generationError(error,connection.provider,connection.model,stage);}
           const response=record(value);
           if (typeof response.content !== 'string' || !response.content.trim() || /length|max_tokens/.test(String(response.finish_reason ?? ''))) throw new Error('The model returned empty or truncated text. Choose another connection or shorten the description.');
           return response.content;
@@ -76,7 +82,7 @@ export function setupBackend(api: SpindleAPI) {
       // Provider errors may embed URLs, headers or keys. Never forward raw upstream errors.
       const message=error instanceof Error ? error.message : '';
       const trusted=/^(Grant LumiCast|Wait for|This connection|Gelbooru user|Unknown LumiCast|An operation|Use at most|Select a saved|The model |Invalid |Use a plain|Paste a |No explicit|Too many|Conflicting|Tag service|Tag lookup|Cyclic tag|Tag alias|Oversized|Unexpected)/.test(message);
-      reply(undefined,error instanceof Error && error.name==='AbortError' ? 'Operation cancelled or timed out. Your edits are preserved.' : trusted ? message : 'The operation failed. Check your connection, provider status and tag-service access. Your edits are preserved.');
+      reply(undefined,error instanceof Error && error.name==='AbortError' ? 'Operation cancelled or timed out. Your edits are preserved.' : error instanceof ModelRequestError || trusted ? message : 'The operation failed. Check your connection, provider status and tag-service access. Your edits are preserved.');
     });
   });
   return () => {closed=true;off();for(const s of users.values()) for(const c of s.jobs.values()) c.abort();users.clear();};

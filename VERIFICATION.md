@@ -8,19 +8,19 @@
 - SDK `lumiverse-spindle-types` 0.6.40, matching Lumiverse's pinned dependency.
 - [Official Anima model guidance](https://huggingface.co/circlestone-labs/Anima/blob/main/README.md), [Danbooru API](https://danbooru.donmai.us/wiki_pages/help:api), [Gelbooru API](https://gelbooru.com/index.php?page=wiki&s=view&id=18780).
 
-Verified real calls: `ui.registerDrawerTab`, `dom.addStyle`, `sendToBackend`, `onBackendMessage`, `onFrontendMessage`, `sendToFrontend` with `frontendSessionId`, `connections.list/get(userId)`, `generate.raw({type:'raw',connection_id,userId,messages,parameters,signal})`, `cors(url,init)`, `permissions.has`, `userStorage.getJson/setJson` with authenticated user scope.
+Verified real calls: `ui.registerDrawerTab`, `dom.addStyle`, `sendToBackend`, `onBackendMessage`, `onFrontendMessage`, `sendToFrontend` with `frontendSessionId`, `connections.list/get(userId)`, `generate.raw({type:'raw',connection_id,provider,model,userId,messages,parameters,signal})`, `cors(url,init)`, `permissions.has`, `userStorage.getJson/setJson` with authenticated user scope.
 
 The host implementation confirms generation requires explicit `userId` for operator-scoped installs. The local installer reads `<DATA_DIR>/extensions/<identifier>/spindle.json` or its nested `repo` layout and registers it through Import Local.
 
 ## Completed checks
 
 - TypeScript strict typecheck against the pinned SDK: passed.
-- 27 automated tests, 97 assertions: passed. Eight challenging description fixtures plus malformed JSON, fabricated evidence, unsupported model names, nonexistent/deprecated tags, alias/cache behavior, Gelbooru failure, edited tags, RPC expiry, cancellation, per-user secret isolation and failure preservation.
+- 29 automated tests, 153 assertions: passed. Eight challenging description fixtures plus malformed JSON, fabricated evidence, unsupported model names, nonexistent/deprecated tags, alias/cache behavior, Gelbooru failure, edited tags, RPC expiry, cancellation, per-user secret isolation and failure preservation.
 - Production frontend/backend bundle build: passed.
 - Current Lumiverse `detectDangerousBackendCapabilities` scanner, extracted unchanged from the pinned source: backend accepted with zero declared capabilities.
 - Manifest entry existence and package structure checks: passed.
 - Real public Danbooru requests: exact `blue_eyes`, wiki definition, active `gray_hair → grey_hair` alias, `heterochromia` prefix search and nonexistent-tag rejection passed.
-- Bun's default HTTP client was challenged by Danbooru; an honest `LumiCast/0.1.0 (tag metadata client)` header succeeded and is used in production CORS requests.
+- Bun's default HTTP client was challenged by Danbooru; an honest `LumiCast/0.1.1 (tag metadata client)` header succeeded and is used in production CORS requests.
 - Real Gelbooru request without credentials: HTTP 401. The extension's authenticated response parsing and fallback path were tested with controlled fixtures.
 - Browser-rendered standalone frontend preview: paste → Translate → editable tag, source wording and prompt fields visibly populated. This used a clearly labeled fixture response, not a live provider. Preview screenshot supplied separately.
 
@@ -33,3 +33,9 @@ The host implementation confirms generation requires explicit `userId` for opera
 - Older Lumiverse versions. The minimum is conservatively set to the inspected current version.
 
 The package is ready to install locally and includes live provider smoke instructions for these remaining checks. The initial local package was prepared before GitHub publication. Publication adds a new standalone repository; existing repositories/extensions were not modified. No PR is needed for an initial standalone repository.
+
+## v0.1.1 correction
+
+v0.1.0 omitted `provider` and `model` from raw-generation input. Although `connection_id` resolves the connection credentials, the inspected host `prepareRawCall` uses `input.model` for the provider request instead of inheriting `connection.model`. This left the model name blank. SDK 0.6.40 also omits these runtime fields from its request interface, despite showing them in its raw-generation examples.
+
+v0.1.1 explicitly passes the saved provider and model on both calls. A direct DeepSeek regression requires `deepseek` / `deepseek-v4-pro`, the connection ID and authenticated user ID for extraction and review; the test would reject the old request. Errors now expose a fixed category and validated HTTP status with the generation step, while suppressing upstream text. A real paid DeepSeek request remains untested by this development run.

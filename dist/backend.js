@@ -285,6 +285,47 @@ class Translator {
   }
 }
 
+// src/generation-errors.ts
+class ModelRequestError extends Error {
+}
+function generationError(error, provider, model, stage) {
+  const r = record(error);
+  const message = typeof r.message === "string" ? r.message : typeof error === "string" ? error : "";
+  const candidate = r.status ?? r.statusCode ?? record(r.response).status ?? message.match(/\b(?:HTTP(?:\s+error)?|API\s+error|status(?:\s+code)?)\s*[:=]?\s*([45]\d{2})\b/i)?.[1] ?? message.match(/\bfailed\s*\(([45]\d{2})\):/i)?.[1];
+  const status = /^[45]\d{2}$/.test(String(candidate)) ? Number(candidate) : undefined;
+  let code = "REQUEST_FAILED", detail = "Check this connection in Lumiverse and retry.";
+  if (status === 401 || /unauthori|authentication|(?:invalid|incorrect|missing|expired).{0,30}(?:api.?key|credentials|token)/i.test(message)) {
+    code = "AUTHENTICATION";
+    detail = "Check the API key saved in this Lumiverse connection.";
+  } else if (status === 402 || /insufficient.*(?:balance|credit)|balance.*insufficient/i.test(message)) {
+    code = "CREDIT_LIMIT";
+    detail = "Check the provider account balance.";
+  } else if (status === 403) {
+    code = "ACCESS_DENIED";
+    detail = "The provider denied access to this request.";
+  } else if (status === 429 || /rate.limit|quota/i.test(message)) {
+    code = "RATE_LIMIT";
+    detail = "Wait before retrying or check the provider quota.";
+  } else if (/model.{0,80}(?:not found|not available|does not exist|invalid|unknown|required|missing|empty)|(?:unknown|invalid|missing)\s+model/i.test(message)) {
+    code = "MODEL_UNAVAILABLE";
+    detail = "Re-select the model in this Lumiverse connection.";
+  } else if (status === 400 || status === 422 || /unsupported.*parameter|invalid.*request/i.test(message)) {
+    code = "INVALID_REQUEST";
+    detail = "The provider rejected the request settings. Share this code and the selected model.";
+  } else if (/timeout|timed?\s*out/i.test(message) || r.name === "TimeoutError") {
+    code = "TIMEOUT";
+    detail = "The provider took too long to respond. Try again with a shorter description.";
+  } else if (/fetch failed|network|ECONN|ENOTFOUND|connection refused|socket.*closed/i.test(message)) {
+    code = "CONNECTION_FAILED";
+    detail = "Lumiverse could not reach the provider.";
+  } else if (status && status >= 500) {
+    code = "PROVIDER_UNAVAILABLE";
+    detail = "The provider reported a server error. Try again later.";
+  }
+  const safe = (name) => /^[a-zA-Z0-9_.\/-]{1,150}$/.test(name) ? name : "selected connection";
+  return new ModelRequestError(`LumiCast model request failed during ${stage} (${safe(provider)} / ${safe(model)}; ${code}${status ? `; HTTP ${status}` : ""}). ${detail} Your edits are preserved.`);
+}
+
 // src/backend.ts
 var DEFAULTS = { connectionId: "", gelUser: "", gelKey: "" };
 function setupBackend(api) {
@@ -323,7 +364,7 @@ function setupBackend(api) {
       await s.load;
       const settings = s.settings;
       const dictionary = () => s.dictionary ??= new BooruDictionary(async (url) => {
-        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.1.0 (tag metadata client)" } }));
+        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.1.1 (tag metadata client)" } }));
         if (typeof response.status !== "number" || typeof response.body !== "string")
           throw new Error("Invalid proxy response.");
         return { status: response.status, body: response.body };
@@ -369,13 +410,16 @@ function setupBackend(api) {
         const connection = await api.connections.get(connectionId, userId);
         if (!connection || !isGenerative(connection.model))
           throw new Error("Select a saved generative text connection. Jev and Decisions models cannot write the translator output.");
+        let modelCalls = 0;
         const translator = new Translator(async (system, content, signal) => {
           let value;
+          const stage = ++modelCalls === 1 ? "trait extraction" : "tag meaning review";
+          const request = { type: "raw", connection_id: connection.id, provider: connection.provider, model: connection.model, userId, messages: [{ role: "system", content: system }, { role: "user", content }], parameters: { max_tokens: 6000 }, signal };
           try {
-            value = await api.generate.raw({ type: "raw", connection_id: connection.id, userId, messages: [{ role: "system", content: system }, { role: "user", content }], parameters: { max_tokens: 6000 }, signal });
-          } catch {
+            value = await api.generate.raw(request);
+          } catch (error) {
             signal.throwIfAborted();
-            throw new Error("The model request failed. Check the connection and provider status.");
+            throw generationError(error, connection.provider, connection.model, stage);
           }
           const response = record(value);
           if (typeof response.content !== "string" || !response.content.trim() || /length|max_tokens/.test(String(response.finish_reason ?? "")))
@@ -392,7 +436,7 @@ function setupBackend(api) {
     })().then((result) => reply(result)).catch((error) => {
       const message = error instanceof Error ? error.message : "";
       const trusted = /^(Grant LumiCast|Wait for|This connection|Gelbooru user|Unknown LumiCast|An operation|Use at most|Select a saved|The model |Invalid |Use a plain|Paste a |No explicit|Too many|Conflicting|Tag service|Tag lookup|Cyclic tag|Tag alias|Oversized|Unexpected)/.test(message);
-      reply(undefined, error instanceof Error && error.name === "AbortError" ? "Operation cancelled or timed out. Your edits are preserved." : trusted ? message : "The operation failed. Check your connection, provider status and tag-service access. Your edits are preserved.");
+      reply(undefined, error instanceof Error && error.name === "AbortError" ? "Operation cancelled or timed out. Your edits are preserved." : error instanceof ModelRequestError || trusted ? message : "The operation failed. Check your connection, provider status and tag-service access. Your edits are preserved.");
     });
   });
   return () => {

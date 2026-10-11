@@ -5,7 +5,7 @@ import {setupBackend} from '../src/backend';
 import {setup,createRpc} from '../src/frontend';
 import type {Snapshot,Translation} from '../src/contracts';
 
-function harness() {
+function harness(provider='openrouter',model='test/generative') {
   const listeners=new Set<(payload:unknown)=>void>();
   let handler:((payload:unknown,user?:string,session?:string)=>void)|undefined;
   const storage=new Map<string,unknown>();const calls:unknown[]=[];const replies:{payload:unknown;user?:string;session?:string}[]=[];
@@ -13,10 +13,12 @@ function harness() {
   const api={
     permissions:{has:()=>true},
     userStorage:{getJson:async(path:string,o:{fallback:unknown;userId?:string})=>storage.get(`${o.userId}:${path}`)??o.fallback,setJson:async(path:string,value:unknown,o:{userId?:string})=>{storage.set(`${o.userId}:${path}`,value);}},
-    connections:{list:async()=>[{id:'c1',name:'Fast text',provider:'openrouter',model:'test/generative'},{id:'c2',name:'Classifier',provider:'openrouter',model:'typesafe/jev-1.13'}],get:async(id:string,user?:string)=>{calls.push(['connection',id,user]);return id==='c1'?{id,name:'Fast text',provider:'openrouter',model:'test/generative'}:null;}},
+    connections:{list:async()=>[{id:'c1',name:'Fast text',provider,model},{id:'c2',name:'Classifier',provider:'openrouter',model:'typesafe/jev-1.13'}],get:async(id:string,user?:string)=>{calls.push(['connection',id,user]);return id==='c1'?{id,name:'Fast text',provider,model}:null;}},
     cors:async(url:string)=>{calls.push(['cors',url]);return{status:200,body:JSON.stringify(url.includes('/tags.json')?[{name:'red_hair',category:0,post_count:100}]:url.includes('/wiki_pages.json')?[{title:'red_hair',body:'Hair colored red.'}]:[])};},
-    generate:{raw:async(input:{messages:{content:string}[];signal:AbortSignal;userId?:string})=> {
+    generate:{raw:async(input:{messages:{content:string}[];signal:AbortSignal;userId?:string;provider?:string;model?:string;connection_id?:string})=> {
       calls.push(['generation',input]);latestSignal=input.signal;
+      // Mirror prepareRawCall: connection supplies credentials, input supplies model.
+      if(input.model!==model||input.provider!==provider||input.connection_id!=='c1')throw new Error('API error 400: missing or invalid model');
       if(fail)throw new Error('Invalid API key SECRET-DO-NOT-LEAK');
       if(block)await new Promise((_,reject)=>input.signal.addEventListener('abort',()=>reject(new DOMException('aborted','AbortError')),{once:true}));
       return{content:JSON.stringify(input.messages[0].content.includes('Extract all')?{traits:[{id:'t1',evidence:'Short red hair.',tag:'red_hair'}]}:{keep:['red_hair'],issues:[]}),finish_reason:'stop'};
@@ -52,7 +54,7 @@ test('provider error does not leak credentials and failed translation preserves 
   const translate=Array.from(h.root.querySelectorAll('button')).find(b=>b.textContent==='Translate')!;
   await until(()=>!translate.disabled);h.root.querySelector('select')!.value='c1';
   const areas=Array.from(h.root.querySelectorAll('textarea'));areas[0].value='Short red hair.';areas[3].value='Keep this edit.';h.setFail();translate.click();await until(()=>!translate.disabled);
-  expect(h.root.textContent).not.toContain('SECRET-DO-NOT-LEAK');expect(h.root.textContent).toContain('model request failed');expect(areas[3].value).toBe('Keep this edit.');
+  expect(h.root.textContent).not.toContain('SECRET-DO-NOT-LEAK');expect(h.root.textContent).toContain('AUTHENTICATION');expect(h.root.textContent).toContain('trait extraction');expect(areas[3].value).toBe('Keep this edit.');
 });
 test('per-user settings and secret never echoed in snapshot',async()=> {
   dom();const h=harness();cleanups.push(h.stop);const rpc=createRpc(h.ctx);cleanups.push(()=>rpc.destroy());
@@ -73,4 +75,12 @@ test('RPC expires and ignores unrelated response IDs',async()=> {
   let listener:((value:unknown)=>void)|undefined;
   const rpc=createRpc({sendToBackend:()=>{},onBackendMessage:fn=>{listener=fn;return()=>{};}},15);
   const pending=rpc.request('snapshot');listener?.({type:'lumicast:response',id:'foreign',result:true});await expect(pending).rejects.toThrow('did not respond');rpc.destroy();
+});
+test('direct DeepSeek v4 pro passes the saved provider/model on both raw calls',async()=> {
+  dom();const h=harness('deepseek','deepseek-v4-pro');cleanups.push(h.stop);const rpc=createRpc(h.ctx);cleanups.push(()=>rpc.destroy());
+  const result=await rpc.request<Translation>('translate',{description:'Short red hair.',connectionId:'c1'});
+  expect(result.prompt).toContain('Short red hair.');
+  const requests=h.calls.filter(v=>(v as unknown[])[0]==='generation').map(v=>(v as unknown[])[1] as {provider:string;model:string;connection_id:string;userId:string});
+  expect(requests.length).toBe(2);
+  for(const r of requests){expect(r.provider).toBe('deepseek');expect(r.model).toBe('deepseek-v4-pro');expect(r.connection_id).toBe('c1');expect(r.userId).toBe('u1');}
 });
