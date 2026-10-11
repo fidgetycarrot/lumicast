@@ -8,7 +8,8 @@ export const segmentOf = (group: Group): Scope => group === 'moment' ? 'scene' :
 export const inScope = (group: Group, scope: Scope): boolean => scope === 'scene' || (group !== 'moment' && (scope === 'outfit' || group !== 'outfit'));
 export interface Trait { id: string; group: Group; evidence: string; tags: string[]; detail: string }
 export interface Extraction { traits: Trait[]; skipped: number }
-export interface TranslateOptions { scope?: Scope }
+/** stated: facts the user asserts about the character ("femboy, android"), true even if the description never says them. */
+export interface TranslateOptions { scope?: Scope; stated?: string }
 export interface VerifiedTag {
   name: string; source: 'Danbooru' | 'Gelbooru'; wiki: string; url: string;
   aliasFrom?: string; count: number;

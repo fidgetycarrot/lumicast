@@ -1,4 +1,6 @@
-# LumiCast 0.2.2
+# LumiCast 0.2.3
+
+**v0.2.3 adds Character type.** An optional field for what the character is, in your own words (`femboy`, `android`, `werewolf`, `trans woman`). It is treated as true even when the description never says it, takes precedence where the two disagree, and is translated into the matching tag where Danbooru has one and into the caption either way. It is not saved between sessions.
 
 **v0.2.2 looks for type tags.** Danbooru tags that name a kind of character (`android`, `elf`, `otoko_no_ko`, `androgynous`, `tomboy`) steer an image more than any single body tag, and are often stated only as a combination of facts. Extraction now proposes them when the text states those facts, and no longer tags clothing the text says was removed.
 
@@ -17,7 +19,7 @@ Requires **Lumiverse 1.2.5 or later**.
 1. Open **Extensions** in Lumiverse and choose **Install from URL** in the add menu.
 2. Enter `https://github.com/fidgetycarrot/lumicast`.
 3. Grant `generation` and `cors_proxy`, then enable LumiCast.
-4. Open **LumiCast** in the sidebar or command palette. Choose a saved generative connection under **Connection & tag services**, save, paste an appearance, choose what to **Include**, and select **Translate**.
+4. Open **LumiCast** in the sidebar or command palette. Choose a saved generative connection under **Connection & tag services**, save, paste an appearance, optionally fill in **Character type**, choose what to **Include**, and select **Translate**.
 
 Prebuilt `dist/` files are committed for Lumiverse installation. If the tab does not appear after installation, reload Lumiverse or toggle the extension once.
 
@@ -25,7 +27,7 @@ Prebuilt `dist/` files are committed for Lumiverse installation. If the tab does
 
 Requires **Lumiverse 1.2.5 or later**. Compatibility was checked against the current 1.2.5 source and SDK 0.6.40; older versions have not been verified.
 
-1. Unzip `lumicast-0.2.2-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
+1. Unzip `lumicast-0.2.3-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
 2. On the machine running your Lumiverse **server**, copy that folder into `<DATA_DIR>/extensions/`. The server's default DATA_DIR is `./data`, relative to where Lumiverse runs. For Docker, copy into the volume mounted as the server's data directory. Do not copy it into another extension's folder.
 3. As the Lumiverse owner/admin, open **Extensions**, open its add menu, and choose **Import Local**. Enable LumiCast and grant `generation` and `cors_proxy`. If the tab does not appear, reload Lumiverse.
 4. Open **LumiCast** in the sidebar drawer or find it in the command palette. Expand **Connection & tag services**, choose a saved generative connection, and save.

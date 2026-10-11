@@ -59,16 +59,17 @@ export function setup(ctx:SpindleFrontendContext) {
   settings.append(field('Generative connection',connection,'Uses the model saved in Lumiverse. Add or change models in Connections, then refresh here.'),el('p','Choose a fast generative text model that follows JSON instructions. Jev, Decisions and embedding models are not translators.'),field('Gelbooru user ID (optional)',gelUser),field('Gelbooru API key (optional)',gelKey,'Stored in your extension storage on the Lumiverse server. Never returned to this panel. Sent only to Gelbooru over HTTPS.'),clearLabel,credentialNotice,row(save,refreshButton));
   const input=card('01 / Describe');
   const source=el('textarea');source.rows=7;source.maxLength=12_000;source.placeholder='Paste the character’s appearance. Narrator voice and scene detail are fine; they are filtered out.';
+  const stated=el('input');stated.maxLength=300;stated.autocomplete='off';stated.placeholder='e.g. femboy, android, werewolf, trans woman';
   const scope=el('select');scope.append(option('Character only — body, hair and face','character'),option('Character and outfit','outfit'),option('Everything — outfit, pose, expression and scene','scene'));
   const translate=button('Translate',async()=> {
     if(!source.value.trim())throw new Error('Paste a character description first.');
     const currentRevision=revision;
-    const next=await rpc.request<Translation>('translate',{description:source.value,connectionId:connection.value});
+    const next=await rpc.request<Translation>('translate',{description:source.value,stated:stated.value,connectionId:connection.value});
     if(revision!==currentRevision) {notify('The description changed during translation. Translate again to use the new wording.');return;}
     result=next;show();
   },true);
   const cancel=el('button','Cancel');cancel.type='button';cancel.hidden=true;cancel.addEventListener('click',()=>{void rpc.request('cancel').then(()=>notify('Cancellation requested.')).catch(e=>notify(e.message,true));});
-  input.append(field('Character description',source,'Only this pasted description is sent to your selected provider. No chat history is read.'),field('Include',scope,'Character only gives a prompt you can reuse in any scene. One translation covers all three; switch any time without another run.'),row(translate,cancel));
+  input.append(field('Character description',source,'Only this pasted description is sent to your selected provider. No chat history is read.'),field('Character type (optional)',stated,'What the character is, in your own words. Treated as true even if the description never says it, and translated into the matching tags.'),field('Include',scope,'Character only gives a prompt you can reuse in any scene. One translation covers all three; switch any time without another run.'),row(translate,cancel));
   const review=card('02 / Review');
   const tags=el('textarea');tags.rows=3;tags.maxLength=4000;tags.placeholder='Verified booru tags appear here';
   const prose=el('textarea');prose.rows=6;prose.maxLength=16_000;prose.placeholder='A short caption for what the tags cannot say';
@@ -105,7 +106,7 @@ export function setup(ctx:SpindleFrontendContext) {
     notify('Search complete. Popularity is not an Anima quality score.');
   });
   searchCard.append(field('Tag name or prefix',query,'Metadata only. No images or posts are fetched.'),search,found);
-  app.append(intro,settings,status,input,review,output,searchCard,el('p','LumiCast 0.2.2 · Manual translator · Draft stays in this tab until reload.'));
+  app.append(intro,settings,status,input,review,output,searchCard,el('p','LumiCast 0.2.3 · Manual translator · Draft stays in this tab until reload.'));
   const controls=[translate,save,refreshButton,verify,rebuild,copy,search];
   // Every scope comes back from one translation, so changing Include only re-renders.
   function show(){
@@ -125,13 +126,14 @@ export function setup(ctx:SpindleFrontendContext) {
     notify([replaced?'Fields reset from the translation; your manual edits were replaced.':'Translation ready. Review the tags and caption.',!gelUser.value ? 'Gelbooru is not configured; verified tags use Danbooru.' : '',...view.notices].filter(Boolean).join('\n'));
     update();
   }
-  function update(){for(const c of controls)c.disabled=busy;rebuild.disabled=busy||(!verified&&!!tags.value.trim());copy.disabled=busy||!prompt.value.trim();cancel.hidden=!busy;connection.disabled=busy;gelUser.disabled=busy;gelKey.disabled=busy;clearKey.disabled=busy;tags.readOnly=busy;prose.readOnly=busy;prompt.readOnly=busy;source.readOnly=busy;}
+  function update(){for(const c of controls)c.disabled=busy;rebuild.disabled=busy||(!verified&&!!tags.value.trim());copy.disabled=busy||!prompt.value.trim();cancel.hidden=!busy;connection.disabled=busy;gelUser.disabled=busy;gelKey.disabled=busy;clearKey.disabled=busy;stated.readOnly=busy;tags.readOnly=busy;prose.readOnly=busy;prompt.readOnly=busy;source.readOnly=busy;}
   function notify(message:string,error=false){if(closed)return;status.textContent=message;status.dataset.error=String(error);}
   function row(...children:HTMLElement[]){const n=el('div');n.className='lc-row';n.append(...children);return n;}
   function card(title:string){const n=el('section');n.className='lc-card';n.append(el('h2',title));return n;}
   function button(label:string,action:()=>void|Promise<void>,primary=false){const b=el('button',label);b.type='button';if(primary)b.className='lc-primary';b.addEventListener('click',()=>{if(busy||closed)return;busy=true;update();notify('Working…');void Promise.resolve().then(action).catch(e=>notify(e instanceof Error?e.message:'The operation failed.',true)).finally(()=>{busy=false;if(!closed)update();});});return b;}
   async function refresh(){const snapshot=await rpc.request<Snapshot>('snapshot');if(closed)return;const selected=connection.value||snapshot.settings.connectionId;connection.replaceChildren();connection.append(option('Select a generative connection',''));for(const c of snapshot.connections){const o=option(`${c.name} · ${c.provider} / ${c.model}${c.supported?'':' (not generative)'}`,c.id);o.disabled=!c.supported;connection.append(o);}connection.value=selected;gelUser.value=snapshot.settings.gelUser;credentialNotice.textContent=snapshot.settings.hasGelKey?'Gelbooru key saved.':'Danbooru works without credentials. Gelbooru requires its account API key.';if(!connection.value)settings.open=true;}
   source.addEventListener('input',()=>{revision++;if(result)notify('Description changed. Translate again to refresh the result.');});
+  stated.addEventListener('input',()=>{revision++;if(result)notify('Character type changed. Translate again to refresh the result.');});
   scope.addEventListener('change',()=>{if(!busy)show();});
   tags.addEventListener('input',()=>{verified=false;edited=true;tagState.textContent='Tags edited — verify existence before rebuilding. Clear all tags to use prose only.';update();});
   prose.addEventListener('input',()=>{edited=true;notify('Detail changed. Rebuild to apply it to the prompt.');});

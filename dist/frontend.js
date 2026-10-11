@@ -154,13 +154,17 @@ function setup(ctx) {
   source.rows = 7;
   source.maxLength = 12000;
   source.placeholder = "Paste the character’s appearance. Narrator voice and scene detail are fine; they are filtered out.";
+  const stated = el("input");
+  stated.maxLength = 300;
+  stated.autocomplete = "off";
+  stated.placeholder = "e.g. femboy, android, werewolf, trans woman";
   const scope = el("select");
   scope.append(option("Character only — body, hair and face", "character"), option("Character and outfit", "outfit"), option("Everything — outfit, pose, expression and scene", "scene"));
   const translate = button("Translate", async () => {
     if (!source.value.trim())
       throw new Error("Paste a character description first.");
     const currentRevision = revision;
-    const next = await rpc.request("translate", { description: source.value, connectionId: connection.value });
+    const next = await rpc.request("translate", { description: source.value, stated: stated.value, connectionId: connection.value });
     if (revision !== currentRevision) {
       notify("The description changed during translation. Translate again to use the new wording.");
       return;
@@ -174,7 +178,7 @@ function setup(ctx) {
   cancel.addEventListener("click", () => {
     rpc.request("cancel").then(() => notify("Cancellation requested.")).catch((e) => notify(e.message, true));
   });
-  input.append(field("Character description", source, "Only this pasted description is sent to your selected provider. No chat history is read."), field("Include", scope, "Character only gives a prompt you can reuse in any scene. One translation covers all three; switch any time without another run."), row(translate, cancel));
+  input.append(field("Character description", source, "Only this pasted description is sent to your selected provider. No chat history is read."), field("Character type (optional)", stated, "What the character is, in your own words. Treated as true even if the description never says it, and translated into the matching tags."), field("Include", scope, "Character only gives a prompt you can reuse in any scene. One translation covers all three; switch any time without another run."), row(translate, cancel));
   const review = card("02 / Review");
   const tags = el("textarea");
   tags.rows = 3;
@@ -261,7 +265,7 @@ function setup(ctx) {
     notify("Search complete. Popularity is not an Anima quality score.");
   });
   searchCard.append(field("Tag name or prefix", query, "Metadata only. No images or posts are fetched."), search, found);
-  app.append(intro, settings, status, input, review, output, searchCard, el("p", "LumiCast 0.2.2 · Manual translator · Draft stays in this tab until reload."));
+  app.append(intro, settings, status, input, review, output, searchCard, el("p", "LumiCast 0.2.3 · Manual translator · Draft stays in this tab until reload."));
   const controls = [translate, save, refreshButton, verify, rebuild, copy, search];
   function show() {
     if (!result)
@@ -305,6 +309,7 @@ function setup(ctx) {
     gelUser.disabled = busy;
     gelKey.disabled = busy;
     clearKey.disabled = busy;
+    stated.readOnly = busy;
     tags.readOnly = busy;
     prose.readOnly = busy;
     prompt.readOnly = busy;
@@ -369,6 +374,11 @@ function setup(ctx) {
     revision++;
     if (result)
       notify("Description changed. Translate again to refresh the result.");
+  });
+  stated.addEventListener("input", () => {
+    revision++;
+    if (result)
+      notify("Character type changed. Translate again to refresh the result.");
   });
   scope.addEventListener("change", () => {
     if (!busy)

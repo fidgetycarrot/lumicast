@@ -80,3 +80,9 @@ A live run on a male android described with a deliberately feminine figure retur
 
 These are prompt changes; the engine is unchanged. Typecheck, 55 tests and the build passed, but those use controlled responses and cannot show that a live model now finds the tag. A synthetic fixture with `required` tags was added so `scripts/provider-smoke.ts` fails if a live model misses `android` or `otoko_no_ko`. That script was not run here.
 
+## v0.2.3: Character type
+
+Some facts that decide how a character should look are never written in a description (the android run's source text does not contain a word for the character's presentation). v0.2.3 adds an optional Character type field, at most 300 characters, sent to extraction as `stated` and grounded together with the description so the model can quote it as evidence. It is not sent to the review call and is not persisted.
+
+Typecheck, 56 tests and the build passed with controlled responses. How a live model maps a stated type to tags, and which of those tags exist on Danbooru, was not tested here.
+
