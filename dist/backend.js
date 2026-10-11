@@ -304,8 +304,9 @@ The app can be asked for the character alone, so the split between lasting facts
 
 evidence is a short continuous passage copied character for character from the description that states the fact.
 
-tags holds 0 to 4 real Danbooru tags, lowercase with underscores, that an experienced tagger would put on a picture showing this fact. Be generous: every tag is checked against the live Danbooru tag list afterwards and names that do not exist are discarded, so a reasonable guess costs nothing. Each tag must still be something the text says. The usual vocabulary:
+tags holds 0 to 4 real Danbooru tags, lowercase with underscores, that an experienced tagger would put on a picture showing this fact. Be generous: every tag is checked against the live Danbooru tag list afterwards and names that do not exist are discarded, so a reasonable guess costs nothing. Each tag must still be something the text says, either outright or as the plain sum of facts it states. The usual vocabulary:
 - subject: 1girl, 1boy or 1other from the stated gender or pronouns, plus solo when one character is described. Begin with a subject trait whenever the text shows who the character is.
+- subject, type tags: Danbooru has tags that name a kind of character, and they steer the image more than any single body tag, so always look for one. Add it as its own subject trait, quoting the passage that establishes it. Kind of being: android, robot, cyborg, elf, demon_girl, catgirl, furry, monster_girl. Presentation: otoko_no_ko for a character the text says is male while describing a deliberately feminine body, face or styling; androgynous when the text presents the character as hard to read as either; tomboy, muscular_female, mature_female, old_man. A type tag needs the text to state the facts that make it up (for otoko_no_ko, both that the character is male and that the look is feminine). A slim man is not otoko_no_ko, and a job or personality never makes a type.
 - body: petite, skinny, slim, muscular, toned, plump, curvy, tall_female, narrow_waist, wide_hips, narrow_hips, thick_thighs, long_legs, dark_skin, tan, pale_skin, freckles, flat_chest, small_breasts, medium_breasts, large_breasts.
 - hair: always give colour (black_hair, brown_hair, blonde_hair), length (short_hair, medium_hair, long_hair, very_long_hair) and any cut or style (bangs, blunt_bangs, sidelocks, wavy_hair, curly_hair, ponytail, twintails, braid, hair_bun). Shoulder length is medium_hair. A qualified colour takes the plain tag: near-black hair is black_hair.
 - face: blue_eyes and the other eye colours, tsurime, tareme, thick_eyebrows, glasses, mole_under_eye, facial_hair, makeup.
@@ -319,6 +320,7 @@ What to leave out:
 - Anything not visual: personality, biography, studies, thoughts, sounds, what happens next.
 - Anything the text does not state. Never fill in an eye colour, a clothing colour, an age or a body type, and never derive looks from a name, ethnicity, job or personality.
 - Metaphor and negation: a wolfish grin is not wolf_ears, and "not tall" is not a tag. Such a fact keeps its detail with "tags":[].
+- Things that are gone: clothing the text says was removed, ripped away, lost or left behind is not worn. Give it no trait. Tag what remains on the body, and tag absence only with a tag that means absence: stockings with no shoes is no_shoes, not barefoot.
 - Either/or or contradictory statements: "tags":[] and a detail that keeps both sides.
 - With several characters, use "tags":[] for everything except the count tags, and name the owner in each detail, because tags cannot say who a trait belongs to.
 - Quality, score, artist, copyright and character-name tags.
@@ -328,7 +330,7 @@ var REVIEW = `You finish an Anima image prompt for one character. The input JSON
 
 Return only JSON: {"drop":[],"captions":{"character":"","outfit":"","scene":""},"issues":[]}
 
-drop lists the candidate tag names that must not be used. A tag stays when a tagger looking at a faithful picture of this character would apply it. Drop one only when its wiki meaning differs from what the text describes, when it comes from a metaphor, joke, negation or comparison instead of something visible, when it exaggerates the text (large_breasts for modest curves), when it contradicts another trait or a better candidate, or when it would hand one character's trait to another. A plain tag whose nuance is carried in a caption stays: black_hair is right for near-black hair. When unsure, keep the tag.
+drop lists the candidate tag names that must not be used. A tag stays when a tagger looking at a faithful picture of this character would apply it. Drop one only when its wiki meaning differs from what the text describes, when it comes from a metaphor, joke, negation or comparison instead of something visible, when it names clothing the text says is no longer worn, when it exaggerates the text (large_breasts for modest curves), when it contradicts another trait or a better candidate, or when it would hand one character's trait to another. A plain tag whose nuance is carried in a caption stays: black_hair is right for near-black hair. A type tag such as android or otoko_no_ko stays when the traits together state what its definition requires, even though no single quote uses the word. When unsure, keep the tag.
 
 captions holds three short pieces of plain caption text. The app shows the first alone, the first two together, or all three, so each must read correctly on its own and must stay inside its own traits:
 - "character": one or two sentences, under 50 words, from the traits whose group is subject, body, hair or face, in that order: who they are and their build, then hair, then face. This piece is reused in every scene, so it must not mention clothing, accessories, pose, expression, setting or anything from an outfit or moment trait.
@@ -600,7 +602,7 @@ function setupBackend(api) {
       await s.load;
       const settings = s.settings;
       const dictionary = () => s.dictionary ??= new BooruDictionary(async (url) => {
-        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.2.1 (tag metadata client)" } }));
+        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.2.2 (tag metadata client)" } }));
         if (typeof response.status !== "number" || typeof response.body !== "string")
           throw new Error("Invalid proxy response.");
         return { status: response.status, body: response.body };

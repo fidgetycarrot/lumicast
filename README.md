@@ -1,4 +1,6 @@
-# LumiCast 0.2.1
+# LumiCast 0.2.2
+
+**v0.2.2 looks for type tags.** Danbooru tags that name a kind of character (`android`, `elf`, `otoko_no_ko`, `androgynous`, `tomboy`) steer an image more than any single body tag, and are often stated only as a combination of facts. Extraction now proposes them when the text states those facts, and no longer tags clothing the text says was removed.
 
 **v0.2.1 translates once and lets you switch what is shown.** One run now produces the character-only, character-and-outfit and everything views together, so changing **Include** is instant, costs nothing, and the three views can no longer disagree with each other.
 
@@ -23,7 +25,7 @@ Prebuilt `dist/` files are committed for Lumiverse installation. If the tab does
 
 Requires **Lumiverse 1.2.5 or later**. Compatibility was checked against the current 1.2.5 source and SDK 0.6.40; older versions have not been verified.
 
-1. Unzip `lumicast-0.2.1-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
+1. Unzip `lumicast-0.2.2-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
 2. On the machine running your Lumiverse **server**, copy that folder into `<DATA_DIR>/extensions/`. The server's default DATA_DIR is `./data`, relative to where Lumiverse runs. For Docker, copy into the volume mounted as the server's data directory. Do not copy it into another extension's folder.
 3. As the Lumiverse owner/admin, open **Extensions**, open its add menu, and choose **Import Local**. Enable LumiCast and grant `generation` and `cors_proxy`. If the tab does not appear, reload Lumiverse.
 4. Open **LumiCast** in the sidebar drawer or find it in the command palette. Expand **Connection & tag services**, choose a saved generative connection, and save.
@@ -45,7 +47,7 @@ Jev, Decisions, embedding, reranking and moderation models are blocked by recogn
 
 Each translation makes **two generation calls** and a series of tag lookups, and covers every **Include** choice at once.
 
-1. **Extraction.** The model lists each visual fact once, with the passage it came from, a group, up to four candidate booru tags and one plain clause. It is told to tag generously with real Danbooru vocabulary (colour, length and style for hair; build, chest, waist and hips for the body; and so on), because every candidate is checked afterwards. It is told not to fill in anything the text leaves out, and not to tag metaphors, negations, either/or statements or traits in a multi-character description.
+1. **Extraction.** The model lists each visual fact once, with the passage it came from, a group, up to four candidate booru tags and one plain clause. It is told to tag generously with real Danbooru vocabulary (colour, length and style for hair; build, chest, waist and hips for the body; and so on), because every candidate is checked afterwards. It is asked for a type tag (`android`, `otoko_no_ko`, `tomboy` and the like) only when the text states the facts that make one up. It is told not to fill in anything the text leaves out, not to tag clothing described as removed, and not to tag metaphors, negations, either/or statements or traits in a multi-character description.
 2. **Scope.** Groups are `subject`, `body`, `hair`, `face`, `outfit` and `moment`. `moment` covers pose, expression, setting, what a garment is doing right now, and hair that is only arranged that way in the scene. **Include** decides what is shown, and can be changed after translating without another run:
 
    | Include | Keeps |

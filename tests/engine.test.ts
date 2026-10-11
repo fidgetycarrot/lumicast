@@ -28,7 +28,7 @@ test('one run yields every scope; character is the default and says what it hide
   expect(result.evidence.every(t=>inScope(t.group,'character'))).toBe(true);
   expect(result.notices.join(' ')).toContain('6 clothing, pose or scene details are hidden');
   expect(result.prompt).not.toMatch(narratedFiller);expect(result.prompt).not.toMatch(/hoodie|leggings|bored|solo/);
-  for(const scope of ['outfit','scene'] as const)expect(result.views[scope].tags.map(t=>t.name)).toEqual(cases.find(c=>c.scope===scope)!.tags);
+  for(const scope of ['outfit','scene'] as const)expect(result.views[scope].tags.map(t=>t.name)).toEqual(cases.find(c=>c.scope===scope&&c.name.startsWith('narrated'))!.tags);
   expect(result.views.outfit.prose).toBe(`${fixture.caption} She wears an oversized hoodie and thin leggings.`);
   expect(result.views.scene.prose).toBe(`${fixture.caption} She wears an oversized hoodie and thin leggings. She looks bored, chin in her palm.`);
   expect(result.views.outfit.notices.join(' ')).toContain('4 pose or scene details are hidden');expect(result.views.scene.notices.join(' ')).not.toContain('hidden');

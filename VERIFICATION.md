@@ -74,3 +74,9 @@ In v0.2.0 the scope was applied before review, so each **Include** choice needed
 
 Strict typecheck, 54 tests (359 assertions) and the production build passed, including: all three views from two calls, identical shared tags across views, per-piece caption fallback, an empty view instead of a failed run, and switching in the panel after an edit without a further generation call. As before, no live provider or Danbooru call was made from the build environment.
 
+## v0.2.2: type tags
+
+A live run on a male android described with a deliberately feminine figure returned `1boy` and `android` with accurate body tags, but not `otoko_no_ko`, because no single passage says it and extraction was told to tag only what the text says outright. It also tagged underwear the text said had been ripped away, and `barefoot` beside `thighhighs`. v0.2.2 asks extraction for a type tag when the text states its component facts, tells it to give removed clothing no trait and to use `no_shoes` for stockings without shoes, and tells review to keep type tags on that basis and drop tags for clothing no longer worn.
+
+These are prompt changes; the engine is unchanged. Typecheck, 55 tests and the build passed, but those use controlled responses and cannot show that a live model now finds the tag. A synthetic fixture with `required` tags was added so `scripts/provider-smoke.ts` fails if a live model misses `android` or `otoko_no_ko`. That script was not run here.
+

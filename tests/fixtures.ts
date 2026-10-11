@@ -1,6 +1,6 @@
 import type { Scope, Trait } from '../src/contracts';
 /** Controlled model responses: these exercise the engine's handling, not a live model's judgement. */
-export interface Fixture { name:string; source:string; scope?:Scope; traits:Trait[]; drop?:string[]; caption?:string; issues?:unknown[]; tags:string[]; prose?:string; absent?:RegExp }
+export interface Fixture { name:string; source:string; scope?:Scope; traits:Trait[]; drop?:string[]; caption?:string; issues?:unknown[]; tags:string[]; prose?:string; absent?:RegExp; /** Tags a live model must find (provider smoke only). */ required?:string[] }
 const narrated = `Mara, 24, grad student. Height/build: 5'3", petite. Small frame, the kind that folds up into a lecture seat and basically disappears into a hoodie. Figure: B cup, slim waist, modest curves, you know the type. Hair: dark, near-black, shoulder-length-ish, shoved up in a claw clip and given up on. Face: soft features, grey eyes, wearing the dead-eyed boredom mask of a girl on her ninth Skinner lecture, chin propped in her palm. Wearing: oversized hoodie, sleeves swallow her hands to the knuckles, and thin leggings, now very much soaked-through.`;
 const narratedTraits: Trait[] = [
   {id:'t1',group:'subject',evidence:'Mara, 24, grad student.',tags:['1girl','solo'],detail:'A 24-year-old woman'},
@@ -39,6 +39,10 @@ const fixtures: Fixture[] = [
     caption:'A petite 24-year-old woman with a small frame, a slim waist and modest curves. Near-black hair, about shoulder length. Soft facial features and grey eyes.',
     tags:['1girl','petite','small_breasts','narrow_waist','black_hair','medium_hair','grey_eyes'],
     prose:'A petite 24-year-old woman with a small frame, a slim waist and modest curves. Near-black hair, about shoulder length. Soft facial features and grey eyes.',absent:/hoodie|leggings|bored|clip|wet|solo/},
+  {name:'type tags: a male android with a feminine build, and a garment that is gone',scope:'scene',required:['android','otoko_no_ko'],absent:/panties|barefoot/,
+    source:'Unit K-7 is a synthetic: polymer skin over a composite frame. Narrow shoulders flare into an engineered hourglass waist and hips, a silhouette that is all deliberate feminine curve despite the male configuration beneath. Short silver hair. He wears black thigh-high stockings and no shoes; the white satin panties were ripped away earlier.',
+    traits:[{id:'t1',group:'subject',evidence:'Unit K-7 is a synthetic',tags:['1boy','android'],detail:'A male android'},{id:'t2',group:'subject',evidence:'all deliberate feminine curve despite the male configuration beneath',tags:['otoko_no_ko'],detail:'A male android with a deliberately feminine silhouette'},{id:'t3',group:'body',evidence:'Narrow shoulders flare into an engineered hourglass waist and hips',tags:['narrow_waist','wide_hips'],detail:'Narrow shoulders and an hourglass waist and hips'},{id:'t4',group:'hair',evidence:'Short silver hair.',tags:['silver_hair','short_hair'],detail:'Short silver hair'},{id:'t5',group:'outfit',evidence:'black thigh-high stockings and no shoes',tags:['thighhighs','black_thighhighs','no_shoes'],detail:'Black thigh-high stockings and no shoes'}],
+    tags:['1boy','android','otoko_no_ko','narrow_waist','wide_hips','silver_hair','short_hair','thighhighs','black_thighhighs','no_shoes']},
   {name:'narrated scene, with outfit',source:narrated,scope:'outfit',traits:narratedTraits,
     tags:['1girl','petite','small_breasts','narrow_waist','black_hair','medium_hair','grey_eyes','hoodie','oversized_clothes','sleeves_past_wrists','leggings'],absent:/bored|clip|wet|solo/},
   {name:'narrated scene, everything',source:narrated,scope:'scene',traits:narratedTraits,

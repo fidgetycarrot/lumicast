@@ -8,7 +8,7 @@ const endpoint=new URL(process.env.LUMICAST_SMOKE_URL ?? 'https://openrouter.ai/
 if(!key||!model||!isGenerative(model))throw new Error('Set LUMICAST_SMOKE_API_KEY and LUMICAST_SMOKE_MODEL to a generative text model.');
 if(endpoint.protocol!=='https:'&&!(['localhost','127.0.0.1'].includes(endpoint.hostname)&&endpoint.protocol==='http:'))throw new Error('Use HTTPS, or localhost for a local test provider.');
 const dictionary=new BooruDictionary(async url=> {
-  const r=await fetch(url,{signal:AbortSignal.timeout(15_000),redirect:'error',headers:{Accept:'application/json','User-Agent':'LumiCast/0.2.1 (tag metadata client)'}});
+  const r=await fetch(url,{signal:AbortSignal.timeout(15_000),redirect:'error',headers:{Accept:'application/json','User-Agent':'LumiCast/0.2.2 (tag metadata client)'}});
   return{status:r.status,body:await r.text()};
 });
 const engine=new Translator(async(system,input,signal)=> {
@@ -27,6 +27,8 @@ for(const fixture of cases) {
     // fixture's, so tags and caption are printed for you to judge by eye.
     if(!result.prompt.trim())throw new Error('Empty prompt.');
     if(fixture.absent?.test(result.prompt))throw new Error('Narration, a measurement or out-of-scope detail reached the prompt.');
+    const missing=(fixture.required??[]).filter(name=>!result.tags.some(t=>t.name===name));
+    if(missing.length)throw new Error(`Expected tags not found: ${missing.join(', ')}.`);
     if(fixture.name.includes('sparse')&&result.issues.length)throw new Error('Sparse input produced uncertainty.');
     if(fixture.name.includes('metaphor')&&result.tags.some(t=>t.name==='wolf_ears'))throw new Error('Metaphor became anatomy.');
     if(fixture.name.includes('contradiction')&&result.tags.some(t=>/_hair$/.test(t.name)))throw new Error('A contradiction was resolved by guessing.');

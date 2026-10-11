@@ -22,7 +22,7 @@ If a model files a lasting trait under the scene (or the reverse), misses a deta
 
 ## Optional live provider smoke
 
-This was **not run during development**: no provider credentials were supplied. It uses the production engine and dictionary directly, not an authenticated Lumiverse session. It makes up to **22 paid calls** over eleven synthetic inputs, without automatic retries. It does not generate images.
+This was **not run during development**: no provider credentials were supplied. It uses the production engine and dictionary directly, not an authenticated Lumiverse session. It makes up to **24 paid calls** over twelve synthetic inputs, without automatic retries. It does not generate images.
 
 Supply environment variables using your normal secret-handling method, without putting real keys in committed files:
 
