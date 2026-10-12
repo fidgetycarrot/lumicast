@@ -222,3 +222,18 @@ test('the sheet is shared for Lumi Studio after translating and after edits, wit
   h.setNoPool();appearance.value='red hair';appearance.dispatchEvent(new Event('input'));
   await until(()=>(h.root.textContent??'').includes('Not shared with Lumi Studio'));
 });
+test('after Refine, the prompt rebuilds itself unless the tags carry unverified hand edits, and the status says which',async()=> {
+  dom();const h=harness();cleanups.push(h.stop);const dispose=setup(h.ctx);cleanups.push(dispose);
+  const b=(name:string)=>Array.from(h.root.querySelectorAll('button')).find(x=>x.textContent===name)!;
+  await until(()=>!b('Translate').disabled);h.root.querySelector('select')!.value='c1';
+  const suggestion={reply:'Weight it.',remove:[],add:[],weight:[{tag:'red_hair',weight:1.5,why:'faint'}],caption:null};
+  h.setResponses([{traits:[{id:'1',group:'hair',evidence:'Short red hair.',tags:['red_hair'],detail:'Short red hair'}]},{drop:[],captions:{character:'Short red hair.'},issues:[]},suggestion,suggestion]);
+  named(h.root,'source').value='Short red hair.';b('Translate').click();await until(()=>!b('Translate').disabled);
+  named(h.root,'feedback').value='Hair too faint.';b('Suggest changes').click();await until(()=>!b('Translate').disabled);
+  b('Apply selected').click();await until(()=>!b('Translate').disabled);
+  expect(named(h.root,'prompt').value).toBe('(red hair:1.5)\n\nShort red hair.');expect(h.root.querySelector('.lc-status')!.textContent).toContain('Copy the prompt and generate again.');
+  const tags=named(h.root,'tags');tags.value='(red_hair:1.5), freckles';tags.dispatchEvent(new Event('input'));
+  named(h.root,'feedback').value='Still faint.';b('Suggest changes').click();await until(()=>!b('Translate').disabled);
+  b('Apply selected').click();await until(()=>!b('Translate').disabled);
+  expect(named(h.root,'prompt').value).toBe('(red hair:1.5)\n\nShort red hair.');expect(h.root.querySelector('.lc-status')!.textContent).toContain('Press Verify edited tags, then Rebuild.');
+});

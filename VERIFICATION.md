@@ -162,3 +162,7 @@ The user found copying six fields between two extensions, one panel at a time, t
 
 LumiCast: typecheck, 78 tests (576 assertions) and the build passed, including a panel test of publishing, re-publishing after edits, and the failure message. Lumi Studio: both files pass `node --check`; its backend request was exercised against a stubbed Lumiverse, and its panel in headless Chromium with a stub host. The two have not yet been run together in a live Lumiverse, which is the remaining check: that the host passes the same user ID to both extensions and that a fresh `rpcPool` read returns the published value.
 
+## v0.7.1
+
+After Apply selected, the status line claimed the Anima prompt was updated even when it had not been rebuilt (the tags box held unverified hand edits). It now says so and points to Verify edited tags and Rebuild. Typecheck, 79 tests and the build passed.
+

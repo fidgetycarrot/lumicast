@@ -182,10 +182,11 @@ export function setup(ctx:SpindleFrontendContext) {
       if(p.kind==='caption')prose.value=p.caption!;
     }
     tags.value=list.map(t=>formatWeighted(t)).join(', ');edited=true;
-    if(verified||!tags.value.trim())prompt.value=withQuality(assemble(list,prose.value),quality.value,list.length>0);
+    const rebuilt=verified||!tags.value.trim();
+    if(rebuilt)prompt.value=withQuality(assemble(list,prose.value),quality.value,list.length>0);
     pending=[];proposed.replaceChildren();feedback.value='';share();
     const standalone=tags.value!==before||prose.value!==captionBefore;
-    notify(standalone?'Changes applied to the Anima prompt and the character sheet. Copy the prompt and generate again.':'Changes applied to the character sheet. None of them touched a tag or the caption in the Anima prompt.');
+    notify(standalone&&!rebuilt?'Changes applied to the tags and the character sheet, but the prompt was not rebuilt because the tags had unverified hand edits. Press Verify edited tags, then Rebuild.':standalone?'Changes applied to the Anima prompt and the character sheet. Copy the prompt and generate again.':'Changes applied to the character sheet. None of them touched a tag or the caption in the Anima prompt.');
   });
   const notes=named(el('textarea'),'notes');notes.rows=4;notes.maxLength=2000;notes.placeholder='e.g. Femboys: weight trap at 1.4. Androids: add visible panel seams at the shoulders and concealed joints.';
   const saveNotes=button('Save notes',async()=>{await rpc.request('saveNotes',{notes:notes.value});notify('Notes saved. They apply from the next translation or refinement.');});
@@ -248,7 +249,7 @@ export function setup(ctx:SpindleFrontendContext) {
   });
   searchCard.append(field('Tag name or the start of one',query,'Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched.'),search,found);
 
-  app.append(intro,settings,status,input,gapsCard,output,refine,sheetCard,searchCard,el('p','LumiCast 0.7.0 · Draft stays in this tab until reload.'));
+  app.append(intro,settings,status,input,gapsCard,output,refine,sheetCard,searchCard,el('p','LumiCast 0.7.1 · Draft stays in this tab until reload.'));
   const controls=[translate,again,save,refreshButton,testGel,saveNotes,saveQuality,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
 
   // Every change to the sheet is offered to Lumi Studio, a moment after typing stops.

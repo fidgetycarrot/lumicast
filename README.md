@@ -1,4 +1,4 @@
-# LumiCast 0.7.0
+# LumiCast 0.7.1
 
 **v0.7.0 hands characters to Lumi Studio.** LumiCast now shares its latest character sheet with Lumi Studio 1.8.2 or newer. In Lumi Studio, open a new reusable character or persona and choose **Fill from LumiCast**: the sheet fields, and a name guessed from the description's first line, are filled in one step for you to check and save. Edits you make to the sheet in LumiCast are shared too.
 
@@ -49,7 +49,7 @@ Prebuilt `dist/` files are committed for Lumiverse installation. If the tab does
 
 Requires **Lumiverse 1.2.5 or later**. Compatibility was checked against the current 1.2.5 source and SDK 0.6.40; older versions have not been verified.
 
-1. Unzip `lumicast-0.7.0-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
+1. Unzip `lumicast-0.7.1-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
 2. On the machine running your Lumiverse **server**, copy that folder into `<DATA_DIR>/extensions/`. The server's default DATA_DIR is `./data`, relative to where Lumiverse runs. For Docker, copy into the volume mounted as the server's data directory. Do not copy it into another extension's folder.
 3. As the Lumiverse owner/admin, open **Extensions**, open its add menu, and choose **Import Local**. Enable LumiCast and grant `generation` and `cors_proxy`. If the tab does not appear, reload Lumiverse.
 4. Open **LumiCast** in the sidebar drawer or find it in the command palette. Expand **Connection & tag services**, choose a saved generative connection, and save.
