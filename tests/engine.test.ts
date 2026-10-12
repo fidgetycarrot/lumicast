@@ -282,3 +282,10 @@ test('refine never drops a defining tag unless the feedback names it, and passes
   const named=await refineWith(response,{tags:['1boy','android','trap'],locked:['android','trap'],feedback:'Drop the trap look, he should read as a plain android.'});
   expect(named.result.proposals.map(p=>[p.kind,p.tag])).toEqual([['remove','trap'],['weight','android']]);
 });
+test('Known facts close a gap even when the model files the fact under the wrong group',async()=> {
+  const traits=[{id:'s',group:'subject',evidence:'He is a massive man',tags:['1boy'],detail:'A massive man'},{id:'k',group:'subject',evidence:'brown hair, blue eyes',tags:[],detail:'Brown hair and blue eyes'}];
+  const without=await run('He is a massive man.',{traits:[traits[0]]},{});
+  expect(without.result.gaps.map(g=>g.what)).toEqual(['hair colour','hair length','eye colour']);
+  const withFacts=await run('He is a massive man.',{traits},{},{stated:'short messy brown hair, blue eyes'});
+  expect(withFacts.result.gaps).toEqual([]);
+});

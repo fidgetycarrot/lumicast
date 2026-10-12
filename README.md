@@ -1,4 +1,4 @@
-# LumiCast 0.5.3
+# LumiCast 0.5.4
 
 **v0.5.1 keeps unverified guesses as words.** A tag the model proposed that neither booru has (`silver_hair`, `violet_eyes`) no longer disappears: the character sheet keeps it as plain words, which Anima can read, unless a tag or a longer phrase already says it. Tags themselves are still only ever verified ones.
 
@@ -43,7 +43,7 @@ Prebuilt `dist/` files are committed for Lumiverse installation. If the tab does
 
 Requires **Lumiverse 1.2.5 or later**. Compatibility was checked against the current 1.2.5 source and SDK 0.6.40; older versions have not been verified.
 
-1. Unzip `lumicast-0.5.3-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
+1. Unzip `lumicast-0.5.4-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
 2. On the machine running your Lumiverse **server**, copy that folder into `<DATA_DIR>/extensions/`. The server's default DATA_DIR is `./data`, relative to where Lumiverse runs. For Docker, copy into the volume mounted as the server's data directory. Do not copy it into another extension's folder.
 3. As the Lumiverse owner/admin, open **Extensions**, open its add menu, and choose **Import Local**. Enable LumiCast and grant `generation` and `cors_proxy`. If the tab does not appear, reload Lumiverse.
 4. Open **LumiCast** in the sidebar drawer or find it in the command palette. Expand **Connection & tag services**, choose a saved generative connection, and save.
@@ -103,7 +103,7 @@ A reproducible character needs its anchors fixed, and a faithful translator will
 - **Not stated:** man, woman or other; hair colour; hair length; eye colour. These four are checked by plain code against the verified tags and the extracted wording, with no model involved, so the list cannot grow into a general "uncertain" bucket. A colour or length given only in words counts as stated. A bald character is not asked about hair.
 - **Vague:** up to four traits the review call judges an artist could not draw without guessing, such as a gradient with no colours named.
 
-Nothing on this list changes the tags, the captions or the sheet, and nothing is filled in. To close a gap, add the fact under **Known facts** and translate again, or edit the sheet field yourself. This is separate from **issues**, which still report only contradictions and either/or statements in the text.
+Nothing on this list changes the tags, the captions or the sheet, and nothing is filled in. To close a gap, type the fact into the box under the list (it is the same as **Known facts**) and choose **Translate again**, or edit the sheet field yourself. A colour or length you type there counts as stated even if the model files it oddly, and the status line says which gaps closed and which are still open. This is separate from **issues**, which still report only contradictions and either/or statements in the text.
 
 ### Refining from a generated image
 

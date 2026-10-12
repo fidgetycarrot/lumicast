@@ -80,8 +80,12 @@ export function setup(ctx:SpindleFrontendContext) {
     const currentRevision=revision;
     const next=await rpc.request<Translation>('translate',{description:source.value,stated:stated.value,connectionId:connection.value});
     if(revision!==currentRevision) {notify('The description changed during translation. Translate again to use the new wording.');return;}
+    // Say what a re-run settled, so answering a gap never looks like nothing happened.
+    const before=result?result.gaps.map(g=>g.what):[];
     result=next;showSheet();showStandalone();
-    notify(['Translation ready.',!gelUser.value ? 'Gelbooru is not configured; verified tags use Danbooru.' : '',...next.views.scene.notices].filter(Boolean).join('\n'));
+    const still=next.gaps.map(g=>g.what);const closed=before.filter(w=>!still.includes(w));
+    const outcome=before.length?[closed.length?`Pinned down: ${closed.join(', ')}.`:'',still.length?`Still open: ${still.join(', ')}.`:''].filter(Boolean).join(' '):'';
+    notify([before.length?`Translated again. ${outcome}`:'Translation ready.',!gelUser.value ? 'Gelbooru is not configured; verified tags use Danbooru.' : '',...next.views.scene.notices].filter(Boolean).join('\n'));
   };
   const translate=button('Translate',runTranslate,true);
   const cancel=el('button','Cancel');cancel.type='button';cancel.hidden=true;cancel.addEventListener('click',()=>{void rpc.request('cancel').then(()=>notify('Cancellation requested.')).catch(e=>notify(e.message,true));});
@@ -226,7 +230,7 @@ export function setup(ctx:SpindleFrontendContext) {
   });
   searchCard.append(field('Tag name or the start of one',query,'Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched.'),search,found);
 
-  app.append(intro,settings,status,input,sheetCard,refine,output,searchCard,el('p','LumiCast 0.5.3 · Draft stays in this tab until reload.'));
+  app.append(intro,settings,status,input,sheetCard,refine,output,searchCard,el('p','LumiCast 0.5.4 · Draft stays in this tab until reload.'));
   const controls=[translate,again,save,refreshButton,testGel,saveNotes,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
 
   function showSheet(){

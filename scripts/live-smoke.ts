@@ -1,6 +1,6 @@
 import {BooruDictionary} from '../src/dictionary';
 const dictionary=new BooruDictionary(async url=> {
-  const response=await fetch(url,{signal:AbortSignal.timeout(15_000),redirect:'error',headers:{Accept:'application/json','User-Agent':'LumiCast/0.5.3 (tag metadata client)'}});
+  const response=await fetch(url,{signal:AbortSignal.timeout(15_000),redirect:'error',headers:{Accept:'application/json','User-Agent':'LumiCast/0.5.4 (tag metadata client)'}});
   return{status:response.status,body:await response.text()};
 });
 const signal=AbortSignal.timeout(60_000);

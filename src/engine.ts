@@ -295,12 +295,15 @@ export class Translator {
     const words = (group: Group, about = /./) => identity.filter(t => t.group === group).map(t => `${t.detail} ${t.evidence}`.toLowerCase()).filter(v => about.test(v)).join(' ');
     const COLOUR = /\b(?:black|white|gr[ae]y|silver|brown|brunette|blonde?|red|ginger|auburn|copper|blue|green|purple|violet|lavender|lilac|pink|magenta|orange|gold(?:en)?|yellow|amber|hazel|teal|aqua|turquoise|platinum|chestnut|raven|crimson|scarlet|multicolou?red|heterochromia)\b/;
     const LENGTH = /\b(?:short|medium|long|shoulder|chin|cropped|bob|pixie|buzz|shaved|waist|hip|mid-back|ankle|floor)\b/;
-    const bald = names.includes('bald') || /\bbald\b/.test(words('hair'));
+    // What the user typed under Known facts settles a gap even if the model filed it oddly.
+    const statedParts = stated.toLowerCase().split(/[,;\n]+/);
+    const statedAbout = (about: RegExp, what: RegExp) => statedParts.some(p => about.test(p) && what.test(p));
+    const bald = names.includes('bald') || /\bbald\b/.test(words('hair')) || statedAbout(/\bbald\b/, /./);
     if (!sheet.countTag) gaps.push({kind:'missing', what:'man, woman or other', note:'Lumi Studio’s Count tag will be empty.'});
     else if (sheet.countTag === '1other') gaps.push({kind:'vague', what:'man, woman or other', note:'The count tag came out as 1other, which image models draw less reliably for humanoids. Change it to 1boy or 1girl if this character reads as one.'});
-    if (!bald && !names.some(n => / hair$/.test(n) && COLOUR.test(n)) && !COLOUR.test(words('hair'))) gaps.push({kind:'missing', what:'hair colour', note:'The image model will pick one, and not the same one each time.'});
-    if (!bald && !names.some(n => / hair$/.test(n) && LENGTH.test(n)) && !LENGTH.test(words('hair'))) gaps.push({kind:'missing', what:'hair length', note:'The image model will pick one, and not the same one each time.'});
-    if (!names.some(n => (/ eyes$/.test(n) && COLOUR.test(n)) || n === 'heterochromia') && !COLOUR.test(words('face', /\b(?:eyes?|iris(?:es)?)\b/))) gaps.push({kind:'missing', what:'eye colour', note:'The image model will pick one, and not the same one each time.'});
+    if (!bald && !names.some(n => / hair$/.test(n) && COLOUR.test(n)) && !COLOUR.test(words('hair')) && !statedAbout(/\bhair\b/, COLOUR)) gaps.push({kind:'missing', what:'hair colour', note:'The image model will pick one, and not the same one each time.'});
+    if (!bald && !names.some(n => / hair$/.test(n) && LENGTH.test(n)) && !LENGTH.test(words('hair')) && !statedAbout(/\bhair\b/, LENGTH)) gaps.push({kind:'missing', what:'hair length', note:'The image model will pick one, and not the same one each time.'});
+    if (!names.some(n => (/ eyes$/.test(n) && COLOUR.test(n)) || n === 'heterochromia') && !COLOUR.test(words('face', /\b(?:eyes?|iris(?:es)?)\b/)) && !statedAbout(/\b(?:eyes?|iris(?:es)?)\b/, COLOUR)) gaps.push({kind:'missing', what:'eye colour', note:'The image model will pick one, and not the same one each time.'});
     for (const v of (Array.isArray(review.vague) ? review.vague : []).slice(0, 4).map(record)) {
       const trait = traits.find(t => t.id === v.traitId && t.group !== 'moment');
       const what = optional(() => text(v.what, 'trait', 60), ''); const note = optional(() => text(v.why, 'reason', 200), '');

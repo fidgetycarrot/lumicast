@@ -671,16 +671,18 @@ class Translator {
     const words = (group, about = /./) => identity.filter((t) => t.group === group).map((t) => `${t.detail} ${t.evidence}`.toLowerCase()).filter((v) => about.test(v)).join(" ");
     const COLOUR = /\b(?:black|white|gr[ae]y|silver|brown|brunette|blonde?|red|ginger|auburn|copper|blue|green|purple|violet|lavender|lilac|pink|magenta|orange|gold(?:en)?|yellow|amber|hazel|teal|aqua|turquoise|platinum|chestnut|raven|crimson|scarlet|multicolou?red|heterochromia)\b/;
     const LENGTH = /\b(?:short|medium|long|shoulder|chin|cropped|bob|pixie|buzz|shaved|waist|hip|mid-back|ankle|floor)\b/;
-    const bald = names.includes("bald") || /\bbald\b/.test(words("hair"));
+    const statedParts = stated.toLowerCase().split(/[,;\n]+/);
+    const statedAbout = (about, what) => statedParts.some((p) => about.test(p) && what.test(p));
+    const bald = names.includes("bald") || /\bbald\b/.test(words("hair")) || statedAbout(/\bbald\b/, /./);
     if (!sheet.countTag)
       gaps.push({ kind: "missing", what: "man, woman or other", note: "Lumi Studio\u2019s Count tag will be empty." });
     else if (sheet.countTag === "1other")
       gaps.push({ kind: "vague", what: "man, woman or other", note: "The count tag came out as 1other, which image models draw less reliably for humanoids. Change it to 1boy or 1girl if this character reads as one." });
-    if (!bald && !names.some((n) => / hair$/.test(n) && COLOUR.test(n)) && !COLOUR.test(words("hair")))
+    if (!bald && !names.some((n) => / hair$/.test(n) && COLOUR.test(n)) && !COLOUR.test(words("hair")) && !statedAbout(/\bhair\b/, COLOUR))
       gaps.push({ kind: "missing", what: "hair colour", note: "The image model will pick one, and not the same one each time." });
-    if (!bald && !names.some((n) => / hair$/.test(n) && LENGTH.test(n)) && !LENGTH.test(words("hair")))
+    if (!bald && !names.some((n) => / hair$/.test(n) && LENGTH.test(n)) && !LENGTH.test(words("hair")) && !statedAbout(/\bhair\b/, LENGTH))
       gaps.push({ kind: "missing", what: "hair length", note: "The image model will pick one, and not the same one each time." });
-    if (!names.some((n) => / eyes$/.test(n) && COLOUR.test(n) || n === "heterochromia") && !COLOUR.test(words("face", /\b(?:eyes?|iris(?:es)?)\b/)))
+    if (!names.some((n) => / eyes$/.test(n) && COLOUR.test(n) || n === "heterochromia") && !COLOUR.test(words("face", /\b(?:eyes?|iris(?:es)?)\b/)) && !statedAbout(/\b(?:eyes?|iris(?:es)?)\b/, COLOUR))
       gaps.push({ kind: "missing", what: "eye colour", note: "The image model will pick one, and not the same one each time." });
     for (const v of (Array.isArray(review.vague) ? review.vague : []).slice(0, 4).map(record)) {
       const trait = traits.find((t) => t.id === v.traitId && t.group !== "moment");
@@ -844,7 +846,7 @@ function setupBackend(api) {
       await s.load;
       const settings = s.settings;
       const dictionary = () => s.dictionary ??= new BooruDictionary(async (url) => {
-        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.5.3 (tag metadata client)" } }));
+        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.5.4 (tag metadata client)" } }));
         if (typeof response.status !== "number" || typeof response.body !== "string")
           throw new Error("Invalid proxy response.");
         return { status: response.status, body: response.body };
@@ -881,7 +883,7 @@ function setupBackend(api) {
         const entered = gelCredentials(text(v.gelUser ?? "", "Gelbooru user", 300), v.gelKey ? text(v.gelKey, "Gelbooru key", 300) : "");
         const credentials = { user: entered.user || settings.gelUser, key: entered.key || settings.gelKey };
         const outcome = await testGelbooru(async (url) => {
-          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.5.3 (tag metadata client)" } }));
+          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.5.4 (tag metadata client)" } }));
           return { status: Number(response.status), body: typeof response.body === "string" ? response.body : "" };
         }, credentials);
         const unsaved = credentials.user !== settings.gelUser || credentials.key !== settings.gelKey;

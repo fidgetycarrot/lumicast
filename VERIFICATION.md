@@ -144,3 +144,7 @@ The user saw no change in the standalone prompt after applying refinements. A pa
 
 A live refinement for "android features are weak" proposed removing `trap`, the character's defining type tag, and a replacement caption that brought in scene details (flushing, residue, missing underwear) the character-only caption had left out. Its other proposals (weight `android`, add `robot_joints` and `mechanical_parts`, weight the eye phrase) were reasonable. The sheet's Always include entries are now sent as `locked`; a removal of a locked tag is dropped in code unless the feedback contains the tag's words. The prompt also tells the model to strengthen the weak trait instead of removing the strong one, and to keep the caption's scope; the caption rule is an instruction only. Typecheck, 71 tests and the build passed with controlled responses.
 
+## v0.5.4: answering a gap
+
+The user typed a hair and eye colour into the gap box, chose Translate again, and saw nothing change. The run's output was not available. Two plausible causes were addressed: the anchor checks read only hair and face traits, so a stated fact the model filed under another group left the same gaps standing; and a re-run gave no sign of what it settled. The checks now also read Known facts directly, and the status line reports which gaps closed and which remain. If the button itself did not fire, this release would not fix that; the status line now makes the difference visible. Typecheck, 72 tests and the build passed.
+
