@@ -41,6 +41,15 @@ export interface TagDictionary {
   resolve(name: string, signal: AbortSignal): Promise<VerifiedTag | null>;
   search(query: string, signal: AbortSignal): Promise<VerifiedTag[]>;
 }
+/** Gelbooru's account page shows the two values as one string, "&api_key=…&user_id=…". Accept that pasted into either box. */
+export function gelCredentials(user: string, key: string): {user: string; key: string} {
+  const both = `${user} ${key}`;
+  return {
+    user: (/user_id=(\d+)/.exec(both)?.[1] ?? user).trim(),
+    key: (/api_key=([^&\s]+)/.exec(both)?.[1] ?? key).trim(),
+  };
+}
+export interface GelbooruTest { ok: boolean; message: string }
 export const record = (v: unknown): Record<string, unknown> => v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {};
 export function text(v: unknown, label: string, max: number): string {
   if (typeof v !== 'string' || v.length > max || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(v)) throw new Error(`Invalid ${label}.`);

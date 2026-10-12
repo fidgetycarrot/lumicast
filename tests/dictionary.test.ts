@@ -1,5 +1,6 @@
 import {test,expect} from 'bun:test';
-import {BooruDictionary} from '../src/dictionary';
+import {BooruDictionary,testGelbooru} from '../src/dictionary';
+import {gelCredentials} from '../src/contracts';
 const signal=()=>new AbortController().signal;
 test('active alias resolves, fetches wiki and caches metadata',async()=> {
   const seen:string[]=[];
@@ -52,4 +53,36 @@ test('a live tag skips the alias lookup: two requests, not three',async()=> {
   const seen:string[]=[];
   const d=new BooruDictionary(async url=>{seen.push(new URL(url).pathname);return{status:200,body:JSON.stringify(url.includes('/tags.json')?[{name:'blue_eyes',category:0,post_count:1}]:url.includes('/wiki_pages.json')?[{title:'blue_eyes',body:'Blue eyes.'}]:[])};},undefined,0);
   expect((await d.resolve('blue_eyes',signal()))?.wiki).toBe('Blue eyes.');expect(seen).toEqual(['/tags.json','/wiki_pages.json']);
+});
+test('Gelbooru test names the cause without leaking the key, the ID or the reply body',async()=> {
+  const creds={user:'123456',key:'abcdef0123456789secret'};const seen:string[]=[];
+  const reply=(status:number,body:string)=>testGelbooru(async url=>{seen.push(url);return{status,body};},creds);
+  const ok=await reply(200,JSON.stringify({'@attributes':{count:1},tag:[{name:'blue_eyes',count:2100000,type:0}]}));
+  expect(ok).toEqual({ok:true,message:'Gelbooru accepted these credentials and returned blue_eyes (2100000 posts).'});
+  const u=new URL(seen[0]);expect(u.hostname).toBe('gelbooru.com');expect(u.searchParams.get('user_id')).toBe('123456');expect(u.searchParams.get('api_key')).toBe(creds.key);expect(u.searchParams.get('name')).toBe('blue_eyes');
+  expect((await reply(200,JSON.stringify([{name:'blue_eyes',count:5}]))).ok).toBe(true);
+  const cases:[number,string,string][]=[
+    [401,'<html><title>Unauthorized for abcdef0123456789secret user 123456</title>private body text</html>','rejected these credentials (HTTP 401)'],
+    [403,'<html><title>Just a moment...</title></html>','refused the request (HTTP 403)'],
+    [429,'','too many requests'],[503,'down','HTTP 503'],
+    [200,'','the reply was empty'],[200,'<html><title>Gelbooru</title>login</html>','not with tag data'],
+    [200,JSON.stringify({'@attributes':{count:0}}),'without the tag that was asked for (top-level fields: @attributes)'],
+  ];
+  for(const [status,body,expected] of cases) {
+    const result=await reply(status,body);
+    expect(result.ok).toBe(false);expect(result.message).toContain(expected);
+    expect(result.message).not.toContain(creds.key);expect(result.message).not.toContain('123456');expect(result.message).not.toContain('private body text');
+  }
+  expect((await reply(403,'<html><title>Just a moment...</title></html>')).message).toContain('titled “Just a moment...”');
+  expect((await testGelbooru(async()=>{throw new Error('ECONNREFUSED 10.0.0.1 key=abcdef');},creds)).message).toBe('The request never reached Gelbooru. This is the Lumiverse server’s network or its CORS proxy, not your credentials.');
+  const none:string[]=[];
+  expect((await testGelbooru(async url=>{none.push(url);return{status:200,body:'[]'};},{user:'',key:'k'})).message).toContain('Enter your Gelbooru user ID');
+  expect((await testGelbooru(async url=>{none.push(url);return{status:200,body:'[]'};},{user:'eric',key:'k'})).message).toContain('must be the number');expect(none).toEqual([]);
+});
+test('Gelbooru\'s combined credential line is accepted in either box',()=> {
+  expect(gelCredentials('','&api_key=abc123&user_id=42')).toEqual({user:'42',key:'abc123'});
+  expect(gelCredentials('&api_key=abc123&user_id=42','')).toEqual({user:'42',key:'abc123'});
+  expect(gelCredentials(' 42 ',' abc123 ')).toEqual({user:'42',key:'abc123'});
+  expect(gelCredentials('7','&api_key=abc123&user_id=42')).toEqual({user:'42',key:'abc123'});
+  expect(gelCredentials('','')).toEqual({user:'',key:''});
 });

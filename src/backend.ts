@@ -1,7 +1,7 @@
 import type { SpindleAPI, GenerationRequestDTO } from 'lumiverse-spindle-types';
-import { BooruDictionary } from './dictionary';
+import { BooruDictionary, testGelbooru } from './dictionary';
 import { Translator } from './engine';
-import { isGenerative, record, text, type Settings, type Snapshot } from './contracts';
+import { gelCredentials, isGenerative, record, text, type Settings, type Snapshot } from './contracts';
 import { generationError, ModelRequestError } from './generation-errors';
 
 const DEFAULTS: Settings = {connectionId:'',gelUser:'',gelKey:'',notes:''};
@@ -27,7 +27,7 @@ export function setupBackend(api: SpindleAPI) {
       await s.load;
       const settings=s.settings!;
       const dictionary=() => s.dictionary ??= new BooruDictionary(async url=> {
-        const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.4.3 (tag metadata client)'}}));
+        const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.4.4 (tag metadata client)'}}));
         if(typeof response.status!=='number'||typeof response.body!=='string')throw new Error('Invalid proxy response.');
         return {status:response.status,body:response.body};
       },{user:settings.gelUser,key:settings.gelKey});
@@ -38,12 +38,27 @@ export function setupBackend(api: SpindleAPI) {
       if (r.action === 'save') {
         if (s.jobs.size) throw new Error('Wait for the current operation before changing settings.');
         const v=record(r.input);
-        const next:Settings={connectionId:text(v.connectionId,'connection',100),gelUser:text(v.gelUser,'Gelbooru user',50),gelKey:v.clearGelKey===true ? '' : v.gelKey ? text(v.gelKey,'Gelbooru key',200) : settings.gelKey,notes:v.notes===undefined ? settings.notes : text(v.notes,'notes (maximum 2,000 characters)',2000)};
+        const entered=gelCredentials(text(v.gelUser,'Gelbooru user',300),v.gelKey ? text(v.gelKey,'Gelbooru key',300) : '');
+        const next:Settings={connectionId:text(v.connectionId,'connection',100),gelUser:entered.user,gelKey:v.clearGelKey===true ? '' : entered.key || settings.gelKey,notes:v.notes===undefined ? settings.notes : text(v.notes,'notes (maximum 2,000 characters)',2000)};
         if (next.gelUser && !/^\d+$/.test(next.gelUser)) throw new Error('Gelbooru user ID must be numeric.');
         if (next.connectionId && !await api.connections.get(next.connectionId,userId)) throw new Error('This connection is unavailable.');
         await api.userStorage.setJson('settings.json',next,{userId});
         s.settings=next;s.dictionary=undefined;
         return true;
+      }
+      if (r.action === 'testGelbooru') {
+        // Tests what is typed in the boxes, falling back to the saved key, without saving or caching anything.
+        const v=record(r.input);
+        const entered=gelCredentials(text(v.gelUser ?? '','Gelbooru user',300),v.gelKey ? text(v.gelKey,'Gelbooru key',300) : '');
+        const credentials={user:entered.user||settings.gelUser,key:entered.key||settings.gelKey};
+        const outcome=await testGelbooru(async url=> {
+          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.4.4 (tag metadata client)'}}));
+          return {status:Number(response.status),body:typeof response.body==='string'?response.body:''};
+        },credentials);
+        const unsaved=credentials.user!==settings.gelUser||credentials.key!==settings.gelKey;
+        // A dictionary that has seen failures keeps a stale notice and a pause; start it afresh once the key works.
+        if (outcome.ok&&!unsaved) s.dictionary=undefined;
+        return {ok:outcome.ok,message:outcome.ok&&unsaved?`${outcome.message} Save settings to start using them.`:outcome.message};
       }
       if (!['translate','refine','search','verify'].includes(String(r.action))) throw new Error('Unknown LumiCast action.');
       if (s.jobs.size) throw new Error('An operation is already running. Wait or cancel it first.');

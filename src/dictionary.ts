@@ -6,6 +6,34 @@ interface Cached { expires: number; value: unknown }
 const DAN = 'https://danbooru.donmai.us';
 const GEL = 'https://gelbooru.com/index.php';
 
+/** One fixed lookup that says what Gelbooru does with these credentials. Never returns the reply body, the key or the ID. */
+export async function testGelbooru(http: HttpGet, credentials: {user: string; key: string}): Promise<{ok: boolean; message: string}> {
+  if (!credentials.user || !credentials.key) return {ok:false, message:'Enter your Gelbooru user ID and API key first.'};
+  if (!/^\d+$/.test(credentials.user)) return {ok:false, message:'The Gelbooru user ID must be the number from your account page, not your username.'};
+  const url = new URL(GEL);
+  Object.entries({page:'dapi', s:'tag', q:'index', json:'1', limit:'1', name:'blue_eyes', user_id:credentials.user, api_key:credentials.key}).forEach(([k, v]) => url.searchParams.set(k, v));
+  let response: HttpResponse; let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    response = await Promise.race([http(url.toString()), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('timeout')), 12_000); })]).finally(() => clearTimeout(timer));
+  } catch (error) {
+    return {ok:false, message: error instanceof Error && error.message === 'timeout' ? 'Gelbooru did not answer within 12 seconds.' : 'The request never reached Gelbooru. This is the Lumiverse server’s network or its CORS proxy, not your credentials.'};
+  }
+  const body = typeof response.body === 'string' ? response.body : '';
+  // A page title is the most telling safe detail of a non-JSON reply ("Just a moment..." is bot protection).
+  const title = (/<title[^>]*>([^<]{1,80})/i.exec(body)?.[1] ?? '').replace(/\s+/g, ' ').trim().split(credentials.key).join('…').split(credentials.user).join('…');
+  const shown = title ? ` The page it returned is titled “${title}”.` : '';
+  if (response.status === 401) return {ok:false, message:`Gelbooru rejected these credentials (HTTP 401). Check that the user ID is the number and the API key is the long string from Gelbooru → My Account → Options → API Access Credentials.${shown}`};
+  if (response.status === 403) return {ok:false, message:`Gelbooru refused the request (HTTP 403) before checking your key. That is usually bot protection against requests from a server, so new credentials will not help.${shown}`};
+  if (response.status === 429) return {ok:false, message:'Gelbooru says too many requests (HTTP 429). Wait a minute and test again.'};
+  if (response.status !== 200) return {ok:false, message:`Gelbooru answered HTTP ${Number(response.status) || 'unknown'}.${shown}`};
+  let value: unknown;
+  try { value = JSON.parse(body); } catch { return {ok:false, message:`Gelbooru answered HTTP 200 but not with tag data${body.trim() ? '' : ' (the reply was empty)'}.${shown} An empty or non-JSON reply usually means the credentials were not accepted.`}; }
+  const rows = Array.isArray(value) ? value : Array.isArray(record(value).tag) ? record(value).tag as unknown[] : [];
+  const hit = rows.map(record).find(r => r.name === 'blue_eyes');
+  if (hit) return {ok:true, message:`Gelbooru accepted these credentials and returned blue_eyes (${Number(hit.count ?? hit.post_count) || 0} posts).`};
+  return {ok:false, message:`Gelbooru answered HTTP 200 with JSON, but without the tag that was asked for (top-level fields: ${Object.keys(record(value)).slice(0, 6).join(', ') || 'none'}). LumiCast may not understand its current reply format.`};
+}
+
 /** Only fixed public metadata endpoints, never post/image searches or user-supplied URLs. */
 export class BooruDictionary implements TagDictionary {
   private cache = new Map<string, Cached>();

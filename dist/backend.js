@@ -4,6 +4,13 @@ var GROUPS = ["subject", "body", "hair", "face", "outfit", "moment"];
 var segmentOf = (group) => group === "moment" ? "scene" : group === "outfit" ? "outfit" : "character";
 var inScope = (group, scope) => scope === "scene" || group !== "moment" && (scope === "outfit" || group !== "outfit");
 var SCOPES = ["character", "outfit", "scene"];
+function gelCredentials(user, key) {
+  const both = `${user} ${key}`;
+  return {
+    user: (/user_id=(\d+)/.exec(both)?.[1] ?? user).trim(),
+    key: (/api_key=([^&\s]+)/.exec(both)?.[1] ?? key).trim()
+  };
+}
 var record = (v) => v && typeof v === "object" && !Array.isArray(v) ? v : {};
 function text(v, label, max) {
   if (typeof v !== "string" || v.length > max || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(v))
@@ -72,6 +79,45 @@ function assemble(tags, prose) {
 // src/dictionary.ts
 var DAN = "https://danbooru.donmai.us";
 var GEL = "https://gelbooru.com/index.php";
+async function testGelbooru(http, credentials) {
+  if (!credentials.user || !credentials.key)
+    return { ok: false, message: "Enter your Gelbooru user ID and API key first." };
+  if (!/^\d+$/.test(credentials.user))
+    return { ok: false, message: "The Gelbooru user ID must be the number from your account page, not your username." };
+  const url = new URL(GEL);
+  Object.entries({ page: "dapi", s: "tag", q: "index", json: "1", limit: "1", name: "blue_eyes", user_id: credentials.user, api_key: credentials.key }).forEach(([k, v]) => url.searchParams.set(k, v));
+  let response;
+  let timer;
+  try {
+    response = await Promise.race([http(url.toString()), new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error("timeout")), 12000);
+    })]).finally(() => clearTimeout(timer));
+  } catch (error) {
+    return { ok: false, message: error instanceof Error && error.message === "timeout" ? "Gelbooru did not answer within 12 seconds." : "The request never reached Gelbooru. This is the Lumiverse server\u2019s network or its CORS proxy, not your credentials." };
+  }
+  const body = typeof response.body === "string" ? response.body : "";
+  const title = (/<title[^>]*>([^<]{1,80})/i.exec(body)?.[1] ?? "").replace(/\s+/g, " ").trim().split(credentials.key).join("\u2026").split(credentials.user).join("\u2026");
+  const shown = title ? ` The page it returned is titled \u201C${title}\u201D.` : "";
+  if (response.status === 401)
+    return { ok: false, message: `Gelbooru rejected these credentials (HTTP 401). Check that the user ID is the number and the API key is the long string from Gelbooru \u2192 My Account \u2192 Options \u2192 API Access Credentials.${shown}` };
+  if (response.status === 403)
+    return { ok: false, message: `Gelbooru refused the request (HTTP 403) before checking your key. That is usually bot protection against requests from a server, so new credentials will not help.${shown}` };
+  if (response.status === 429)
+    return { ok: false, message: "Gelbooru says too many requests (HTTP 429). Wait a minute and test again." };
+  if (response.status !== 200)
+    return { ok: false, message: `Gelbooru answered HTTP ${Number(response.status) || "unknown"}.${shown}` };
+  let value;
+  try {
+    value = JSON.parse(body);
+  } catch {
+    return { ok: false, message: `Gelbooru answered HTTP 200 but not with tag data${body.trim() ? "" : " (the reply was empty)"}.${shown} An empty or non-JSON reply usually means the credentials were not accepted.` };
+  }
+  const rows = Array.isArray(value) ? value : Array.isArray(record(value).tag) ? record(value).tag : [];
+  const hit = rows.map(record).find((r) => r.name === "blue_eyes");
+  if (hit)
+    return { ok: true, message: `Gelbooru accepted these credentials and returned blue_eyes (${Number(hit.count ?? hit.post_count) || 0} posts).` };
+  return { ok: false, message: `Gelbooru answered HTTP 200 with JSON, but without the tag that was asked for (top-level fields: ${Object.keys(record(value)).slice(0, 6).join(", ") || "none"}). LumiCast may not understand its current reply format.` };
+}
 
 class BooruDictionary {
   http;
@@ -764,7 +810,7 @@ function setupBackend(api) {
       await s.load;
       const settings = s.settings;
       const dictionary = () => s.dictionary ??= new BooruDictionary(async (url) => {
-        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.4.3 (tag metadata client)" } }));
+        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.4.4 (tag metadata client)" } }));
         if (typeof response.status !== "number" || typeof response.body !== "string")
           throw new Error("Invalid proxy response.");
         return { status: response.status, body: response.body };
@@ -777,7 +823,8 @@ function setupBackend(api) {
         if (s.jobs.size)
           throw new Error("Wait for the current operation before changing settings.");
         const v = record(r.input);
-        const next = { connectionId: text(v.connectionId, "connection", 100), gelUser: text(v.gelUser, "Gelbooru user", 50), gelKey: v.clearGelKey === true ? "" : v.gelKey ? text(v.gelKey, "Gelbooru key", 200) : settings.gelKey, notes: v.notes === undefined ? settings.notes : text(v.notes, "notes (maximum 2,000 characters)", 2000) };
+        const entered = gelCredentials(text(v.gelUser, "Gelbooru user", 300), v.gelKey ? text(v.gelKey, "Gelbooru key", 300) : "");
+        const next = { connectionId: text(v.connectionId, "connection", 100), gelUser: entered.user, gelKey: v.clearGelKey === true ? "" : entered.key || settings.gelKey, notes: v.notes === undefined ? settings.notes : text(v.notes, "notes (maximum 2,000 characters)", 2000) };
         if (next.gelUser && !/^\d+$/.test(next.gelUser))
           throw new Error("Gelbooru user ID must be numeric.");
         if (next.connectionId && !await api.connections.get(next.connectionId, userId))
@@ -786,6 +833,19 @@ function setupBackend(api) {
         s.settings = next;
         s.dictionary = undefined;
         return true;
+      }
+      if (r.action === "testGelbooru") {
+        const v = record(r.input);
+        const entered = gelCredentials(text(v.gelUser ?? "", "Gelbooru user", 300), v.gelKey ? text(v.gelKey, "Gelbooru key", 300) : "");
+        const credentials = { user: entered.user || settings.gelUser, key: entered.key || settings.gelKey };
+        const outcome = await testGelbooru(async (url) => {
+          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.4.4 (tag metadata client)" } }));
+          return { status: Number(response.status), body: typeof response.body === "string" ? response.body : "" };
+        }, credentials);
+        const unsaved = credentials.user !== settings.gelUser || credentials.key !== settings.gelKey;
+        if (outcome.ok && !unsaved)
+          s.dictionary = undefined;
+        return { ok: outcome.ok, message: outcome.ok && unsaved ? `${outcome.message} Save settings to start using them.` : outcome.message };
       }
       if (!["translate", "refine", "search", "verify"].includes(String(r.action)))
         throw new Error("Unknown LumiCast action.");

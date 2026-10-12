@@ -1,4 +1,6 @@
-# LumiCast 0.4.3
+# LumiCast 0.4.4
+
+**v0.4.4 adds Test Gelbooru.** A button under the Gelbooru fields makes one lookup and says what happened: accepted, rejected, refused before the key was checked, or never reached. It tests what is typed in the boxes, so you can try credentials before saving them. Gelbooru's combined `&api_key=…&user_id=…` line can now be pasted whole into the key box.
 
 **v0.4.3 tightens the sheet and reports why Gelbooru failed.** Phrases that only restate a tag are dropped and the cap is six per field. A failed Gelbooru lookup now shows its HTTP status, once.
 
@@ -37,7 +39,7 @@ Prebuilt `dist/` files are committed for Lumiverse installation. If the tab does
 
 Requires **Lumiverse 1.2.5 or later**. Compatibility was checked against the current 1.2.5 source and SDK 0.6.40; older versions have not been verified.
 
-1. Unzip `lumicast-0.4.3-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
+1. Unzip `lumicast-0.4.4-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
 2. On the machine running your Lumiverse **server**, copy that folder into `<DATA_DIR>/extensions/`. The server's default DATA_DIR is `./data`, relative to where Lumiverse runs. For Docker, copy into the volume mounted as the server's data directory. Do not copy it into another extension's folder.
 3. As the Lumiverse owner/admin, open **Extensions**, open its add menu, and choose **Import Local**. Enable LumiCast and grant `generation` and `cors_proxy`. If the tab does not appear, reload Lumiverse.
 4. Open **LumiCast** in the sidebar drawer or find it in the command palette. Expand **Connection & tag services**, choose a saved generative connection, and save.
@@ -134,6 +136,8 @@ The table is `CUP_TAGS` in `src/contracts.ts`; edit it and rebuild if your model
 This follows the [official Anima model guidance](https://huggingface.co/circlestone-labs/Anima/blob/main/README.md), which supports tags, natural language and combinations, and prefers Gelbooru spellings where they differ.
 
 ## Gelbooru
+
+**Test Gelbooru** makes a single `blue_eyes` tag lookup with the credentials in the boxes (or the saved key if the key box is empty) and reports the HTTP status and what it usually means. It shows a returned page's title when there is one, with your key and ID blanked, and never the reply body. Nothing is saved or cached by the test.
 
 Danbooru needs no credentials for these metadata calls. Gelbooru's live API returned HTTP 401 without credentials during development. Optionally enter your Gelbooru numeric user ID and API key, obtained from your own Gelbooru account API access settings.
 

@@ -10,11 +10,12 @@ function harness(provider='openrouter',model='test/generative') {
   let handler:((payload:unknown,user?:string,session?:string)=>void)|undefined;
   const storage=new Map<string,unknown>();const calls:unknown[]=[];const replies:{payload:unknown;user?:string;session?:string}[]=[];
   let fail=false,block=false;let latestSignal:AbortSignal|undefined;let responses:unknown[]|undefined;
+  let gel:{status:number;body:string}|undefined;
   const api={
     permissions:{has:()=>true},
     userStorage:{getJson:async(path:string,o:{fallback:unknown;userId?:string})=>storage.get(`${o.userId}:${path}`)??o.fallback,setJson:async(path:string,value:unknown,o:{userId?:string})=>{storage.set(`${o.userId}:${path}`,value);}},
     connections:{list:async()=>[{id:'c1',name:'Fast text',provider,model},{id:'c2',name:'Classifier',provider:'openrouter',model:'typesafe/jev-1.13'}],get:async(id:string,user?:string)=>{calls.push(['connection',id,user]);return id==='c1'?{id,name:'Fast text',provider,model}:null;}},
-    cors:async(url:string)=>{calls.push(['cors',url]);return{status:200,body:JSON.stringify(url.includes('/tags.json')?[{name:new URL(url).searchParams.get('search[name]')??'red_hair',category:0,post_count:100}]:url.includes('/wiki_pages.json')?[{title:'red_hair',body:'Hair colored red.'}]:[])};},
+    cors:async(url:string)=>{calls.push(['cors',url]);if(gel&&new URL(url).hostname==='gelbooru.com')return gel;return{status:200,body:JSON.stringify(url.includes('/tags.json')?[{name:new URL(url).searchParams.get('search[name]')??'red_hair',category:0,post_count:100}]:url.includes('/wiki_pages.json')?[{title:'red_hair',body:'Hair colored red.'}]:[])};},
     generate:{raw:async(input:{messages:{content:string}[];signal:AbortSignal;userId?:string;provider?:string;model?:string;connection_id?:string})=> {
       calls.push(['generation',input]);latestSignal=input.signal;
       // Mirror prepareRawCall: connection supplies credentials, input supplies model.
@@ -29,7 +30,7 @@ function harness(provider='openrouter',model='test/generative') {
   const root=document.createElement('div');document.body.append(root);
   const ctx={sendToBackend:(payload:unknown)=>handler?.(payload,'u1','s1'),onBackendMessage:(fn:(payload:unknown)=>void)=>{listeners.add(fn);return()=>{listeners.delete(fn);};},ui:{registerDrawerTab:()=>({root,destroy:()=>root.remove()})},dom:{addStyle:()=>()=>{}}} as unknown as SpindleFrontendContext;
   const stop=setupBackend(api);
-  return{ctx,root,calls,replies,storage,stop,emit:(payload:unknown,user='u1',session='s1')=>handler?.(payload,user,session),setFail:()=>{fail=true;},setBlock:()=>{block=true;},setResponses:(values:unknown[])=>{responses=values;},signal:()=>latestSignal};
+  return{ctx,root,calls,replies,storage,stop,emit:(payload:unknown,user='u1',session='s1')=>handler?.(payload,user,session),setFail:()=>{fail=true;},setBlock:()=>{block=true;},setResponses:(values:unknown[])=>{responses=values;},setGel:(value:{status:number;body:string})=>{gel=value;},signal:()=>latestSignal};
 }
 const cleanups:(()=>void)[]=[];
 afterEach(()=>{while(cleanups.length)cleanups.pop()!();});
@@ -135,4 +136,24 @@ test('refine: typed feedback becomes verified, selectable changes; weights and n
   expect(tags.value).toBe('(red_hair:1.8), short_hair');expect(prose.value).toBe('Short red hair.');expect(prompt.value).toBe('(red hair:1.8), short hair\n\nShort red hair.');
   expect(feedback.value).toBe('');expect(h.root.querySelectorAll('.lc-proposal').length).toBe(0);
   expect(appearance.value).toBe('(red hair:1.8), short hair');
+});
+test('Test Gelbooru checks what is typed, falls back to the saved key, and saving accepts the pasted line',async()=> {
+  dom();const h=harness();cleanups.push(h.stop);const dispose=setup(h.ctx);cleanups.push(dispose);
+  const b=(name:string)=>Array.from(h.root.querySelectorAll('button')).find(x=>x.textContent===name)!;
+  await until(()=>!b('Translate').disabled);h.root.querySelector('select')!.value='c1';
+  const inputs=Array.from(h.root.querySelectorAll('input')) as HTMLInputElement[];const key=inputs.find(i=>i.type==='password')!;const user=inputs[inputs.indexOf(key)-1];
+  const gelCalls=()=>h.calls.filter(v=>(v as unknown[])[0]==='cors'&&String((v as unknown[])[1]).includes('gelbooru.com')).map(v=>new URL(String((v as unknown[])[1])));
+  b('Test Gelbooru').click();await until(()=>!b('Translate').disabled);
+  expect(h.root.textContent).toContain('✗ Enter your Gelbooru user ID and API key first.');expect(gelCalls().length).toBe(0);
+  h.setGel({status:401,body:'<title>Nope</title>'});key.value='&api_key=feedbeef&user_id=77';
+  b('Test Gelbooru').click();await until(()=>!b('Translate').disabled);
+  expect(h.root.textContent).toContain('✗ Gelbooru rejected these credentials (HTTP 401)');expect(gelCalls()[0].searchParams.get('user_id')).toBe('77');expect(gelCalls()[0].searchParams.get('api_key')).toBe('feedbeef');
+  expect(h.root.textContent).not.toContain('feedbeef');
+  h.setGel({status:200,body:JSON.stringify({tag:[{name:'blue_eyes',count:9}]})});
+  b('Test Gelbooru').click();await until(()=>!b('Translate').disabled);
+  expect(h.root.textContent).toContain('✓ Gelbooru accepted these credentials and returned blue_eyes (9 posts). Save settings to start using them.');
+  b('Save settings').click();await until(()=>!b('Translate').disabled);
+  expect(h.storage.get('u1:settings.json')).toMatchObject({gelUser:'77',gelKey:'feedbeef'});expect(user.value).toBe('77');expect(key.value).toBe('');
+  b('Test Gelbooru').click();await until(()=>!b('Translate').disabled);
+  expect(h.root.textContent).toContain('returned blue_eyes (9 posts).');expect(h.root.textContent).not.toContain('Save settings to start using them');expect(gelCalls().pop()!.searchParams.get('api_key')).toBe('feedbeef');
 });

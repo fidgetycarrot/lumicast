@@ -1,5 +1,5 @@
 import type { SpindleFrontendContext } from 'lumiverse-spindle-types';
-import { assemble, editList, formatWeighted, parseWeighted, splitTags, type Proposal, type Refinement, type Scope, type Snapshot, type Translation, type VerifiedTag } from './contracts';
+import { assemble, editList, formatWeighted, parseWeighted, splitTags, type GelbooruTest, type Proposal, type Refinement, type Scope, type Snapshot, type Translation, type VerifiedTag } from './contracts';
 import { removeConflicts } from './engine';
 
 export function createRpc(ctx: Pick<SpindleFrontendContext,'sendToBackend'|'onBackendMessage'>, timeout=250_000) {
@@ -56,8 +56,13 @@ export function setup(ctx:SpindleFrontendContext) {
     gelKey.value='';clearKey.checked=false;await refresh();notify('Settings saved.');
   });
   const refreshButton=button('Refresh connections',refresh);
+  const gelResult=el('p');gelResult.className='lc-muted';
+  const testGel=button('Test Gelbooru',async()=> {
+    const outcome=await rpc.request<GelbooruTest>('testGelbooru',{gelUser:gelUser.value,gelKey:gelKey.value});
+    gelResult.textContent=`${outcome.ok?'✓':'✗'} ${outcome.message}`;notify(outcome.ok?'Gelbooru test passed.':'Gelbooru test failed. See the result under the key field.',!outcome.ok);
+  });
   const credentialNotice=el('p');credentialNotice.className='lc-muted';
-  settings.append(field('Generative connection',connection,'Uses the model saved in Lumiverse. Add or change models in Connections, then refresh here.'),el('p','Choose a fast generative text model that follows JSON instructions. Jev, Decisions and embedding models are not translators.'),field('Gelbooru user ID (optional)',gelUser),field('Gelbooru API key (optional)',gelKey,'Stored in your extension storage on the Lumiverse server. Never returned to this panel. Sent only to Gelbooru over HTTPS.'),clearLabel,credentialNotice,field('Your Anima notes (optional)',notes,'What you have learned works, in your own words. Saved with your settings and read on every translation and refinement. A weight is only ever applied when a note gives the number.'),row(save,refreshButton));
+  settings.append(field('Generative connection',connection,'Uses the model saved in Lumiverse. Add or change models in Connections, then refresh here.'),el('p','Choose a fast generative text model that follows JSON instructions. Jev, Decisions and embedding models are not translators.'),field('Gelbooru user ID (optional)',gelUser,'The number, not your username. You can also paste Gelbooru’s whole “&api_key=…&user_id=…” line into the key box and leave this empty.'),field('Gelbooru API key (optional)',gelKey,'Stored in your extension storage on the Lumiverse server. Never returned to this panel. Sent only to Gelbooru over HTTPS.'),clearLabel,credentialNotice,row(testGel),gelResult,field('Your Anima notes (optional)',notes,'What you have learned works, in your own words. Saved with your settings and read on every translation and refinement. A weight is only ever applied when a note gives the number.'),row(save,refreshButton));
   const input=card('01 / Describe');
   const source=el('textarea');source.rows=7;source.maxLength=12_000;source.placeholder='Paste the character’s appearance. Narrator voice and scene detail are fine; they are filtered out.';
   const stated=el('input');stated.maxLength=300;stated.autocomplete='off';stated.placeholder='e.g. femboy, android, green eyes, rose-pink gradient lips';
@@ -173,8 +178,8 @@ export function setup(ctx:SpindleFrontendContext) {
     notify('Search complete. Popularity is not an Anima quality score.');
   });
   searchCard.append(field('Tag name or prefix',query,'Metadata only. No images or posts are fetched.'),search,found);
-  app.append(intro,settings,status,input,review,sheetCard,output,refine,searchCard,el('p','LumiCast 0.4.3 · Manual translator · Draft stays in this tab until reload.'));
-  const controls=[translate,save,refreshButton,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
+  app.append(intro,settings,status,input,review,sheetCard,output,refine,searchCard,el('p','LumiCast 0.4.4 · Manual translator · Draft stays in this tab until reload.'));
+  const controls=[translate,save,refreshButton,testGel,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
   // Every scope comes back from one translation, so changing Include only re-renders.
   function show(){
     if(!result)return;

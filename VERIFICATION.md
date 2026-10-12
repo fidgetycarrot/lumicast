@@ -120,3 +120,9 @@ A live run with saved Gelbooru credentials showed "Gelbooru lookup failed" twice
 
 The same run produced nineteen appearance entries, several restating a tag. Sheet phrases are now dropped when they are a kept tag plus at most one extra word, the cap is six, and the prompts name that pattern. Extraction is also told that flushing, blushing and anything dried on the skin belong to the scene, and review that a tag must match in meaning and not only in wording. Typecheck, 65 tests and the build passed with controlled responses.
 
+## v0.4.4: Gelbooru connection test
+
+Adds `testGelbooru` and a settings button for it, because the cause of the user's failing Gelbooru lookups could not be told from a notice. It distinguishes rejected credentials (401), a refusal before authentication (403), rate limiting, other statuses, an empty or non-JSON 200, a JSON reply without the requested tag, a timeout, and a request that never left the Lumiverse server. Saving and testing now accept Gelbooru's combined `&api_key=…&user_id=…` line in either box, a likely cause of a rejected key.
+
+Typecheck, 68 tests (509 assertions) and the build passed. The tests assert that no message contains the key, the user ID or the reply body. Gelbooru's live reply to an authenticated request has still not been seen from the build environment, so the 200-with-JSON branch follows its documented shape, not an observed one.
+
