@@ -11,6 +11,7 @@ function harness(provider='openrouter',model='test/generative') {
   const storage=new Map<string,unknown>();const calls:unknown[]=[];const replies:{payload:unknown;user?:string;session?:string}[]=[];
   let fail=false,block=false;let latestSignal:AbortSignal|undefined;let responses:unknown[]|undefined;
   let gel:{status:number;body:string}|undefined;
+  let noPool=false;
   const api={
     permissions:{has:()=>true},
     userStorage:{getJson:async(path:string,o:{fallback:unknown;userId?:string})=>storage.get(`${o.userId}:${path}`)??o.fallback,setJson:async(path:string,value:unknown,o:{userId?:string})=>{storage.set(`${o.userId}:${path}`,value);}},
@@ -25,12 +26,13 @@ function harness(provider='openrouter',model='test/generative') {
       return{content:JSON.stringify(responses ? responses.shift() : input.messages[0].content.includes('one trait per visual fact')?{traits:[{id:'t1',group:'hair',evidence:'Short red hair.',tags:['red_hair'],detail:'Short red hair'}]}:{drop:[],captions:{character:'Short red hair.'},issues:[]}),finish_reason:'stop'};
     }},
     onFrontendMessage:(fn:typeof handler)=>{handler=fn;return()=>{handler=undefined;};},
+    rpcPool:{sync:(endpoint:string,value:unknown,policy:unknown)=>{if(noPool)throw new Error('pool unavailable');calls.push(['sync',endpoint,value,policy]);return `lumicast.${endpoint}`;}},
     sendToFrontend:(payload:unknown,user?:string,options?:{frontendSessionId?:string})=>{replies.push({payload,user,session:options?.frontendSessionId});if(user==='u1'&&options?.frontendSessionId==='s1')listeners.forEach(fn=>fn(payload));},
   } as unknown as SpindleAPI;
   const root=document.createElement('div');document.body.append(root);
   const ctx={sendToBackend:(payload:unknown)=>handler?.(payload,'u1','s1'),onBackendMessage:(fn:(payload:unknown)=>void)=>{listeners.add(fn);return()=>{listeners.delete(fn);};},ui:{registerDrawerTab:()=>({root,destroy:()=>root.remove()})},dom:{addStyle:()=>()=>{}}} as unknown as SpindleFrontendContext;
   const stop=setupBackend(api);
-  return{ctx,root,calls,replies,storage,stop,emit:(payload:unknown,user='u1',session='s1')=>handler?.(payload,user,session),setFail:()=>{fail=true;},setBlock:()=>{block=true;},setResponses:(values:unknown[])=>{responses=values;},setGel:(value:{status:number;body:string})=>{gel=value;},signal:()=>latestSignal};
+  return{ctx,root,calls,replies,storage,stop,emit:(payload:unknown,user='u1',session='s1')=>handler?.(payload,user,session),setFail:()=>{fail=true;},setBlock:()=>{block=true;},setResponses:(values:unknown[])=>{responses=values;},setGel:(value:{status:number;body:string})=>{gel=value;},setNoPool:()=>{noPool=true;},signal:()=>latestSignal};
 }
 const named=(root:Element,name:string)=>(root.querySelector(`[data-lc="${name}"]`)??root.querySelector(`[data-sheet="${name}"]`)) as HTMLTextAreaElement;
 /** [description, tags, caption, appearance, outfit, prompt] */
@@ -200,4 +202,23 @@ test('saved quality tags lead every Anima prompt and save without touching other
   expect(named(h.root,'prompt').value).toBe('masterpiece, best quality, score_9, red hair\n\nShort red hair.');
   named(h.root,'tags').value='';named(h.root,'tags').dispatchEvent(new Event('input'));b('Rebuild from tags + detail').click();await until(()=>!b('Translate').disabled);
   expect(named(h.root,'prompt').value).toBe('masterpiece, best quality, score_9\n\nShort red hair.');
+});
+test('the sheet is shared for Lumi Studio after translating and after edits, with a name guess and an open read policy',async()=> {
+  dom();const h=harness();cleanups.push(h.stop);const dispose=setup(h.ctx);cleanups.push(dispose);
+  const b=(name:string)=>Array.from(h.root.querySelectorAll('button')).find(x=>x.textContent===name)!;
+  await until(()=>!b('Translate').disabled);h.root.querySelector('select')!.value='c1';
+  named(h.root,'source').value='Jason Slatz — physical description:\nShort red hair.';
+  h.setResponses([{traits:[{id:'1',group:'hair',evidence:'Short red hair.',tags:['red_hair','short_hair'],detail:'Short red hair'}]},{drop:[],captions:{},sheet:{subject:'adult man'},issues:[]}]);
+  b('Translate').click();await until(()=>!b('Translate').disabled);
+  const syncs=()=>h.calls.filter(v=>(v as unknown[])[0]==='sync') as [string,string,{sheet:Record<string,string>;name:string;title:string;version:number;userId:string},{requires:string[]}][];
+  await until(()=>syncs().length===1);
+  const [,endpoint,value,policy]=syncs()[0];
+  expect(endpoint).toBe('sheet.latest');expect(policy).toEqual({requires:[]});
+  expect(value).toMatchObject({version:1,name:'Jason Slatz',title:'Jason Slatz — physical description:',userId:'u1',sheet:{subject:'adult man',appearance:'red hair, short hair',countTag:'',always:'',outfit:'',anatomy:''}});
+  expect(h.root.textContent).toContain('Ready for Fill from LumiCast in Lumi Studio.');
+  const appearance=named(h.root,'appearance');appearance.value='red hair, short hair, freckles';appearance.dispatchEvent(new Event('input'));
+  appearance.value='red hair, short hair, freckles, green eyes';appearance.dispatchEvent(new Event('input'));
+  await until(()=>syncs().length===2);expect(syncs()[1][2].sheet.appearance).toBe('red hair, short hair, freckles, green eyes');
+  h.setNoPool();appearance.value='red hair';appearance.dispatchEvent(new Event('input'));
+  await until(()=>(h.root.textContent??'').includes('Not shared with Lumi Studio'));
 });

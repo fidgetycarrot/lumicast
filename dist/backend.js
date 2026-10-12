@@ -4,6 +4,12 @@ var GROUPS = ["subject", "body", "hair", "face", "anatomy", "outfit", "moment"];
 var segmentOf = (group) => group === "moment" || group === "anatomy" ? "scene" : group === "outfit" ? "outfit" : "character";
 var inScope = (group, scope) => scope === "scene" || segmentOf(group) !== "scene" && (scope === "outfit" || group !== "outfit");
 var SCOPES = ["character", "outfit", "scene"];
+function nameFrom(description) {
+  const first = (description.split(`
+`).find((l) => l.trim()) ?? "").trim();
+  const head = first.split(/\s+[\u2014\u2013-]\s+|:/)[0].replace(/[*_#"\u201C\u201D]/g, "").trim();
+  return /^[A-Z][\p{L}\d'\u2019.-]*(?:\s+[A-Z][\p{L}\d'\u2019.-]*){0,3}$/u.test(head) && head.length <= 40 ? head : "";
+}
 function gelCredentials(user, key) {
   const both = `${user} ${key}`;
   return {
@@ -880,7 +886,7 @@ function setupBackend(api) {
       await s.load;
       const settings = s.settings;
       const dictionary = () => s.dictionary ??= new BooruDictionary(async (url) => {
-        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.6.0 (tag metadata client)" } }));
+        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.7.0 (tag metadata client)" } }));
         if (typeof response.status !== "number" || typeof response.body !== "string")
           throw new Error("Invalid proxy response.");
         return { status: response.status, body: response.body };
@@ -913,12 +919,31 @@ function setupBackend(api) {
         s.settings = next;
         return true;
       }
+      if (r.action === "publish") {
+        const v = record(r.input);
+        const sheet = record(v.sheet);
+        const field = (key) => text(sheet[key] ?? "", key, 4000);
+        const description = text(v.description ?? "", "description", 12000);
+        const shared = {
+          version: 1,
+          sheet: { countTag: field("countTag"), subject: field("subject"), always: field("always"), appearance: field("appearance"), outfit: field("outfit"), anatomy: field("anatomy") },
+          name: nameFrom(description),
+          title: (description.split(`
+`).find((l) => l.trim()) ?? "").trim().slice(0, 120),
+          updatedAt: Date.now(),
+          userId: userId ?? ""
+        };
+        const pool = api.rpcPool;
+        if (typeof pool?.sync !== "function")
+          throw new Error("This Lumiverse version cannot share data between extensions.");
+        return pool.sync("sheet.latest", shared, { requires: [] });
+      }
       if (r.action === "testGelbooru") {
         const v = record(r.input);
         const entered = gelCredentials(text(v.gelUser ?? "", "Gelbooru user", 300), v.gelKey ? text(v.gelKey, "Gelbooru key", 300) : "");
         const credentials = { user: entered.user || settings.gelUser, key: entered.key || settings.gelKey };
         const outcome = await testGelbooru(async (url) => {
-          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.6.0 (tag metadata client)" } }));
+          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.7.0 (tag metadata client)" } }));
           return { status: Number(response.status), body: typeof response.body === "string" ? response.body : "" };
         }, credentials);
         const unsaved = credentials.user !== settings.gelUser || credentials.key !== settings.gelKey;
@@ -983,7 +1008,7 @@ function setupBackend(api) {
       }
     })().then((result) => reply(result)).catch((error) => {
       const message = error instanceof Error ? error.message : "";
-      const trusted = /^(Grant LumiCast|Wait for|This connection|Gelbooru user|Unknown LumiCast|An operation|Use at most|Use a tag|Select a saved|The model |Invalid |Use a plain|Paste a |No explicit|Too many|Conflicting|Tag service|Tag lookup|Cyclic tag|Tag alias|Oversized|Unexpected)/.test(message);
+      const trusted = /^(Grant LumiCast|Wait for|This connection|Gelbooru user|Unknown LumiCast|An operation|Use at most|Use a tag|This Lumiverse|Select a saved|The model |Invalid |Use a plain|Paste a |No explicit|Too many|Conflicting|Tag service|Tag lookup|Cyclic tag|Tag alias|Oversized|Unexpected)/.test(message);
       reply(undefined, error instanceof Error && error.name === "AbortError" ? "Operation cancelled or timed out. Your edits are preserved." : error instanceof ModelRequestError || trusted ? message : "The operation failed. Check your connection, provider status and tag-service access. Your edits are preserved.");
     });
   });

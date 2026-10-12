@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test';
 import { Translator, parseExtraction, removeConflicts } from '../src/engine';
-import { assemble, cupSize, editList, heightCm, withQuality, formatWeighted, inScope, isGenerative, parseWeighted, type TagDictionary, type TagRow, type TranslateOptions } from '../src/contracts';
+import { assemble, cupSize, editList, heightCm, nameFrom, withQuality, formatWeighted, inScope, isGenerative, parseWeighted, type TagDictionary, type TagRow, type TranslateOptions } from '../src/contracts';
 import { cases, narratedFiller } from './fixtures';
 const dictionary:TagDictionary={resolve:async name=>({name,source:'Danbooru',count:10,wiki:`Definition of ${name}`,url:'https://danbooru.donmai.us/wiki_pages/'+name}),search:async()=>[]};
 const signal=()=>new AbortController().signal;
@@ -313,4 +313,10 @@ test('quality prefix joins the tag line, or stands alone when there are no tags'
   expect(withQuality('red hair\n\nShort red hair.','masterpiece, score_9, ',true)).toBe('masterpiece, score_9, red hair\n\nShort red hair.');
   expect(withQuality('Short red hair.','masterpiece',false)).toBe('masterpiece\n\nShort red hair.');
   expect(withQuality('red hair','  ',true)).toBe('red hair');expect(withQuality('','masterpiece',false)).toBe('masterpiece');
+});
+test('a character name is taken from a heading line only when it looks like one',()=> {
+  expect(nameFrom('Jason Slatz — physical description:\nAbsolute unit.')).toBe('Jason Slatz');
+  expect(nameFrom('\n**Elys-04** — physical description:')).toBe('Elys-04');
+  expect(nameFrom('Mei Tanaka — 21, college junior')).toBe('Mei Tanaka');
+  expect(nameFrom('Slender synthetic frame, 175 cm')).toBe('');expect(nameFrom('She is short and blonde.')).toBe('');expect(nameFrom('')).toBe('');
 });

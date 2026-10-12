@@ -266,7 +266,10 @@ function setup(ctx) {
   const sheetCard = remembered(el("details"), "sheet");
   sheetCard.className = "lc-card";
   sheetCard.append(el("summary", "04 / Lumi Studio character sheet"));
-  sheetCard.append(el("p", "One field per box in Lumi Studio’s character editor. Comma-separated, no sentences."));
+  sheetCard.append(el("p", "One field per box in Lumi Studio’s character editor. In Lumi Studio, open a new reusable character or persona and choose Fill from LumiCast to copy all of them at once, or copy each field below."));
+  const shareState = el("small");
+  shareState.className = "lc-muted";
+  sheetCard.append(shareState);
   const gapsBox = el("div");
   gapsBox.className = "lc-gaps";
   const gapsCard = el("section");
@@ -284,6 +287,7 @@ function setup(ctx) {
     if (long)
       box.rows = 3;
     box.dataset.sheet = key;
+    box.addEventListener("input", () => share());
     const copyField = button("Copy", () => copyText(box.value, label.toLowerCase()));
     copyField.className = "lc-mini";
     copyField.setAttribute("aria-label", `Copy ${label.toLowerCase()}`);
@@ -405,6 +409,7 @@ function setup(ctx) {
     pending = [];
     proposed.replaceChildren();
     feedback.value = "";
+    share();
     const standalone = tags.value !== before || prose.value !== captionBefore;
     notify(standalone ? "Changes applied to the Anima prompt and the character sheet. Copy the prompt and generate again." : "Changes applied to the character sheet. None of them touched a tag or the caption in the Anima prompt.");
   });
@@ -515,8 +520,24 @@ function setup(ctx) {
     notify("Search complete. Popularity is not an Anima quality score.");
   });
   searchCard.append(field("Tag name or the start of one", query, "Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched."), search, found);
-  app.append(intro, settings, status, input, gapsCard, output, refine, sheetCard, searchCard, el("p", "LumiCast 0.6.0 · Draft stays in this tab until reload."));
+  app.append(intro, settings, status, input, gapsCard, output, refine, sheetCard, searchCard, el("p", "LumiCast 0.7.0 · Draft stays in this tab until reload."));
   const controls = [translate, again, save, refreshButton, testGel, saveNotes, saveQuality, verify, rebuild, copy, copyTags, copyProse, suggest, apply, search, ...Object.values(sheet).map((f) => f.copyField)];
+  let shareTimer;
+  function share() {
+    clearTimeout(shareTimer);
+    shareTimer = setTimeout(() => {
+      const values = Object.fromEntries(Object.keys(sheet).map((k) => [k, sheet[k].box.value]));
+      if (!Object.values(values).some((v) => v.trim()))
+        return;
+      rpc.request("publish", { sheet: values, description: source.value }).then(() => {
+        if (!closed)
+          shareState.textContent = "Ready for Fill from LumiCast in Lumi Studio.";
+      }).catch((e) => {
+        if (!closed)
+          shareState.textContent = `Not shared with Lumi Studio: ${e instanceof Error ? e.message : "unknown error"} Copy the fields by hand.`;
+      });
+    }, 400);
+  }
   function showSheet() {
     if (!result)
       return;
@@ -550,6 +571,7 @@ function setup(ctx) {
     pending = [];
     proposed.replaceChildren();
     reply.textContent = "";
+    share();
   }
   function showStandalone() {
     if (!result)

@@ -1,7 +1,7 @@
 import type { SpindleAPI, GenerationRequestDTO } from 'lumiverse-spindle-types';
 import { BooruDictionary, testGelbooru } from './dictionary';
 import { Translator } from './engine';
-import { gelCredentials, isGenerative, record, text, type Settings, type Snapshot } from './contracts';
+import { gelCredentials, isGenerative, nameFrom, record, text, type Settings, type SharedSheet, type Snapshot } from './contracts';
 import { generationError, ModelRequestError } from './generation-errors';
 
 const DEFAULTS: Settings = {connectionId:'',gelUser:'',gelKey:'',notes:'',quality:''};
@@ -27,7 +27,7 @@ export function setupBackend(api: SpindleAPI) {
       await s.load;
       const settings=s.settings!;
       const dictionary=() => s.dictionary ??= new BooruDictionary(async url=> {
-        const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.6.0 (tag metadata client)'}}));
+        const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.7.0 (tag metadata client)'}}));
         if(typeof response.status!=='number'||typeof response.body!=='string')throw new Error('Invalid proxy response.');
         return {status:response.status,body:response.body};
       },{user:settings.gelUser,key:settings.gelKey});
@@ -55,13 +55,24 @@ export function setupBackend(api: SpindleAPI) {
         s.settings=next;
         return true;
       }
+      if (r.action === 'publish') {
+        // The latest sheet, for Lumi Studio's "Fill from LumiCast". In memory only; cleared when Lumiverse restarts.
+        const v=record(r.input);const sheet=record(v.sheet);
+        const field=(key:string)=>text(sheet[key] ?? '',key,4000);
+        const description=text(v.description ?? '','description',12_000);
+        const shared:SharedSheet={version:1,sheet:{countTag:field('countTag'),subject:field('subject'),always:field('always'),appearance:field('appearance'),outfit:field('outfit'),anatomy:field('anatomy')},
+          name:nameFrom(description),title:(description.split('\n').find(l=>l.trim()) ?? '').trim().slice(0,120),updatedAt:Date.now(),userId:userId ?? ''};
+        const pool=(api as unknown as {rpcPool?:{sync?:(endpoint:string,value:unknown,policy?:{requires?:string[]})=>string}}).rpcPool;
+        if (typeof pool?.sync!=='function') throw new Error('This Lumiverse version cannot share data between extensions.');
+        return pool.sync('sheet.latest',shared,{requires:[]});
+      }
       if (r.action === 'testGelbooru') {
         // Tests what is typed in the boxes, falling back to the saved key, without saving or caching anything.
         const v=record(r.input);
         const entered=gelCredentials(text(v.gelUser ?? '','Gelbooru user',300),v.gelKey ? text(v.gelKey,'Gelbooru key',300) : '');
         const credentials={user:entered.user||settings.gelUser,key:entered.key||settings.gelKey};
         const outcome=await testGelbooru(async url=> {
-          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.6.0 (tag metadata client)'}}));
+          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.7.0 (tag metadata client)'}}));
           return {status:Number(response.status),body:typeof response.body==='string'?response.body:''};
         },credentials);
         const unsaved=credentials.user!==settings.gelUser||credentials.key!==settings.gelKey;
@@ -113,7 +124,7 @@ export function setupBackend(api: SpindleAPI) {
     })().then(result=>reply(result)).catch(error=> {
       // Provider errors may embed URLs, headers or keys. Never forward raw upstream errors.
       const message=error instanceof Error ? error.message : '';
-      const trusted=/^(Grant LumiCast|Wait for|This connection|Gelbooru user|Unknown LumiCast|An operation|Use at most|Use a tag|Select a saved|The model |Invalid |Use a plain|Paste a |No explicit|Too many|Conflicting|Tag service|Tag lookup|Cyclic tag|Tag alias|Oversized|Unexpected)/.test(message);
+      const trusted=/^(Grant LumiCast|Wait for|This connection|Gelbooru user|Unknown LumiCast|An operation|Use at most|Use a tag|This Lumiverse|Select a saved|The model |Invalid |Use a plain|Paste a |No explicit|Too many|Conflicting|Tag service|Tag lookup|Cyclic tag|Tag alias|Oversized|Unexpected)/.test(message);
       reply(undefined,error instanceof Error && error.name==='AbortError' ? 'Operation cancelled or timed out. Your edits are preserved.' : error instanceof ModelRequestError || trusted ? message : 'The operation failed. Check your connection, provider status and tag-service access. Your edits are preserved.');
     });
   });

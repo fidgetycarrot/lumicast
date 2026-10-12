@@ -107,7 +107,8 @@ export function setup(ctx:SpindleFrontendContext) {
   };
   // Field names and order match Lumi Studio's character editor so each can be pasted straight across.
   const sheetCard=remembered(el('details'),'sheet');sheetCard.className='lc-card';sheetCard.append(el('summary','04 / Lumi Studio character sheet'));
-  sheetCard.append(el('p','One field per box in Lumi Studio’s character editor. Comma-separated, no sentences.'));
+  sheetCard.append(el('p','One field per box in Lumi Studio’s character editor. In Lumi Studio, open a new reusable character or persona and choose Fill from LumiCast to copy all of them at once, or copy each field below.'));
+  const shareState=el('small');shareState.className='lc-muted';sheetCard.append(shareState);
   // Gaps are answered where they are shown: the box mirrors Known facts.
   const gapsBox=el('div');gapsBox.className='lc-gaps';
   const gapsCard=el('section');gapsCard.className='lc-card';gapsCard.hidden=true;gapsCard.append(gapsBox);
@@ -116,6 +117,7 @@ export function setup(ctx:SpindleFrontendContext) {
   const sheetField=(label:string,key:'countTag'|'subject'|'always'|'appearance'|'outfit'|'anatomy',hint:string,long=false)=> {
     const box=long?el('textarea'):el('input');if(long)(box as HTMLTextAreaElement).rows=3;box.dataset.sheet=key;
     // The copy button sits on the label's line, so five fields do not become ten rows.
+    box.addEventListener('input',()=>share());
     const copyField=button('Copy',()=>copyText(box.value,label.toLowerCase()));copyField.className='lc-mini';copyField.setAttribute('aria-label',`Copy ${label.toLowerCase()}`);
     const head=el('div');head.className='lc-head';head.append(el('span',label),copyField);
     const wrapper=el('div');wrapper.className='lc-field';box.setAttribute('aria-label',label);wrapper.append(head,box,el('small',hint));
@@ -181,7 +183,7 @@ export function setup(ctx:SpindleFrontendContext) {
     }
     tags.value=list.map(t=>formatWeighted(t)).join(', ');edited=true;
     if(verified||!tags.value.trim())prompt.value=withQuality(assemble(list,prose.value),quality.value,list.length>0);
-    pending=[];proposed.replaceChildren();feedback.value='';
+    pending=[];proposed.replaceChildren();feedback.value='';share();
     const standalone=tags.value!==before||prose.value!==captionBefore;
     notify(standalone?'Changes applied to the Anima prompt and the character sheet. Copy the prompt and generate again.':'Changes applied to the character sheet. None of them touched a tag or the caption in the Anima prompt.');
   });
@@ -246,9 +248,21 @@ export function setup(ctx:SpindleFrontendContext) {
   });
   searchCard.append(field('Tag name or the start of one',query,'Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched.'),search,found);
 
-  app.append(intro,settings,status,input,gapsCard,output,refine,sheetCard,searchCard,el('p','LumiCast 0.6.0 · Draft stays in this tab until reload.'));
+  app.append(intro,settings,status,input,gapsCard,output,refine,sheetCard,searchCard,el('p','LumiCast 0.7.0 · Draft stays in this tab until reload.'));
   const controls=[translate,again,save,refreshButton,testGel,saveNotes,saveQuality,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
 
+  // Every change to the sheet is offered to Lumi Studio, a moment after typing stops.
+  let shareTimer:ReturnType<typeof setTimeout>|undefined;
+  function share(){
+    clearTimeout(shareTimer);
+    shareTimer=setTimeout(()=> {
+      const values=Object.fromEntries((Object.keys(sheet) as (keyof typeof sheet)[]).map(k=>[k,sheet[k].box.value]));
+      if(!Object.values(values).some(v=>v.trim()))return;
+      void rpc.request('publish',{sheet:values,description:source.value})
+        .then(()=>{if(!closed)shareState.textContent='Ready for Fill from LumiCast in Lumi Studio.';})
+        .catch(e=>{if(!closed)shareState.textContent=`Not shared with Lumi Studio: ${e instanceof Error?e.message:'unknown error'} Copy the fields by hand.`;});
+    },400);
+  }
   function showSheet(){
     if(!result)return;
     for(const key of Object.keys(sheet) as (keyof typeof sheet)[])sheet[key].box.value=result.sheet[key];
@@ -270,6 +284,7 @@ export function setup(ctx:SpindleFrontendContext) {
     sourceQuotes.replaceChildren(el('p','Passages the result was built from:'));
     view.evidence.forEach(t=>sourceQuotes.append(el('blockquote',t.evidence)));
     pending=[];proposed.replaceChildren();reply.textContent='';
+    share();
   }
   // Every scope comes back from one translation, so changing Include only re-renders this part.
   function showStandalone(){

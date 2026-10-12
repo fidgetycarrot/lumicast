@@ -30,6 +30,14 @@ export interface View { tags: TagRow[]; prose: string; prompt: string; notices: 
 export interface Sheet { countTag: string; subject: string; always: string; appearance: string; outfit: string; anatomy: string }
 /** Something that leaves the character under-specified. Advisory only: a gap never changes tags, captions or the sheet. */
 export interface Gap { kind: 'missing' | 'vague'; what: string; note: string }
+/** What LumiCast shares with Lumi Studio through Lumiverse's shared RPC pool, at lumicast.sheet.latest. */
+export interface SharedSheet { version: 1; sheet: Sheet; name: string; title: string; updatedAt: number; userId: string }
+/** A likely character name from a description's first line, such as "Jason Slatz — physical description:". */
+export function nameFrom(description: string): string {
+  const first = (description.split('\n').find(l => l.trim()) ?? '').trim();
+  const head = first.split(/\s+[—–-]\s+|:/)[0].replace(/[*_#"“”]/g, '').trim();
+  return /^[A-Z][\p{L}\d'’.-]*(?:\s+[A-Z][\p{L}\d'’.-]*){0,3}$/u.test(head) && head.length <= 40 ? head : '';
+}
 export interface Translation extends View { issues: Issue[]; model: string; views: Record<Scope, View>; sheet: Sheet; gaps: Gap[] }
 /** quality: the user's own prefix (quality, score, year, safety tags) for the Anima prompt. Never verified or changed. */
 export interface Settings { connectionId: string; gelUser: string; gelKey: string; notes: string; quality: string }

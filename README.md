@@ -1,4 +1,6 @@
-# LumiCast 0.6.0
+# LumiCast 0.7.0
+
+**v0.7.0 hands characters to Lumi Studio.** LumiCast now shares its latest character sheet with Lumi Studio 1.8.2 or newer. In Lumi Studio, open a new reusable character or persona and choose **Fill from LumiCast**: the sheet fields, and a name guessed from the description's first line, are filled in one step for you to check and save. Edits you make to the sheet in LumiCast are shared too.
 
 **v0.6.0 follows how LumiCast is used.** The Anima prompt is now step 02, open, with the finished prompt and **Copy prompt** at the top and the tag and caption editors folded beneath. A saved **Your quality tags** field goes in front of every prompt exactly as typed. Worth pinning down has its own card under Describe. Refine reads the Anima prompt as well as the sheet. The Lumi Studio character sheet is step 04 and collapses; sections stay open or closed as you left them.
 
@@ -47,7 +49,7 @@ Prebuilt `dist/` files are committed for Lumiverse installation. If the tab does
 
 Requires **Lumiverse 1.2.5 or later**. Compatibility was checked against the current 1.2.5 source and SDK 0.6.40; older versions have not been verified.
 
-1. Unzip `lumicast-0.6.0-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
+1. Unzip `lumicast-0.7.0-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
 2. On the machine running your Lumiverse **server**, copy that folder into `<DATA_DIR>/extensions/`. The server's default DATA_DIR is `./data`, relative to where Lumiverse runs. For Docker, copy into the volume mounted as the server's data directory. Do not copy it into another extension's folder.
 3. As the Lumiverse owner/admin, open **Extensions**, open its add menu, and choose **Import Local**. Enable LumiCast and grant `generation` and `cors_proxy`. If the tab does not appear, reload Lumiverse.
 4. Open **LumiCast** in the sidebar drawer or find it in the command palette. Expand **Connection & tag services**, choose a saved generative connection, and save.
@@ -99,7 +101,7 @@ Card **02** lays the result out for Lumi Studio 1.8.1's character editor. **Incl
 
 Tags are written with spaces and keep any weight. Phrases come from the review call, which is told to skip anything a kept tag already covers; they are lower-cased, split at any comma, stripped of a leading pronoun, and dropped if they repeat a tag, restate one with a single extra word (`pale porcelain skin` beside `pale skin`), or cite a number the description never gave. Pose, expression, setting and `solo` never appear here. Refine applies its tag changes to these fields as well; a newly added tag lands in Permanent appearance tags.
 
-This is a copy-and-paste handoff. LumiCast does not write to Lumi Studio, and the field mapping was read from Lumi Studio 1.8.1's code, not confirmed by generating through it.
+LumiCast never writes to Lumi Studio. It publishes the sheet, with a name guessed from the description's first line, on Lumiverse's shared RPC pool at `lumicast.sheet.latest` (in memory, readable by other extensions, replaced on every change, gone when Lumiverse restarts). Lumi Studio 1.8.2's **Fill from LumiCast** reads it and fills only the fields LumiCast has values for; nothing is saved until you save there. Each field also has its own copy button.
 
 ### Worth pinning down
 
@@ -166,6 +168,7 @@ When both services verify an equivalent spelling (including an active Danbooru a
 - Drafts stay in the open tab and are lost on reload. Pasted descriptions, feedback, AI outputs and prompts are not persisted by LumiCast. Your notes are persisted with your settings in per-user extension storage, unencrypted, and are sent to your selected provider with each translation and refinement. Provider-side handling follows your chosen provider's policy. Settings and optional Gelbooru credentials are persisted per user.
 - Public metadata caches are memory-only, bounded at 512 responses: positive entries expire after seven days; empty responses after one hour. Failures are not cached as missing tags; HTTP failures briefly pause requests to that host. Requests are serialized with 450 ms spacing, two per live tag, so a first translation with many new tags can spend most of a minute on lookups; repeated tags come from the cache.
 - A translation has a four-minute limit and supports cancellation. Provider generation is aborted through Spindle. The CORS API has no cancellation signal; a tag lookup wait is capped at 12 seconds and the host applies its own network limits. Cancelling does not retroactively undo provider billing.
+- The latest character sheet and the first line of its description are shared with other extensions through Lumiverse's shared RPC pool so Lumi Studio can read them. They stay in memory on the Lumiverse server and are not persisted.
 - Frontend replies are scoped to the authenticated user and originating frontend session. Operator installations pass authenticated `userId` to connection and generation calls. Concurrent operations are limited to one per user.
 
 ## Build and test the source package
