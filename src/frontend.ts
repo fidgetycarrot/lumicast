@@ -107,7 +107,7 @@ export function setup(ctx:SpindleFrontendContext) {
   const statedAgain=el('input');statedAgain.maxLength=300;statedAgain.autocomplete='off';statedAgain.placeholder='e.g. short hair, rose-pink gradient lips';statedAgain.setAttribute('aria-label','Known facts');
   const again=button('Translate again',runTranslate);
   sheetCard.append(gapsBox);
-  const sheetField=(label:string,key:'countTag'|'subject'|'always'|'appearance'|'outfit',hint:string,long=false)=> {
+  const sheetField=(label:string,key:'countTag'|'subject'|'always'|'appearance'|'outfit'|'anatomy',hint:string,long=false)=> {
     const box=long?el('textarea'):el('input');if(long)(box as HTMLTextAreaElement).rows=3;box.dataset.sheet=key;
     // The copy button sits on the label's line, so five fields do not become ten rows.
     const copyField=button('Copy',()=>copyText(box.value,label.toLowerCase()));copyField.className='lc-mini';copyField.setAttribute('aria-label',`Copy ${label.toLowerCase()}`);
@@ -122,6 +122,7 @@ export function setup(ctx:SpindleFrontendContext) {
     always:sheetField('Always include','always','The type tags that define the character.'),
     appearance:sheetField('Permanent appearance tags','appearance','Verified tags first, then short phrases for what no tag says.',true),
     outfit:sheetField('Default outfit tags','outfit','Clothing from the description. Leave it out for a character whose clothes change with the story.',true),
+    anatomy:sheetField('Conditional visible anatomy','anatomy','Explicit anatomy, kept out of the permanent tags so it never appears in scenes that do not show it. Set its rule in Lumi Studio.',true),
   };
   const provenance=el('div');const issues=el('div');const sourceQuotes=el('div');
   const evidence=el('details');evidence.className='lc-sub';evidence.append(el('summary','Where each tag came from'),provenance,issues,sourceQuotes);
@@ -131,7 +132,7 @@ export function setup(ctx:SpindleFrontendContext) {
   const refine=card('03 / Refine');
   const feedback=named(el('textarea'),'feedback');feedback.rows=3;feedback.maxLength=2000;feedback.placeholder='Generate an image in Lumi Studio, then say what came out wrong: “reads too masculine”, “eyes came out blue”, “no visible seams”.';
   const reply=el('p');const proposed=el('div');
-  const sheetEntries=()=>[sheet.countTag.box.value,...splitTags(sheet.always.box.value),...splitTags(sheet.appearance.box.value),...splitTags(sheet.outfit.box.value)].map(v=>v.trim()).filter(Boolean);
+  const sheetEntries=()=>[sheet.countTag.box.value,...splitTags(sheet.always.box.value),...splitTags(sheet.appearance.box.value),...splitTags(sheet.outfit.box.value),...splitTags(sheet.anatomy.box.value)].map(v=>v.trim()).filter(Boolean);
   const suggest=button('Suggest changes',async()=> {
     const entries=sheetEntries();
     if(!entries.length)throw new Error('Translate a character first.');
@@ -156,9 +157,9 @@ export function setup(ctx:SpindleFrontendContext) {
     // The count tag has its own box in Lumi Studio, so a count change goes there and nowhere else.
     for(const p of chosen)if(p.tag&&COUNT.test(p.tag)){if(p.kind==='add')sheet.countTag.box.value=p.tag;if(p.kind==='remove'&&sheet.countTag.box.value.trim()===p.tag)sheet.countTag.box.value='';}
     const changes=chosen.filter(p=>!p.tag||!COUNT.test(p.tag));
-    sheet.always.box.value=editList(sheet.always.box.value,changes);sheet.outfit.box.value=editList(sheet.outfit.box.value,changes);
+    sheet.always.box.value=editList(sheet.always.box.value,changes);sheet.outfit.box.value=editList(sheet.outfit.box.value,changes);sheet.anatomy.box.value=editList(sheet.anatomy.box.value,changes);
     // A new tag lands in the appearance field for you to move if it is clothing.
-    const elsewhere=new Set([...splitTags(sheet.always.box.value),...splitTags(sheet.outfit.box.value)].map(v=>v.replace(/^\((.+?):[\d.]+\)$/,'$1').trim().toLowerCase().replace(/_/g,' ')));
+    const elsewhere=new Set([...splitTags(sheet.always.box.value),...splitTags(sheet.outfit.box.value),...splitTags(sheet.anatomy.box.value)].map(v=>v.replace(/^\((.+?):[\d.]+\)$/,'$1').trim().toLowerCase().replace(/_/g,' ')));
     sheet.appearance.box.value=editList(sheet.appearance.box.value,changes.filter(p=>p.kind!=='add'||!elsewhere.has(p.tag!.replace(/_/g,' '))),true);
     // The standalone prompt gets every change that names one of its tags, the count included; a change to a
     // sheet-only phrase has nothing to change there.
@@ -230,7 +231,7 @@ export function setup(ctx:SpindleFrontendContext) {
   });
   searchCard.append(field('Tag name or the start of one',query,'Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched.'),search,found);
 
-  app.append(intro,settings,status,input,sheetCard,refine,output,searchCard,el('p','LumiCast 0.5.4 · Draft stays in this tab until reload.'));
+  app.append(intro,settings,status,input,sheetCard,refine,output,searchCard,el('p','LumiCast 0.5.5 · Draft stays in this tab until reload.'));
   const controls=[translate,again,save,refreshButton,testGel,saveNotes,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
 
   function showSheet(){

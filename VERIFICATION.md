@@ -148,3 +148,7 @@ A live refinement for "android features are weak" proposed removing `trap`, the 
 
 The user typed a hair and eye colour into the gap box, chose Translate again, and saw nothing change. The run's output was not available. Two plausible causes were addressed: the anchor checks read only hair and face traits, so a stated fact the model filed under another group left the same gaps standing; and a re-run gave no sign of what it settled. The checks now also read Known facts directly, and the status line reports which gaps closed and which remain. If the button itself did not fire, this release would not fix that; the status line now makes the difference visible. Typecheck, 72 tests and the build passed.
 
+## v0.5.5: height, anatomy, figurative "giant"
+
+Reading a persona description before its run showed three predictable failures: the character's defining size was given only as `6'8" (203 cm)`, which the number rule discards; the text calls him "the giant" figuratively; and explicit anatomy would have been filed under body, putting it in Lumi Studio's permanent appearance tags and so in every image. Lumi Studio 1.8.1 has a separate "Conditional visible anatomy" field for this. v0.5.5 adds `heightCm` and a fixed tall conversion, an `anatomy` group that belongs to the scene scope and fills a new sheet field, and a prompt example for the figurative "giant". Typecheck, 74 tests and the build passed with controlled responses. The tag names `tall_male` and `tall_female` are checked live at run time; if one does not exist, it reaches the sheet as plain words.
+

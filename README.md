@@ -1,4 +1,6 @@
-# LumiCast 0.5.4
+# LumiCast 0.5.5
+
+**v0.5.5 keeps a character's height and keeps explicit anatomy separate.** A stated height (`6'8"`, `203 cm`) that is unusually tall becomes `tall_male`, `tall_female` or `tall`, plus "very tall" in the sheet for the very tallest, since a picture shows tall and not a number. Explicitly described genitals and similar anatomy go to a new **Conditional visible anatomy** field, matching Lumi Studio's own, instead of the permanent appearance tags, so they only appear in images that show them. Calling a big man "the giant" no longer suggests the `giant` tag.
 
 **v0.5.1 keeps unverified guesses as words.** A tag the model proposed that neither booru has (`silver_hair`, `violet_eyes`) no longer disappears: the character sheet keeps it as plain words, which Anima can read, unless a tag or a longer phrase already says it. Tags themselves are still only ever verified ones.
 
@@ -43,7 +45,7 @@ Prebuilt `dist/` files are committed for Lumiverse installation. If the tab does
 
 Requires **Lumiverse 1.2.5 or later**. Compatibility was checked against the current 1.2.5 source and SDK 0.6.40; older versions have not been verified.
 
-1. Unzip `lumicast-0.5.4-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
+1. Unzip `lumicast-0.5.5-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
 2. On the machine running your Lumiverse **server**, copy that folder into `<DATA_DIR>/extensions/`. The server's default DATA_DIR is `./data`, relative to where Lumiverse runs. For Docker, copy into the volume mounted as the server's data directory. Do not copy it into another extension's folder.
 3. As the Lumiverse owner/admin, open **Extensions**, open its add menu, and choose **Import Local**. Enable LumiCast and grant `generation` and `cors_proxy`. If the tab does not appear, reload Lumiverse.
 4. Open **LumiCast** in the sidebar drawer or find it in the command palette. Expand **Connection & tag services**, choose a saved generative connection, and save.
@@ -91,6 +93,7 @@ Card **02** lays the result out for Lumi Studio 1.8.1's character editor. **Incl
 | Always include | The type tags, such as `android, trap`. |
 | Permanent appearance tags | Verified body, hair and face tags, then plain words for any guess that is not a booru tag, then short phrases for what no tag says (`choppy silver-white hair`), at most eight extras. |
 | Default outfit tags | Verified clothing tags, then short clothing phrases. Skip it for a character whose clothes follow the story. |
+| Conditional visible anatomy | Explicitly described anatomy that clothing normally covers. Lumi Studio adds it only under the rule you choose there. |
 
 Tags are written with spaces and keep any weight. Phrases come from the review call, which is told to skip anything a kept tag already covers; they are lower-cased, split at any comma, stripped of a leading pronoun, and dropped if they repeat a tag, restate one with a single extra word (`pale porcelain skin` beside `pale skin`), or cite a number the description never gave. Pose, expression, setting and `solo` never appear here. Refine applies its tag changes to these fields as well; a newly added tag lands in Permanent appearance tags.
 
@@ -118,6 +121,10 @@ The model is given Anima's published prompting guidance, the current tags and de
 ### Weights
 
 Write emphasis in the tags box as `(tag:1.4)`, from 0.1 to 3. **Verify edited tags** checks the bare tag and keeps the weight, and the assembled prompt writes it as `(tag name:1.4)`. During translation a weight is applied only when your notes give that number; LumiCast does not choose weights there. During refinement it may propose one for a trait you said the image ignored, for you to accept or decline. The model card notes that Anima needs higher weights than SDXL.
+
+### Height
+
+A single stated height is converted the way a cup size is. Men from 188 cm (6'2") get `tall_male`, women from 178 cm (5'10") get `tall_female`, and anyone else from 188 cm gets `tall`; from 198 cm (men) or 188 cm (women) the sheet also gets the words "very tall". Shorter heights add nothing, because no tag means "short" without also meaning young or small-built. The same height written twice (`6'8" (203 cm)`) counts once; different heights add nothing. The thresholds are in `src/engine.ts`.
 
 ### Cup sizes
 

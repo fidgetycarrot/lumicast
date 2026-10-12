@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test';
 import { Translator, parseExtraction, removeConflicts } from '../src/engine';
-import { assemble, cupSize, editList, formatWeighted, inScope, isGenerative, parseWeighted, type TagDictionary, type TagRow, type TranslateOptions } from '../src/contracts';
+import { assemble, cupSize, editList, heightCm, formatWeighted, inScope, isGenerative, parseWeighted, type TagDictionary, type TagRow, type TranslateOptions } from '../src/contracts';
 import { cases, narratedFiller } from './fixtures';
 const dictionary:TagDictionary={resolve:async name=>({name,source:'Danbooru',count:10,wiki:`Definition of ${name}`,url:'https://danbooru.donmai.us/wiki_pages/'+name}),search:async()=>[]};
 const signal=()=>new AbortController().signal;
@@ -221,10 +221,10 @@ test('Lumi Studio sheet: fields the character editor takes, with phrases only fo
   expect(result.sheet).toEqual({
     countTag:'1boy',subject:'adult male android',always:'android, trap',
     appearance:'narrow waist, wide hips, silver hair, short hair, engineered hourglass silhouette, narrow shoulders, pale polymer skin, choppy silver-white hair, a, b',
-    outfit:'thighhighs, black thighhighs, no shoes, sheer black thigh-high stockings',
+    outfit:'thighhighs, black thighhighs, no shoes, sheer black thigh-high stockings',anatomy:'',
   });
   // The sheet does not depend on the Include choice, and never carries solo or scene detail.
-  expect((await run(fixture.source,{traits:fixture.traits},{},{scope:'scene'})).result.sheet).toEqual({countTag:'1boy',subject:'',always:'android, trap',appearance:'narrow waist, wide hips, silver hair, short hair',outfit:'thighhighs, black thighhighs, no shoes'});
+  expect((await run(fixture.source,{traits:fixture.traits},{},{scope:'scene'})).result.sheet).toEqual({countTag:'1boy',subject:'',always:'android, trap',appearance:'narrow waist, wide hips, silver hair, short hair',outfit:'thighhighs, black thighhighs, no shoes',anatomy:''});
   const weighted=await run('He is a femboy with silver hair.',{traits:[{id:'1',group:'subject',evidence:'femboy',tags:['1boy','(trap:1.4)'],detail:'A feminine young man'}]},{},{notes:'Weight trap at 1.4.'});
   expect(weighted.result.sheet.always).toBe('(trap:1.4)');expect(weighted.result.sheet.countTag).toBe('1boy');
 });
@@ -288,4 +288,24 @@ test('Known facts close a gap even when the model files the fact under the wrong
   expect(without.result.gaps.map(g=>g.what)).toEqual(['hair colour','hair length','eye colour']);
   const withFacts=await run('He is a massive man.',{traits},{},{stated:'short messy brown hair, blue eyes'});
   expect(withFacts.result.gaps).toEqual([]);
+});
+test('an unusual height becomes a tall tag; ordinary, mixed and absent heights add nothing',async()=> {
+  expect(heightCm('24 years old, 6\'8" (203 cm), 285 lbs')).toBe(203);expect(heightCm('6 ft 2')).toBe(188);expect(heightCm('5\'4", petite')).toBe(163);
+  expect(heightCm('180 cm, though her sister is 5\'1"')).toBe('mixed');expect(heightCm('a 9.6 inch blade, size-15 trainers')).toBeNull();
+  const man=[{id:'s',group:'subject',evidence:'Jason Slatz',tags:['1boy'],detail:'A 24-year-old man'},{id:'b',group:'body',evidence:'Broad chest',tags:['broad_shoulders','muscular_male'],detail:'A broad chest'}];
+  const source='Jason Slatz, 6\'8" (203 cm). Broad chest.';
+  const {result}=await run(source,{traits:man},{});
+  expect(result.sheet.appearance).toBe('broad shoulders, muscular male, tall male, very tall');expect(result.tags.map(t=>t.name)).toContain('tall_male');
+  expect(result.notices).toContain('A height of 203 cm was converted to tall_male and “very tall”.');
+  const woman=await run('She is 5\'11".',{traits:[{id:'s',group:'subject',evidence:'She',tags:['1girl'],detail:'A woman'}]},{});
+  expect(woman.result.tags.map(t=>t.name)).toEqual(['1girl','tall_female']);expect(woman.result.sheet.appearance).toBe('');
+  expect((await run('Jason Slatz is 5\'9". Broad chest.',{traits:man},{})).result.tags.map(t=>t.name)).not.toContain('tall_male');
+});
+test('explicit anatomy goes to its own sheet field and never into the saved look or a character-only prompt',async()=> {
+  const traits=[{id:'s',group:'subject',evidence:'the man',tags:['1boy'],detail:'A man'},{id:'b',group:'body',evidence:'Broad chest',tags:['muscular_male'],detail:'A broad chest'},
+    {id:'a',group:'anatomy',evidence:'packing',tags:['large_penis'],detail:'Large genitals'},{id:'h',group:'hair',evidence:'brown hair',tags:['brown_hair','short_hair'],detail:'Short brown hair'},{id:'e',group:'face',evidence:'blue eyes',tags:['blue_eyes'],detail:'Blue eyes'}];
+  const {result}=await run('the man. Broad chest, packing, short brown hair, blue eyes.',{traits},{sheet:{anatomy:['uncut']}});
+  expect(result.sheet.anatomy).toBe('large penis, uncut');expect(result.sheet.appearance).not.toContain('penis');
+  expect(result.prompt).not.toContain('penis');expect(result.views.outfit.prompt).not.toContain('penis');expect(result.views.scene.prompt).toContain('large penis');
+  expect(result.gaps).toEqual([]);
 });

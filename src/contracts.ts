@@ -1,11 +1,12 @@
 /** Identity groups describe the character in any scene; outfit and moment belong to one scene. */
-export const GROUPS = ['subject','body','hair','face','outfit','moment'] as const;
+export const GROUPS = ['subject','body','hair','face','anatomy','outfit','moment'] as const;
 export type Group = typeof GROUPS[number];
 /** character: body, hair and face only. outfit: plus clothing. scene: everything described. */
 export type Scope = 'character' | 'outfit' | 'scene';
 /** Each caption segment covers the groups its scope adds. */
-export const segmentOf = (group: Group): Scope => group === 'moment' ? 'scene' : group === 'outfit' ? 'outfit' : 'character';
-export const inScope = (group: Group, scope: Scope): boolean => scope === 'scene' || (group !== 'moment' && (scope === 'outfit' || group !== 'outfit'));
+/** Explicit anatomy shows only in images that show it, so like a moment it belongs to the scene, never to the saved look. */
+export const segmentOf = (group: Group): Scope => group === 'moment' || group === 'anatomy' ? 'scene' : group === 'outfit' ? 'outfit' : 'character';
+export const inScope = (group: Group, scope: Scope): boolean => scope === 'scene' || (segmentOf(group) !== 'scene' && (scope === 'outfit' || group !== 'outfit'));
 export interface Trait { id: string; group: Group; evidence: string; tags: string[]; detail: string }
 export interface Extraction { traits: Trait[]; skipped: number; weights: Map<string, number> }
 /** stated: facts the user asserts about the character ("femboy, android"), true even if the description never says them. */
@@ -26,7 +27,7 @@ export const SCOPES = ['character','outfit','scene'] as const;
 export interface View { tags: TagRow[]; prose: string; prompt: string; notices: string[]; evidence: Trait[] }
 /** The requested scope's view at the top level, plus every scope so the panel can switch without another run. */
 /** The result laid out as Lumi Studio's character sheet fields: comma-separated, spaces for underscores, no sentences. */
-export interface Sheet { countTag: string; subject: string; always: string; appearance: string; outfit: string }
+export interface Sheet { countTag: string; subject: string; always: string; appearance: string; outfit: string; anatomy: string }
 /** Something that leaves the character under-specified. Advisory only: a gap never changes tags, captions or the sheet. */
 export interface Gap { kind: 'missing' | 'vague'; what: string; note: string }
 export interface Translation extends View { issues: Issue[]; model: string; views: Record<Scope, View>; sheet: Sheet; gaps: Gap[] }
@@ -79,6 +80,16 @@ export function cupSize(source: string): {label: string; tag: string} | 'mixed' 
   if (found.size > 1) return 'mixed';
   const [letter, label] = [...found][0];
   return {label, tag: CUP_TAGS[letter]};
+}
+/** A stated height in centimetres, from 6'8", 6 ft 8, 6'8 or 203 cm; 'mixed' when several differ. */
+export function heightCm(source: string): number | 'mixed' | null {
+  const found = new Set<number>();
+  for (const m of source.matchAll(/\b([4-8])\s*(?:'|’|ft\.?|feet|foot)\s*(\d{1,2})?\s*(?:"|”|''|in\.?|inches)?(?![\d'’])/gi)) found.add(Math.round((Number(m[1]) * 12 + Number(m[2] ?? 0)) * 2.54));
+  for (const m of source.matchAll(/\b(1[2-9]\d|2[0-4]\d)\s*cm\b/gi)) found.add(Number(m[1]));
+  const values = [...found];
+  if (!values.length) return null;
+  // 6'8" and 203 cm in one description are the same height written twice.
+  return values.every(v => Math.abs(v - values[0]) <= 3) ? values[0] : 'mixed';
 }
 // A cup label is never itself a booru tag.
 export function isCupSizeTag(name: string): boolean {
