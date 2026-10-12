@@ -11,7 +11,7 @@ export interface Extraction { traits: Trait[]; skipped: number; weights: Map<str
 /** stated: facts the user asserts about the character ("femboy, android"), true even if the description never says them. */
 export interface TranslateOptions { scope?: Scope; stated?: string; /** The user's standing prompting guidance, saved in settings. */ notes?: string }
 /** A prompt the user has generated from, and what they saw in the image. */
-export interface RefineInput { tags: string[]; caption: string; feedback: string; description?: string; stated?: string; notes?: string }
+export interface RefineInput { tags: string[]; caption: string; feedback: string; description?: string; stated?: string; notes?: string; /** Tags that define the character (the sheet's Always include). Removable only when the feedback names them. */ locked?: string[] }
 /** One change the user can accept or decline. */
 export interface Proposal { kind: 'add' | 'remove' | 'weight' | 'caption'; tag?: string; weight?: number; caption?: string; why: string; definition?: string; url?: string }
 export interface Refinement { reply: string; proposals: Proposal[]; notices: string[]; model: string }

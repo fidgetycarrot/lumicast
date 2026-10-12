@@ -140,3 +140,7 @@ A live run reported `silver_hair` and `violet_eyes` as not live and dropped them
 
 The user saw no change in the standalone prompt after applying refinements. A panel test reproduced one cause: a count-tag change (`1girl` to `1boy`) was routed to the sheet's Count tag field and skipped for the standalone tag list. Changes to sheet-only phrases, which the standalone list never contains, also left it untouched without saying so. Count changes now apply to both, and the status line says whether anything reached the standalone prompt. The live run's exact suggestions were not seen, so which cause applied there is not known. Typecheck, 70 tests and the build passed.
 
+## v0.5.3: refine keeps the character
+
+A live refinement for "android features are weak" proposed removing `trap`, the character's defining type tag, and a replacement caption that brought in scene details (flushing, residue, missing underwear) the character-only caption had left out. Its other proposals (weight `android`, add `robot_joints` and `mechanical_parts`, weight the eye phrase) were reasonable. The sheet's Always include entries are now sent as `locked`; a removal of a locked tag is dropped in code unless the feedback contains the tag's words. The prompt also tells the model to strengthen the weak trait instead of removing the strong one, and to keep the caption's scope; the caption rule is an instruction only. Typecheck, 71 tests and the build passed with controlled responses.
+

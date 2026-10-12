@@ -132,7 +132,7 @@ export function setup(ctx:SpindleFrontendContext) {
     const entries=sheetEntries();
     if(!entries.length)throw new Error('Translate a character first.');
     if(!feedback.value.trim())throw new Error('Say what the image got wrong first.');
-    const next=await rpc.request<Refinement>('refine',{connectionId:connection.value,tags:entries,caption:prose.value,feedback:feedback.value,description:source.value,stated:stated.value});
+    const next=await rpc.request<Refinement>('refine',{connectionId:connection.value,tags:entries,caption:prose.value,feedback:feedback.value,description:source.value,stated:stated.value,locked:splitTags(sheet.always.box.value)});
     pending=next.proposals;reply.textContent=next.reply;proposed.replaceChildren();
     pending.forEach((p,i)=> {
       const line=el('label');line.className='lc-proposal';const box=el('input');box.type='checkbox';box.checked=true;box.dataset.index=String(i);
@@ -226,7 +226,7 @@ export function setup(ctx:SpindleFrontendContext) {
   });
   searchCard.append(field('Tag name or the start of one',query,'Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched.'),search,found);
 
-  app.append(intro,settings,status,input,sheetCard,refine,output,searchCard,el('p','LumiCast 0.5.2 · Draft stays in this tab until reload.'));
+  app.append(intro,settings,status,input,sheetCard,refine,output,searchCard,el('p','LumiCast 0.5.3 · Draft stays in this tab until reload.'));
   const controls=[translate,again,save,refreshButton,testGel,saveNotes,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
 
   function showSheet(){

@@ -273,3 +273,12 @@ test('a guess the boorus lack is kept as plain words in the sheet, not lost',asy
   expect(result.notices).toContain('“overheating” is not a live booru tag and was left out.');
   expect(result.gaps.map(g=>g.what)).toEqual([]);
 });
+test('refine never drops a defining tag unless the feedback names it, and passes the lock to the model',async()=> {
+  const response={reply:'Android is diluted.',remove:[{tag:'trap',why:'pulls toward human'},{tag:'blue_eyes',why:'wrong colour'}],weight:[{tag:'android',weight:1.4,why:'weak'}],add:[],caption:null};
+  const {result,inputs}=await refineWith(response,{tags:['1boy','android','trap','blue_eyes'],locked:['android','trap'],feedback:'Android features are weak.'});
+  expect(JSON.parse(inputs[0]).locked).toEqual(['android','trap']);
+  expect(result.proposals.map(p=>[p.kind,p.tag])).toEqual([['remove','blue_eyes'],['weight','android']]);
+  expect(result.notices.join(' ')).toContain('A suggestion to remove “trap” was set aside');
+  const named=await refineWith(response,{tags:['1boy','android','trap'],locked:['android','trap'],feedback:'Drop the trap look, he should read as a plain android.'});
+  expect(named.result.proposals.map(p=>[p.kind,p.tag])).toEqual([['remove','trap'],['weight','android']]);
+});

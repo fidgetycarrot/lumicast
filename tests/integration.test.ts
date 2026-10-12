@@ -180,7 +180,8 @@ test('a gap is answered where it is shown: the inline box mirrors Known facts an
   expect(h.root.querySelector('.lc-gaps')!.hasAttribute('hidden')).toBe(true);expect(named(h.root,'countTag').value).toBe('1girl');expect(named(h.root,'appearance').value).toBe('red hair, short hair, green eyes');
   // Refine works from the sheet, and a count change goes to the Count tag box only.
   named(h.root,'feedback').value='Came out as a woman.';b('Suggest changes').click();await until(()=>!b('Translate').disabled);
-  expect(JSON.parse(((h.calls.filter(v=>(v as unknown[])[0]==='generation').pop() as unknown[])[1] as {messages:{content:string}[]}).messages[1].content).tags).toEqual(['1girl','red_hair','short_hair','green_eyes']);
+  const lastInput=JSON.parse(((h.calls.filter(v=>(v as unknown[])[0]==='generation').pop() as unknown[])[1] as {messages:{content:string}[]}).messages[1].content);
+  expect(lastInput.tags).toEqual(['1girl','red_hair','short_hair','green_eyes']);expect(lastInput.locked).toBeUndefined();
   b('Apply selected').click();await until(()=>!b('Translate').disabled);
   expect(named(h.root,'countTag').value).toBe('1boy');expect(named(h.root,'appearance').value).toBe('red hair, short hair, green eyes, freckles');
   // The standalone prompt follows the same changes, the count included.
