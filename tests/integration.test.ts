@@ -227,7 +227,7 @@ test('after Refine, the prompt rebuilds itself unless the tags carry unverified 
   const b=(name:string)=>Array.from(h.root.querySelectorAll('button')).find(x=>x.textContent===name)!;
   await until(()=>!b('Translate').disabled);h.root.querySelector('select')!.value='c1';
   const suggestion={reply:'Weight it.',remove:[],add:[],weight:[{tag:'red_hair',weight:1.5,why:'faint'}],caption:null};
-  h.setResponses([{traits:[{id:'1',group:'hair',evidence:'Short red hair.',tags:['red_hair'],detail:'Short red hair'}]},{drop:[],captions:{character:'Short red hair.'},issues:[]},suggestion,suggestion]);
+  h.setResponses([{traits:[{id:'1',group:'hair',evidence:'Short red hair.',tags:['red_hair'],detail:'Short red hair'}]},{drop:[],captions:{character:'Short red hair.'},issues:[]},suggestion,{...suggestion,weight:[{tag:'red_hair',weight:1.8,why:'still faint'}]}]);
   named(h.root,'source').value='Short red hair.';b('Translate').click();await until(()=>!b('Translate').disabled);
   named(h.root,'feedback').value='Hair too faint.';b('Suggest changes').click();await until(()=>!b('Translate').disabled);
   b('Apply selected').click();await until(()=>!b('Translate').disabled);
@@ -235,5 +235,6 @@ test('after Refine, the prompt rebuilds itself unless the tags carry unverified 
   const tags=named(h.root,'tags');tags.value='(red_hair:1.5), freckles';tags.dispatchEvent(new Event('input'));
   named(h.root,'feedback').value='Still faint.';b('Suggest changes').click();await until(()=>!b('Translate').disabled);
   b('Apply selected').click();await until(()=>!b('Translate').disabled);
+  expect(named(h.root,'tags').value).toBe('(red_hair:1.8), freckles');
   expect(named(h.root,'prompt').value).toBe('(red hair:1.5)\n\nShort red hair.');expect(h.root.querySelector('.lc-status')!.textContent).toContain('Press Verify edited tags, then Rebuild.');
 });
