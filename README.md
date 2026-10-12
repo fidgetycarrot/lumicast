@@ -1,4 +1,6 @@
-# LumiCast 0.5.5
+# LumiCast 0.6.0
+
+**v0.6.0 follows how LumiCast is used.** The Anima prompt is now step 02, open, with the finished prompt and **Copy prompt** at the top and the tag and caption editors folded beneath. A saved **Your quality tags** field goes in front of every prompt exactly as typed. Worth pinning down has its own card under Describe. Refine reads the Anima prompt as well as the sheet. The Lumi Studio character sheet is step 04 and collapses; sections stay open or closed as you left them.
 
 **v0.5.5 keeps a character's height and keeps explicit anatomy separate.** A stated height (`6'8"`, `203 cm`) that is unusually tall becomes `tall_male`, `tall_female` or `tall`, plus "very tall" in the sheet for the very tallest, since a picture shows tall and not a number. Explicitly described genitals and similar anatomy go to a new **Conditional visible anatomy** field, matching Lumi Studio's own, instead of the permanent appearance tags, so they only appear in images that show them. Calling a big man "the giant" no longer suggests the `giant` tag.
 
@@ -45,7 +47,7 @@ Prebuilt `dist/` files are committed for Lumiverse installation. If the tab does
 
 Requires **Lumiverse 1.2.5 or later**. Compatibility was checked against the current 1.2.5 source and SDK 0.6.40; older versions have not been verified.
 
-1. Unzip `lumicast-0.5.5-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
+1. Unzip `lumicast-0.6.0-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
 2. On the machine running your Lumiverse **server**, copy that folder into `<DATA_DIR>/extensions/`. The server's default DATA_DIR is `./data`, relative to where Lumiverse runs. For Docker, copy into the volume mounted as the server's data directory. Do not copy it into another extension's folder.
 3. As the Lumiverse owner/admin, open **Extensions**, open its add menu, and choose **Import Local**. Enable LumiCast and grant `generation` and `cors_proxy`. If the tab does not appear, reload Lumiverse.
 4. Open **LumiCast** in the sidebar drawer or find it in the command palette. Expand **Connection & tag services**, choose a saved generative connection, and save.
@@ -80,7 +82,7 @@ Each translation makes **two generation calls** and a series of tag lookups, and
 3. **Dictionary.** Each candidate is looked up on Danbooru. Live general tags pass; nonexistent, deprecated, artist, copyright and character tags are dropped and named in a notice; active aliases resolve to the canonical tag. At most 40 tags are looked up, identity tags first. A lookup failure leaves that tag out and adds a notice.
 4. **Review and caption.** The second call sees the traits and the verified tags with the start of each wiki definition. It can remove tags (wrong meaning, exaggeration, metaphor) but cannot add any, and it writes the caption in three pieces: the character, the outfit, and the scene. The panel joins the pieces the chosen **Include** calls for. The character piece is instructed to mention no clothing, pose or setting; that is an instruction to the model, not a guarantee, so read it. If the answer is unusable, the verified tags are kept unreviewed and the caption is assembled from the first-pass clauses, with a notice. A piece that is missing, or cites a number the description never gave, is replaced the same way on its own.
 5. **Guards.** Two hair colours, hair lengths, eye colours, subject counts or breast sizes are removed together. A trait named in a genuine contradiction or ambiguity loses its tags and stays in the caption. A malformed uncertainty note is ignored, withholding tags only for a trait it can be traced to; a note about a missing attribute is discarded.
-6. **Assembly.** Tags are ordered subject, body, hair, face, outfit, moment. Canonical names use underscores in the editor; the assembled prompt uses lowercase tags with spaces, preserving `score_*` spelling if manually supplied. Tags and caption are separated by a blank line. No quality, safety, artist or lighting tags are added; add the prefix your Anima variant wants in the editable final prompt.
+6. **Assembly.** Tags are ordered subject, body, hair, face, outfit, moment. Canonical names use underscores in the editor; the assembled prompt uses lowercase tags with spaces, preserving `score_*` spelling if manually supplied. Tags and caption are separated by a blank line. LumiCast adds no quality, safety, artist or lighting tags of its own. Your saved **quality tags** (in 02 / Anima prompt) go first, exactly as typed and unverified, joined to the tag line, or on their own line when there are no tags.
 
 ### Lumi Studio character sheet
 

@@ -31,8 +31,9 @@ export interface Sheet { countTag: string; subject: string; always: string; appe
 /** Something that leaves the character under-specified. Advisory only: a gap never changes tags, captions or the sheet. */
 export interface Gap { kind: 'missing' | 'vague'; what: string; note: string }
 export interface Translation extends View { issues: Issue[]; model: string; views: Record<Scope, View>; sheet: Sheet; gaps: Gap[] }
-export interface Settings { connectionId: string; gelUser: string; gelKey: string; notes: string }
-export interface PublicSettings { connectionId: string; gelUser: string; hasGelKey: boolean; notes: string }
+/** quality: the user's own prefix (quality, score, year, safety tags) for the Anima prompt. Never verified or changed. */
+export interface Settings { connectionId: string; gelUser: string; gelKey: string; notes: string; quality: string }
+export interface PublicSettings { connectionId: string; gelUser: string; hasGelKey: boolean; notes: string; quality: string }
 export interface Snapshot {
   connections: { id: string; name: string; provider: string; model: string; supported: boolean }[];
   settings: PublicSettings; permissions: boolean;
@@ -125,6 +126,13 @@ export function editList(value: string, changes: {kind: string; tag?: string; we
     if (c.kind === 'add' && addHere && !items.some(i => key(i) === name)) items.push(written);
   }
   return items.join(', ');
+}
+/** Put the user's quality prefix in front of a prompt: on the tag line when there is one, otherwise as its own line. */
+export function withQuality(prompt: string, quality: string, hasTags: boolean): string {
+  const prefix = quality.trim().replace(/[,\s]+$/, '');
+  if (!prefix) return prompt;
+  if (!prompt.trim()) return prefix;
+  return hasTags ? `${prefix}, ${prompt}` : `${prefix}\n\n${prompt}`;
 }
 export const splitTags = (value: string): string[] => value.split(/[\n,]/).map(v => v.trim()).filter(Boolean);
 export function assemble(tags: (string | Weighted)[], prose: string): string {

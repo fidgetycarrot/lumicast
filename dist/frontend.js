@@ -42,6 +42,16 @@ function editList(value, changes, addHere = false) {
   }
   return items.join(", ");
 }
+function withQuality(prompt, quality, hasTags) {
+  const prefix = quality.trim().replace(/[,\s]+$/, "");
+  if (!prefix)
+    return prompt;
+  if (!prompt.trim())
+    return prefix;
+  return hasTags ? `${prefix}, ${prompt}` : `${prefix}
+
+${prompt}`;
+}
 var splitTags = (value) => value.split(/[\n,]/).map((v) => v.trim()).filter(Boolean);
 function assemble(tags, prose) {
   const unique = new Map;
@@ -153,10 +163,21 @@ function setup(ctx) {
     node.dataset.lc = name;
     return node;
   };
+  const remembered = (box, name) => {
+    try {
+      box.open = localStorage.getItem(`lumicast.open.${name}`) === "1";
+    } catch {}
+    box.addEventListener("toggle", () => {
+      try {
+        localStorage.setItem(`lumicast.open.${name}`, box.open ? "1" : "0");
+      } catch {}
+    });
+    return box;
+  };
   const intro = el("header");
-  const kicker = el("div", "DESCRIPTION → LUMI STUDIO");
+  const kicker = el("div", "DESCRIPTION → ANIMA");
   kicker.className = "lc-kicker";
-  intro.append(kicker, el("h1", "LumiCast"), el("p", "Turn a written character into a Lumi Studio character sheet built from real booru tags."));
+  intro.append(kicker, el("h1", "LumiCast"), el("p", "Turn a written character into an Anima prompt and a Lumi Studio character sheet, built from real booru tags."));
   const status = el("div");
   status.className = "lc-status";
   status.setAttribute("role", "status");
@@ -242,18 +263,22 @@ function setup(ctx) {
       notify("Clipboard is unavailable here. Select the text and use your usual Copy shortcut.");
     }
   };
-  const sheetCard = card("02 / Lumi Studio character sheet");
+  const sheetCard = remembered(el("details"), "sheet");
+  sheetCard.className = "lc-card";
+  sheetCard.append(el("summary", "04 / Lumi Studio character sheet"));
   sheetCard.append(el("p", "One field per box in Lumi Studio’s character editor. Comma-separated, no sentences."));
   const gapsBox = el("div");
   gapsBox.className = "lc-gaps";
-  gapsBox.hidden = true;
+  const gapsCard = el("section");
+  gapsCard.className = "lc-card";
+  gapsCard.hidden = true;
+  gapsCard.append(gapsBox);
   const statedAgain = el("input");
   statedAgain.maxLength = 300;
   statedAgain.autocomplete = "off";
   statedAgain.placeholder = "e.g. short hair, rose-pink gradient lips";
   statedAgain.setAttribute("aria-label", "Known facts");
   const again = button("Translate again", runTranslate);
-  sheetCard.append(gapsBox);
   const sheetField = (label, key, hint, long = false) => {
     const box = long ? el("textarea") : el("input");
     if (long)
@@ -283,7 +308,7 @@ function setup(ctx) {
   const provenance = el("div");
   const issues = el("div");
   const sourceQuotes = el("div");
-  const evidence = el("details");
+  const evidence = named(el("details"), "sources");
   evidence.className = "lc-sub";
   evidence.append(el("summary", "Where each tag came from"), provenance, issues, sourceQuotes);
   sheetCard.append(evidence);
@@ -291,12 +316,22 @@ function setup(ctx) {
   const feedback = named(el("textarea"), "feedback");
   feedback.rows = 3;
   feedback.maxLength = 2000;
-  feedback.placeholder = "Generate an image in Lumi Studio, then say what came out wrong: “reads too masculine”, “eyes came out blue”, “no visible seams”.";
+  feedback.placeholder = "Generate an image, then say what came out wrong: “reads too masculine”, “eyes came out blue”, “no visible seams”.";
   const reply = el("p");
   const proposed = el("div");
+  const inUse = () => {
+    const seen = new Set;
+    return [...splitTags(tags.value), ...sheetEntries()].filter((v) => {
+      const k = v.replace(/^\((.+?):[\d.]+\)$/, "$1").trim().toLowerCase().replace(/[\s_]+/g, " ");
+      if (seen.has(k))
+        return false;
+      seen.add(k);
+      return true;
+    });
+  };
   const sheetEntries = () => [sheet.countTag.box.value, ...splitTags(sheet.always.box.value), ...splitTags(sheet.appearance.box.value), ...splitTags(sheet.outfit.box.value), ...splitTags(sheet.anatomy.box.value)].map((v) => v.trim()).filter(Boolean);
   const suggest = button("Suggest changes", async () => {
-    const entries = sheetEntries();
+    const entries = inUse();
     if (!entries.length)
       throw new Error("Translate a character first.");
     if (!feedback.value.trim())
@@ -366,12 +401,12 @@ function setup(ctx) {
     tags.value = list.map((t) => formatWeighted(t)).join(", ");
     edited = true;
     if (verified || !tags.value.trim())
-      prompt.value = assemble(list, prose.value);
+      prompt.value = withQuality(assemble(list, prose.value), quality.value, list.length > 0);
     pending = [];
     proposed.replaceChildren();
     feedback.value = "";
     const standalone = tags.value !== before || prose.value !== captionBefore;
-    notify(standalone ? "Changes applied to the character sheet and to the standalone prompt. Paste the changed fields into Lumi Studio and generate again." : "Changes applied to the character sheet. None of them touched a tag or the caption in the standalone prompt. Paste the changed fields into Lumi Studio and generate again.");
+    notify(standalone ? "Changes applied to the Anima prompt and the character sheet. Copy the prompt and generate again." : "Changes applied to the character sheet. None of them touched a tag or the caption in the Anima prompt.");
   });
   const notes = named(el("textarea"), "notes");
   notes.rows = 4;
@@ -384,10 +419,19 @@ function setup(ctx) {
   const notesBox = el("details");
   notesBox.className = "lc-sub";
   notesBox.append(el("summary", "Your Anima notes"), field("What you have learned works", notes, "In your own words. Saved, and read on every translation and refinement. A weight is only ever applied when a note gives the number."), saveNotes);
-  refine.append(field("What did the image get wrong?", feedback, "LumiCast cannot see the image. It works from what you say here, your description, your notes and the sheet above."), row(suggest), reply, proposed, row(apply), notesBox);
-  const output = el("details");
-  output.className = "lc-card";
-  output.append(el("summary", "Standalone Anima prompt (without Lumi Studio)"));
+  refine.append(field("What did the image get wrong?", feedback, "LumiCast cannot see the image. It works from what you say here, your description, your notes, the Anima prompt and the character sheet."), row(suggest), reply, proposed, row(apply), notesBox);
+  const output = card("02 / Anima prompt");
+  const quality = named(el("input"), "quality");
+  quality.maxLength = 600;
+  quality.autocomplete = "off";
+  quality.placeholder = "e.g. masterpiece, best quality, score_9, newest, safe";
+  const saveQuality = button("Save", async () => {
+    await rpc.request("savePrefs", { quality: quality.value });
+    if (result && verified)
+      prompt.value = withQuality(assemble(splitTags(tags.value), prose.value), quality.value, !!tags.value.trim());
+    notify("Quality tags saved. They go in front of every Anima prompt.");
+  });
+  saveQuality.className = "lc-mini";
   const scope = el("select");
   scope.append(option("Character only — body, hair and face", "character"), option("Character and outfit", "outfit"), option("Everything — outfit, pose, expression and scene", "scene"));
   const tags = named(el("textarea"), "tags");
@@ -422,7 +466,7 @@ function setup(ctx) {
   const rebuild = button("Rebuild from tags + detail", () => {
     if (tags.value.trim() && !verified)
       throw new Error("Verify edited tags before rebuilding.");
-    prompt.value = assemble(splitTags(tags.value), prose.value);
+    prompt.value = withQuality(assemble(splitTags(tags.value), prose.value), quality.value, !!tags.value.trim());
     notify("Prompt rebuilt.");
   });
   const copy = button("Copy prompt", async () => {
@@ -437,7 +481,17 @@ function setup(ctx) {
       notify("Clipboard is unavailable here. The prompt is selected; use your usual Copy shortcut.");
     }
   }, true);
-  output.append(el("p", "Tags followed by a caption in sentences, for pasting straight into an image tool. Lumi Studio does not use this."), field("Include", scope, "What this prompt covers. Switching needs no new translation."), field("Booru tags — comma separated", tags, "Underscores here; the prompt uses spaces. Add emphasis as (tag:1.4)."), tagState, row(verify, copyTags), field("Caption", prose, "Edit freely; nothing the text leaves out is filled in."), copyProse, field("Assembled prompt", prompt, "Rebuild applies edits above and replaces this field. Copy copies exactly what is shown."), row(rebuild, copy), el("p", "No quality, score, safety or artist tags are added; add your own."));
+  const qualityHead = el("div");
+  qualityHead.className = "lc-head";
+  qualityHead.append(el("span", "Your quality tags"), saveQuality);
+  const qualityField = el("div");
+  qualityField.className = "lc-field";
+  quality.setAttribute("aria-label", "Your quality tags");
+  qualityField.append(qualityHead, quality, el("small", "Saved, and put in front of every prompt exactly as typed. Not checked against the boorus."));
+  const editBox = remembered(el("details"), "edit");
+  editBox.className = "lc-sub";
+  editBox.append(el("summary", "Edit tags and caption"), field("Booru tags — comma separated", tags, "Underscores here; the prompt uses spaces. Add emphasis as (tag:1.4)."), tagState, row(verify, copyTags), field("Caption", prose, "Edit freely; nothing the text leaves out is filled in."), copyProse);
+  output.append(el("p", "Your quality tags, then booru tags, then a short caption: ready to paste into SwarmUI or any Anima setup."), qualityField, field("Include", scope, "What this prompt covers. Switching needs no new translation."), field("Prompt", prompt, "Rebuild applies edits from below and replaces this field. Copy copies exactly what is shown."), row(copy, rebuild), editBox);
   const searchCard = el("details");
   searchCard.className = "lc-card";
   searchCard.append(el("summary", "Find a real tag"));
@@ -461,21 +515,21 @@ function setup(ctx) {
     notify("Search complete. Popularity is not an Anima quality score.");
   });
   searchCard.append(field("Tag name or the start of one", query, "Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched."), search, found);
-  app.append(intro, settings, status, input, sheetCard, refine, output, searchCard, el("p", "LumiCast 0.5.5 · Draft stays in this tab until reload."));
-  const controls = [translate, again, save, refreshButton, testGel, saveNotes, verify, rebuild, copy, copyTags, copyProse, suggest, apply, search, ...Object.values(sheet).map((f) => f.copyField)];
+  app.append(intro, settings, status, input, gapsCard, output, refine, sheetCard, searchCard, el("p", "LumiCast 0.6.0 · Draft stays in this tab until reload."));
+  const controls = [translate, again, save, refreshButton, testGel, saveNotes, saveQuality, verify, rebuild, copy, copyTags, copyProse, suggest, apply, search, ...Object.values(sheet).map((f) => f.copyField)];
   function showSheet() {
     if (!result)
       return;
     for (const key of Object.keys(sheet))
       sheet[key].box.value = result.sheet[key];
     gapsBox.replaceChildren();
-    gapsBox.hidden = !result.gaps.length;
+    gapsCard.hidden = !result.gaps.length;
     if (result.gaps.length) {
       gapsBox.append(el("strong", "Worth pinning down"));
       const list = el("ul");
       result.gaps.forEach((g) => list.append(el("li", `${g.kind === "missing" ? "Not stated" : "Vague"}: ${g.what}. ${g.note}`)));
       statedAgain.value = stated.value;
-      gapsBox.append(list, el("small", "LumiCast does not fill these in. Add what you know here, or edit the fields below."), row(statedAgain, again));
+      gapsBox.append(list, el("small", "LumiCast does not fill these in. Add what you know here and translate again."), row(statedAgain, again));
     }
     const view = result.views.outfit;
     provenance.replaceChildren();
@@ -503,7 +557,7 @@ function setup(ctx) {
     const view = result.views[scope.value];
     tags.value = view.tags.map((t) => formatWeighted(t)).join(", ");
     prose.value = view.prose;
-    prompt.value = view.prompt;
+    prompt.value = withQuality(view.prompt, quality.value, view.tags.length > 0);
     verified = true;
     edited = false;
     tagState.textContent = view.tags.length ? `${view.tags.length} tags, each a live booru tag. ${result.model}.` : `No verified tags to show here. ${result.model}.`;
@@ -518,7 +572,7 @@ function setup(ctx) {
     cancel.hidden = !busy;
     for (const node of [connection, gelUser, gelKey, clearKey])
       node.disabled = busy;
-    for (const node of [source, stated, statedAgain, feedback, notes, tags, prose, prompt, ...Object.values(sheet).map((f) => f.box)])
+    for (const node of [source, stated, statedAgain, feedback, notes, quality, tags, prose, prompt, ...Object.values(sheet).map((f) => f.box)])
       node.readOnly = busy;
   }
   function notify(message, error = false) {
@@ -573,6 +627,7 @@ function setup(ctx) {
     connection.value = selected;
     gelUser.value = snapshot.settings.gelUser;
     notes.value = snapshot.settings.notes;
+    quality.value = snapshot.settings.quality;
     credentialNotice.textContent = snapshot.settings.hasGelKey ? "Gelbooru key saved." : "Danbooru works without credentials. Gelbooru requires its account API key.";
     if (!connection.value)
       settings.open = true;

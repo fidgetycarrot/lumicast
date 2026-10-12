@@ -4,7 +4,7 @@ import { Translator } from './engine';
 import { gelCredentials, isGenerative, record, text, type Settings, type Snapshot } from './contracts';
 import { generationError, ModelRequestError } from './generation-errors';
 
-const DEFAULTS: Settings = {connectionId:'',gelUser:'',gelKey:'',notes:''};
+const DEFAULTS: Settings = {connectionId:'',gelUser:'',gelKey:'',notes:'',quality:''};
 export function setupBackend(api: SpindleAPI) {
   const users = new Map<string, { settings?:Settings; dictionary?:BooruDictionary; load?:Promise<void>; jobs:Map<string,AbortController> }>();
   let closed = false;
@@ -22,33 +22,35 @@ export function setupBackend(api: SpindleAPI) {
       if (!api.permissions.has('generation') || !api.permissions.has('cors_proxy')) throw new Error('Grant LumiCast generation and CORS proxy permissions in Extensions.');
       s.load ??= api.userStorage.getJson<Settings>('settings.json',{fallback:{...DEFAULTS},userId}).then(saved => {
         const v=record(saved);
-        s.settings={connectionId:text(v.connectionId ?? '', 'connection',100),gelUser:text(v.gelUser ?? '', 'Gelbooru user',50),gelKey:text(v.gelKey ?? '', 'Gelbooru key',200),notes:text(v.notes ?? '', 'notes',2000)};
+        s.settings={connectionId:text(v.connectionId ?? '', 'connection',100),gelUser:text(v.gelUser ?? '', 'Gelbooru user',50),gelKey:text(v.gelKey ?? '', 'Gelbooru key',200),notes:text(v.notes ?? '', 'notes',2000),quality:text(v.quality ?? '', 'quality tags',600)};
       }).catch(() => {s.settings={...DEFAULTS};});
       await s.load;
       const settings=s.settings!;
       const dictionary=() => s.dictionary ??= new BooruDictionary(async url=> {
-        const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.5.5 (tag metadata client)'}}));
+        const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.6.0 (tag metadata client)'}}));
         if(typeof response.status!=='number'||typeof response.body!=='string')throw new Error('Invalid proxy response.');
         return {status:response.status,body:response.body};
       },{user:settings.gelUser,key:settings.gelKey});
       if (r.action === 'snapshot') {
         const connections=(await api.connections.list(userId)).map(c=>({id:c.id,name:c.name,provider:c.provider,model:c.model,supported:isGenerative(c.model)}));
-        return {connections,settings:{connectionId:settings.connectionId,gelUser:settings.gelUser,hasGelKey:!!settings.gelKey,notes:settings.notes},permissions:true} satisfies Snapshot;
+        return {connections,settings:{connectionId:settings.connectionId,gelUser:settings.gelUser,hasGelKey:!!settings.gelKey,notes:settings.notes,quality:settings.quality},permissions:true} satisfies Snapshot;
       }
       if (r.action === 'save') {
         if (s.jobs.size) throw new Error('Wait for the current operation before changing settings.');
         const v=record(r.input);
         const entered=gelCredentials(text(v.gelUser,'Gelbooru user',300),v.gelKey ? text(v.gelKey,'Gelbooru key',300) : '');
-        const next:Settings={connectionId:text(v.connectionId,'connection',100),gelUser:entered.user,gelKey:v.clearGelKey===true ? '' : entered.key || settings.gelKey,notes:v.notes===undefined ? settings.notes : text(v.notes,'notes (maximum 2,000 characters)',2000)};
+        const next:Settings={connectionId:text(v.connectionId,'connection',100),gelUser:entered.user,gelKey:v.clearGelKey===true ? '' : entered.key || settings.gelKey,notes:v.notes===undefined ? settings.notes : text(v.notes,'notes (maximum 2,000 characters)',2000),quality:settings.quality};
         if (next.gelUser && !/^\d+$/.test(next.gelUser)) throw new Error('Gelbooru user ID must be numeric.');
         if (next.connectionId && !await api.connections.get(next.connectionId,userId)) throw new Error('This connection is unavailable.');
         await api.userStorage.setJson('settings.json',next,{userId});
         s.settings=next;s.dictionary=undefined;
         return true;
       }
-      if (r.action === 'saveNotes') {
+      // Notes and quality tags save on their own, leaving the connection and Gelbooru settings untouched.
+      if (r.action === 'saveNotes' || r.action === 'savePrefs') {
         if (s.jobs.size) throw new Error('Wait for the current operation before changing settings.');
-        const next:Settings={...settings,notes:text(record(r.input).notes ?? '','notes (maximum 2,000 characters)',2000)};
+        const v=record(r.input);
+        const next:Settings={...settings,notes:v.notes===undefined?settings.notes:text(v.notes,'notes (maximum 2,000 characters)',2000),quality:v.quality===undefined?settings.quality:text(v.quality,'quality tags (maximum 600 characters)',600)};
         await api.userStorage.setJson('settings.json',next,{userId});
         s.settings=next;
         return true;
@@ -59,7 +61,7 @@ export function setupBackend(api: SpindleAPI) {
         const entered=gelCredentials(text(v.gelUser ?? '','Gelbooru user',300),v.gelKey ? text(v.gelKey,'Gelbooru key',300) : '');
         const credentials={user:entered.user||settings.gelUser,key:entered.key||settings.gelKey};
         const outcome=await testGelbooru(async url=> {
-          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.5.5 (tag metadata client)'}}));
+          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.6.0 (tag metadata client)'}}));
           return {status:Number(response.status),body:typeof response.body==='string'?response.body:''};
         },credentials);
         const unsaved=credentials.user!==settings.gelUser||credentials.key!==settings.gelKey;

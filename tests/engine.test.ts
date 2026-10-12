@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test';
 import { Translator, parseExtraction, removeConflicts } from '../src/engine';
-import { assemble, cupSize, editList, heightCm, formatWeighted, inScope, isGenerative, parseWeighted, type TagDictionary, type TagRow, type TranslateOptions } from '../src/contracts';
+import { assemble, cupSize, editList, heightCm, withQuality, formatWeighted, inScope, isGenerative, parseWeighted, type TagDictionary, type TagRow, type TranslateOptions } from '../src/contracts';
 import { cases, narratedFiller } from './fixtures';
 const dictionary:TagDictionary={resolve:async name=>({name,source:'Danbooru',count:10,wiki:`Definition of ${name}`,url:'https://danbooru.donmai.us/wiki_pages/'+name}),search:async()=>[]};
 const signal=()=>new AbortController().signal;
@@ -308,4 +308,9 @@ test('explicit anatomy goes to its own sheet field and never into the saved look
   expect(result.sheet.anatomy).toBe('large penis, uncut');expect(result.sheet.appearance).not.toContain('penis');
   expect(result.prompt).not.toContain('penis');expect(result.views.outfit.prompt).not.toContain('penis');expect(result.views.scene.prompt).toContain('large penis');
   expect(result.gaps).toEqual([]);
+});
+test('quality prefix joins the tag line, or stands alone when there are no tags',()=> {
+  expect(withQuality('red hair\n\nShort red hair.','masterpiece, score_9, ',true)).toBe('masterpiece, score_9, red hair\n\nShort red hair.');
+  expect(withQuality('Short red hair.','masterpiece',false)).toBe('masterpiece\n\nShort red hair.');
+  expect(withQuality('red hair','  ',true)).toBe('red hair');expect(withQuality('','masterpiece',false)).toBe('masterpiece');
 });

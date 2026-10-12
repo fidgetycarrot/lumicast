@@ -97,9 +97,9 @@ test('panel prompt omits narration and scene while the source passages stay visi
   const areas=areasOf(h.root);areas[0].value='Red hair, obviously! And a red hair ribbon.';translate.click();await until(()=>!translate.disabled);
   expect(areas[1].value).toBe('red_hair');expect(areas[2].value).toBe('Red hair.');expect(areas[5].value).toBe('red hair\n\nRed hair.');
   // The sources list covers what the sheet holds: the character and the outfit, whatever Include says.
-  expect(h.root.querySelector('details.lc-sub')?.textContent).toContain('Red hair, obviously!');expect(h.root.querySelector('details.lc-sub')?.textContent).toContain('ribbon');expect(areas[5].value).not.toContain('ribbon');
+  expect(h.root.querySelector('[data-lc="sources"]')?.textContent).toContain('Red hair, obviously!');expect(h.root.querySelector('[data-lc="sources"]')?.textContent).toContain('ribbon');expect(areas[5].value).not.toContain('ribbon');
   const scope=h.root.querySelectorAll('select')[1];expect(scope.value).toBe('character');areas[2].value='my edit';areas[2].dispatchEvent(new Event('input'));scope.value='outfit';scope.dispatchEvent(new Event('change'));
-  expect(areas[2].value).toBe('Red hair. She wears a ribbon.');expect(h.calls.filter(v=>(v as unknown[])[0]==='generation').length).toBe(2);expect(h.root.textContent).toContain('manual edits there were replaced');expect(h.root.querySelector('details:not(.lc-card)')?.textContent).toContain('ribbon');
+  expect(areas[2].value).toBe('Red hair. She wears a ribbon.');expect(h.calls.filter(v=>(v as unknown[])[0]==='generation').length).toBe(2);expect(h.root.textContent).toContain('manual edits there were replaced');expect(h.root.querySelector('[data-lc="sources"]')?.textContent).toContain('ribbon');
 });
 test('direct DeepSeek adapter tolerates string evidence without discarding the panel result',async()=> {
   dom();const h=harness('deepseek','deepseek-v4-pro');cleanups.push(h.stop);const dispose=setup(h.ctx);cleanups.push(dispose);
@@ -178,7 +178,7 @@ test('a gap is answered where it is shown: the inline box mirrors Known facts an
   const sent=h.calls.filter(v=>(v as unknown[])[0]==='generation').map(v=>((v as unknown[])[1] as {messages:{content:string}[]}).messages[1].content);
   expect(JSON.parse(sent[2]).stated).toBe('woman, green eyes');
   expect(h.root.querySelector('.lc-status')!.textContent).toContain('Translated again. Pinned down: man, woman or other, eye colour.');
-  expect(h.root.querySelector('.lc-gaps')!.hasAttribute('hidden')).toBe(true);expect(named(h.root,'countTag').value).toBe('1girl');expect(named(h.root,'appearance').value).toBe('red hair, short hair, green eyes');
+  expect(h.root.querySelector('.lc-gaps')!.parentElement!.hasAttribute('hidden')).toBe(true);expect(named(h.root,'countTag').value).toBe('1girl');expect(named(h.root,'appearance').value).toBe('red hair, short hair, green eyes');
   // Refine works from the sheet, and a count change goes to the Count tag box only.
   named(h.root,'feedback').value='Came out as a woman.';b('Suggest changes').click();await until(()=>!b('Translate').disabled);
   const lastInput=JSON.parse(((h.calls.filter(v=>(v as unknown[])[0]==='generation').pop() as unknown[])[1] as {messages:{content:string}[]}).messages[1].content);
@@ -187,5 +187,17 @@ test('a gap is answered where it is shown: the inline box mirrors Known facts an
   expect(named(h.root,'countTag').value).toBe('1boy');expect(named(h.root,'appearance').value).toBe('red hair, short hair, green eyes, freckles');
   // The standalone prompt follows the same changes, the count included.
   expect(named(h.root,'tags').value).toBe('1boy, red_hair, short_hair, green_eyes, freckles');expect(named(h.root,'prompt').value).toBe('1boy, red hair, short hair, green eyes, freckles\n\nA woman. Short red hair. Green eyes.');
-  expect(h.root.textContent).toContain('applied to the character sheet and to the standalone prompt');
+  expect(h.root.textContent).toContain('Changes applied to the Anima prompt and the character sheet.');
+});
+test('saved quality tags lead every Anima prompt and save without touching other settings',async()=> {
+  dom();const h=harness();cleanups.push(h.stop);const dispose=setup(h.ctx);cleanups.push(dispose);
+  const b=(name:string)=>Array.from(h.root.querySelectorAll('button')).find(x=>x.textContent===name)!;
+  await until(()=>!b('Translate').disabled);h.root.querySelector('select')!.value='c1';
+  b('Save settings').click();await until(()=>!b('Translate').disabled);
+  const quality=named(h.root,'quality');quality.value='masterpiece, best quality, score_9,';b('Save').click();await until(()=>!b('Translate').disabled);
+  expect(h.storage.get('u1:settings.json')).toMatchObject({connectionId:'c1',quality:'masterpiece, best quality, score_9,'});
+  named(h.root,'source').value='Short red hair.';b('Translate').click();await until(()=>!b('Translate').disabled);
+  expect(named(h.root,'prompt').value).toBe('masterpiece, best quality, score_9, red hair\n\nShort red hair.');
+  named(h.root,'tags').value='';named(h.root,'tags').dispatchEvent(new Event('input'));b('Rebuild from tags + detail').click();await until(()=>!b('Translate').disabled);
+  expect(named(h.root,'prompt').value).toBe('masterpiece, best quality, score_9\n\nShort red hair.');
 });
