@@ -683,7 +683,15 @@ class Translator {
       throw new Error("Invalid feedback: say what the image got wrong first.");
     if (!Array.isArray(input.tags) || input.tags.length > 60)
       throw new Error("Invalid tags: use at most 60.");
-    const current = input.tags.map(parseWeighted);
+    const current = input.tags.flatMap((v) => {
+      try {
+        return [parseWeighted(v)];
+      } catch (error) {
+        if (typeof v === "string" && v.trim().startsWith("("))
+          throw error;
+        return [];
+      }
+    });
     const names = new Set(current.map((t) => t.name));
     const caption = text(input.caption, "caption", 16000);
     const context = { description: text(input.description ?? "", "description", 12000), stated: text(input.stated ?? "", "character type", 300), notes: text(input.notes ?? "", "notes", 2000) };
@@ -810,7 +818,7 @@ function setupBackend(api) {
       await s.load;
       const settings = s.settings;
       const dictionary = () => s.dictionary ??= new BooruDictionary(async (url) => {
-        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.4.4 (tag metadata client)" } }));
+        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.5.0 (tag metadata client)" } }));
         if (typeof response.status !== "number" || typeof response.body !== "string")
           throw new Error("Invalid proxy response.");
         return { status: response.status, body: response.body };
@@ -834,12 +842,20 @@ function setupBackend(api) {
         s.dictionary = undefined;
         return true;
       }
+      if (r.action === "saveNotes") {
+        if (s.jobs.size)
+          throw new Error("Wait for the current operation before changing settings.");
+        const next = { ...settings, notes: text(record(r.input).notes ?? "", "notes (maximum 2,000 characters)", 2000) };
+        await api.userStorage.setJson("settings.json", next, { userId });
+        s.settings = next;
+        return true;
+      }
       if (r.action === "testGelbooru") {
         const v = record(r.input);
         const entered = gelCredentials(text(v.gelUser ?? "", "Gelbooru user", 300), v.gelKey ? text(v.gelKey, "Gelbooru key", 300) : "");
         const credentials = { user: entered.user || settings.gelUser, key: entered.key || settings.gelKey };
         const outcome = await testGelbooru(async (url) => {
-          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.4.4 (tag metadata client)" } }));
+          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.5.0 (tag metadata client)" } }));
           return { status: Number(response.status), body: typeof response.body === "string" ? response.body : "" };
         }, credentials);
         const unsaved = credentials.user !== settings.gelUser || credentials.key !== settings.gelKey;

@@ -27,7 +27,7 @@ export function setupBackend(api: SpindleAPI) {
       await s.load;
       const settings=s.settings!;
       const dictionary=() => s.dictionary ??= new BooruDictionary(async url=> {
-        const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.4.4 (tag metadata client)'}}));
+        const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.5.0 (tag metadata client)'}}));
         if(typeof response.status!=='number'||typeof response.body!=='string')throw new Error('Invalid proxy response.');
         return {status:response.status,body:response.body};
       },{user:settings.gelUser,key:settings.gelKey});
@@ -46,13 +46,20 @@ export function setupBackend(api: SpindleAPI) {
         s.settings=next;s.dictionary=undefined;
         return true;
       }
+      if (r.action === 'saveNotes') {
+        if (s.jobs.size) throw new Error('Wait for the current operation before changing settings.');
+        const next:Settings={...settings,notes:text(record(r.input).notes ?? '','notes (maximum 2,000 characters)',2000)};
+        await api.userStorage.setJson('settings.json',next,{userId});
+        s.settings=next;
+        return true;
+      }
       if (r.action === 'testGelbooru') {
         // Tests what is typed in the boxes, falling back to the saved key, without saving or caching anything.
         const v=record(r.input);
         const entered=gelCredentials(text(v.gelUser ?? '','Gelbooru user',300),v.gelKey ? text(v.gelKey,'Gelbooru key',300) : '');
         const credentials={user:entered.user||settings.gelUser,key:entered.key||settings.gelKey};
         const outcome=await testGelbooru(async url=> {
-          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.4.4 (tag metadata client)'}}));
+          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.5.0 (tag metadata client)'}}));
           return {status:Number(response.status),body:typeof response.body==='string'?response.body:''};
         },credentials);
         const unsaved=credentials.user!==settings.gelUser||credentials.key!==settings.gelKey;

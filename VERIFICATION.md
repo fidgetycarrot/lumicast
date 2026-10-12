@@ -126,3 +126,9 @@ Adds `testGelbooru` and a settings button for it, because the cause of the user'
 
 Typecheck, 68 tests (509 assertions) and the build passed. The tests assert that no message contains the key, the user ID or the reply body. Gelbooru's live reply to an authenticated request has still not been seen from the build environment, so the 200-with-JSON branch follows its documented shape, not an observed one.
 
+## v0.5.0: panel reorganised
+
+The panel had grown one feature at a time. It is now three numbered steps (Describe, Lumi Studio character sheet, Refine) with the standalone prompt, its Include menu, and the tag lookup collapsed below. Gaps carry an inline box that mirrors Known facts and a Translate again button. Notes moved into Refine and save through a notes-only action that leaves the connection and Gelbooru settings untouched. Refine now sends the sheet entries (free phrases that are not tag-shaped are left out of the request) and routes count-tag changes to the Count tag field.
+
+Typecheck, 69 tests (522 assertions) and the build passed. The built panel was also rendered in headless Chromium at 520 px wide with a fixture translation and a fixture refinement, with no page errors; the sticky status line was checked there. That preview used canned backend replies, not Lumiverse.
+

@@ -1,4 +1,6 @@
-# LumiCast 0.4.4
+# LumiCast 0.5.0
+
+**v0.5.0 reorganises the panel around Lumi Studio.** Three numbered steps: **01 Describe**, **02 Lumi Studio character sheet** and **03 Refine**. Gaps are answered inside the sheet card with a **Translate again** button. Your Anima notes moved from the connection settings into Refine. The tag-and-caption prompt, with its **Include** menu, is now the collapsed **Standalone Anima prompt** section, since Lumi Studio does not use it. Refine now reads and edits the sheet, and a count-tag change goes to the Count tag box. Each sheet field has its copy button on its label line, and status messages stay in view while you scroll.
 
 **v0.4.4 adds Test Gelbooru.** A button under the Gelbooru fields makes one lookup and says what happened: accepted, rejected, refused before the key was checked, or never reached. It tests what is typed in the boxes, so you can try credentials before saving them. Gelbooru's combined `&api_key=…&user_id=…` line can now be pasted whole into the key box.
 
@@ -31,7 +33,7 @@ Requires **Lumiverse 1.2.5 or later**.
 1. Open **Extensions** in Lumiverse and choose **Install from URL** in the add menu.
 2. Enter `https://github.com/fidgetycarrot/lumicast`.
 3. Grant `generation` and `cors_proxy`, then enable LumiCast.
-4. Open **LumiCast** in the sidebar or command palette. Choose a saved generative connection under **Connection & tag services**, save, paste an appearance, optionally fill in **Known facts**, choose what to **Include**, and select **Translate**.
+4. Open **LumiCast** in the sidebar or command palette. Choose a saved generative connection under **Connection & tag services**, save, paste an appearance, optionally fill in **Known facts**, and select **Translate**.
 
 Prebuilt `dist/` files are committed for Lumiverse installation. If the tab does not appear after installation, reload Lumiverse or toggle the extension once.
 
@@ -39,11 +41,11 @@ Prebuilt `dist/` files are committed for Lumiverse installation. If the tab does
 
 Requires **Lumiverse 1.2.5 or later**. Compatibility was checked against the current 1.2.5 source and SDK 0.6.40; older versions have not been verified.
 
-1. Unzip `lumicast-0.4.4-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
+1. Unzip `lumicast-0.5.0-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
 2. On the machine running your Lumiverse **server**, copy that folder into `<DATA_DIR>/extensions/`. The server's default DATA_DIR is `./data`, relative to where Lumiverse runs. For Docker, copy into the volume mounted as the server's data directory. Do not copy it into another extension's folder.
 3. As the Lumiverse owner/admin, open **Extensions**, open its add menu, and choose **Import Local**. Enable LumiCast and grant `generation` and `cors_proxy`. If the tab does not appear, reload Lumiverse.
 4. Open **LumiCast** in the sidebar drawer or find it in the command palette. Expand **Connection & tag services**, choose a saved generative connection, and save.
-5. Paste an appearance and select **Translate**. Review the tags and caption. Source passages appear under **Tag sources & uncertainty**. Edit as needed, rebuild, and copy the prompt.
+5. Paste an appearance and select **Translate**. Copy the character sheet fields into Lumi Studio. Source passages appear under **Where each tag came from**. Edit as needed, rebuild, and copy the prompt.
 
 The install ZIP contains prebuilt self-contained bundles and no package manager dependencies. Installation does not need a build step. Lumiverse supports the local layout above and normalizes it into its managed `lumicast/repo` directory. Keep the separate `lumicast/storage` directory intact when updating.
 
@@ -78,7 +80,7 @@ Each translation makes **two generation calls** and a series of tag lookups, and
 
 ### Lumi Studio character sheet
 
-Card **03** lays the result out for Lumi Studio 1.8.1's character editor. It is the same for every **Include** choice.
+Card **02** lays the result out for Lumi Studio 1.8.1's character editor. **Include** only affects the standalone prompt.
 
 | Field | Filled with |
 |---|---|
@@ -103,13 +105,13 @@ Nothing on this list changes the tags, the captions or the sheet, and nothing is
 
 ### Refining from a generated image
 
-LumiCast never sees an image. Under **04 / Refine**, say what the image got wrong ("reads too masculine", "eyes came out blue", "no visible seams") and choose **Suggest changes**. One generation call returns a short explanation and a list of proposals: tags to remove, tags to weight, tags to add, and a reworded detail. Tags to remove or weight must already be in your tags box. Tags to add are looked up on Danbooru first; ones that do not exist are dropped and named in a notice, and each survivor is shown with the start of its wiki definition. Nothing changes until you tick what you want and choose **Apply selected**, which updates the tags and detail and rebuilds the prompt if the tags were verified.
+LumiCast never sees an image. Under **03 / Refine**, say what the image got wrong ("reads too masculine", "eyes came out blue", "no visible seams") and choose **Suggest changes**. One generation call returns a short explanation and a list of proposals: tags to remove, tags to weight, tags to add, and a reworded detail. Tags to remove or weight must already be in your tags box. Tags to add are looked up on Danbooru first; ones that do not exist are dropped and named in a notice, and each survivor is shown with the start of its wiki definition. Refine reads the character sheet. Nothing changes until you tick what you want and choose **Apply selected**, which edits the sheet fields (a count-tag change goes to Count tag, a new tag to Permanent appearance tags) and applies the same tag changes to the standalone prompt.
 
 The model is given Anima's published prompting guidance, the current tags and detail, your feedback, the description and Character type from the panel, and your notes. Its suggestions are reasoning from your words, not from the picture, so judge them against what you saw.
 
 ### Notes
 
-**Your Anima notes**, under Connection & tag services, holds up to 2,000 characters of your own findings: which tags to prefer or add for a kind of character, or a weight that works. Notes are saved with your settings and read on every translation and refinement. A note can cause a tag to be added that the description does not mention; that tag cites the note as its source.
+**Your Anima notes**, a collapsed section inside **03 / Refine**, holds up to 2,000 characters of your own findings: which tags to prefer or add for a kind of character, or a weight that works. Notes are saved with your settings and read on every translation and refinement. A note can cause a tag to be added that the description does not mention; that tag cites the note as its source.
 
 ### Weights
 

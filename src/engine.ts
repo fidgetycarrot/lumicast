@@ -297,7 +297,9 @@ export class Translator {
     const feedback = text(input.feedback, 'feedback (maximum 2,000 characters)', 2000);
     if (!feedback) throw new Error('Invalid feedback: say what the image got wrong first.');
     if (!Array.isArray(input.tags) || input.tags.length > 60) throw new Error('Invalid tags: use at most 60.');
-    const current = input.tags.map(parseWeighted); const names = new Set(current.map(t => t.name));
+    // Sheet entries include free phrases. One that is not tag-shaped is left out of the request; a bad weight is still an error.
+    const current = input.tags.flatMap(v => { try { return [parseWeighted(v)]; } catch (error) { if (typeof v === 'string' && v.trim().startsWith('(')) throw error; return []; } });
+    const names = new Set(current.map(t => t.name));
     const caption = text(input.caption, 'caption', 16_000);
     const context = {description: text(input.description ?? '', 'description', 12_000), stated: text(input.stated ?? '', 'character type', 300), notes: text(input.notes ?? '', 'notes', 2000)};
     signal.throwIfAborted();
