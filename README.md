@@ -1,4 +1,6 @@
-# LumiCast 0.5.0
+# LumiCast 0.5.1
+
+**v0.5.1 keeps unverified guesses as words.** A tag the model proposed that neither booru has (`silver_hair`, `violet_eyes`) no longer disappears: the character sheet keeps it as plain words, which Anima can read, unless a tag or a longer phrase already says it. Tags themselves are still only ever verified ones.
 
 **v0.5.0 reorganises the panel around Lumi Studio.** Three numbered steps: **01 Describe**, **02 Lumi Studio character sheet** and **03 Refine**. Gaps are answered inside the sheet card with a **Translate again** button. Your Anima notes moved from the connection settings into Refine. The tag-and-caption prompt, with its **Include** menu, is now the collapsed **Standalone Anima prompt** section, since Lumi Studio does not use it. Refine now reads and edits the sheet, and a count-tag change goes to the Count tag box. Each sheet field has its copy button on its label line, and status messages stay in view while you scroll.
 
@@ -41,7 +43,7 @@ Prebuilt `dist/` files are committed for Lumiverse installation. If the tab does
 
 Requires **Lumiverse 1.2.5 or later**. Compatibility was checked against the current 1.2.5 source and SDK 0.6.40; older versions have not been verified.
 
-1. Unzip `lumicast-0.5.0-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
+1. Unzip `lumicast-0.5.1-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
 2. On the machine running your Lumiverse **server**, copy that folder into `<DATA_DIR>/extensions/`. The server's default DATA_DIR is `./data`, relative to where Lumiverse runs. For Docker, copy into the volume mounted as the server's data directory. Do not copy it into another extension's folder.
 3. As the Lumiverse owner/admin, open **Extensions**, open its add menu, and choose **Import Local**. Enable LumiCast and grant `generation` and `cors_proxy`. If the tab does not appear, reload Lumiverse.
 4. Open **LumiCast** in the sidebar drawer or find it in the command palette. Expand **Connection & tag services**, choose a saved generative connection, and save.
@@ -87,7 +89,7 @@ Card **02** lays the result out for Lumi Studio 1.8.1's character editor. **Incl
 | Count tag | `1girl`, `1boy` or `1other`. |
 | Stable subject phrase | Two to five words for who this is, such as `adult male android`. |
 | Always include | The type tags, such as `android, trap`. |
-| Permanent appearance tags | Verified body, hair and face tags, then up to six short phrases for what no tag says (`choppy silver-white hair`). |
+| Permanent appearance tags | Verified body, hair and face tags, then plain words for any guess that is not a booru tag, then short phrases for what no tag says (`choppy silver-white hair`), at most eight extras. |
 | Default outfit tags | Verified clothing tags, then short clothing phrases. Skip it for a character whose clothes follow the story. |
 
 Tags are written with spaces and keep any weight. Phrases come from the review call, which is told to skip anything a kept tag already covers; they are lower-cased, split at any comma, stripped of a leading pronoun, and dropped if they repeat a tag, restate one with a single extra word (`pale porcelain skin` beside `pale skin`), or cite a number the description never gave. Pose, expression, setting and `solo` never appear here. Refine applies its tag changes to these fields as well; a newly added tag lands in Permanent appearance tags.

@@ -130,7 +130,7 @@ test('dictionary outage leaves the caption and no unverified tags',async()=> {
 test('nonexistent tags are named in a notice; aliases collapse to one canonical tag',async()=> {
   const dict={...dictionary,resolve:async(name:string)=>name==='made_up_tag'?null:dictionary.resolve(name==='gray_hair'?'grey_hair':name,signal())};
   const {result}=await run('grey hair',{traits:[{id:'1',group:'hair',evidence:'grey hair',tags:['gray_hair','grey_hair','made_up_tag'],detail:'Grey hair'}]},{},undefined,dict);
-  expect(result.tags.map(t=>t.name)).toEqual(['grey_hair']);expect(result.notices.join(' ')).toContain('“made_up_tag” is not a live Danbooru tag');
+  expect(result.tags.map(t=>t.name)).toEqual(['grey_hair']);expect(result.notices.join(' ')).toContain('“made_up_tag” is not a live booru tag');
 });
 test('candidate tags are capped and wiki text is trimmed before review',async()=> {
   const words=Array.from({length:12},(_,i)=>`w${i}`);const source=words.join(' ');
@@ -198,7 +198,7 @@ test('refine proposes only grounded changes: known tags to remove or weight, ver
   expect(result.reply).toBe('The type tag is being outweighed.');
   expect(result.proposals.map(p=>[p.kind,p.tag,p.weight])).toEqual([['remove','blue_eyes',undefined],['weight','trap',1.8],['add','purple_eyes',1.3],['add','androgynous',undefined],['caption',undefined,undefined]]);
   expect(result.proposals[2].definition).toBe('Eyes that are coloured purple.');expect(result.proposals[4].caption).toBe('A slender, feminine young man with purple eyes.');
-  expect(result.notices.join(' ')).toContain('“very_feminine_boy” is not a live Danbooru tag');
+  expect(result.notices.join(' ')).toContain('“very_feminine_boy” is not a live booru tag');
 });
 test('refine handles vague feedback, empty input and bad output without inventing changes',async()=> {
   const vague=await refineWith({reply:'Which part looked wrong: the face, the body or the clothing?',remove:[],add:[],weight:[],caption:null});
@@ -254,4 +254,22 @@ test('gaps: missing anchors come from plain checks, vague traits from review, an
 test('1other is flagged for a second look, never silently changed',async()=> {
   const {result}=await run('The android has silver hair cut short and amber eyes.',{traits:[{id:'s',group:'subject',evidence:'The android',tags:['1other','android'],detail:'An android'},{id:'h',group:'hair',evidence:'silver hair cut short',tags:['silver_hair','short_hair'],detail:'Short silver hair'},{id:'e',group:'face',evidence:'amber eyes',tags:[],detail:'Amber eyes'}]},{});
   expect(result.sheet.countTag).toBe('1other');expect(result.gaps).toEqual([{kind:'vague',what:'man, woman or other',note:expect.stringContaining('1boy or 1girl')}]);
+});
+test('a guess the boorus lack is kept as plain words in the sheet, not lost',async()=> {
+  const traits=[{id:'s',group:'subject',evidence:'He',tags:['1boy','synthetic_humanoid'],detail:'A synthetic man'},
+    {id:'h',group:'hair',evidence:'silver hair',tags:['silver_hair','short_hair'],detail:'Short silver hair'},
+    {id:'e',group:'face',evidence:'violet eyes',tags:['violet_eyes'],detail:'Violet eyes'},
+    {id:'k',group:'body',evidence:'porcelain skin',tags:['porcelain_skin'],detail:'Porcelain skin'},
+    {id:'m',group:'moment',evidence:'overheating',tags:['overheating'],detail:'Overheating'},
+    {id:'o',group:'outfit',evidence:'a maid collar',tags:['maid_collar'],detail:'A maid collar'}];
+  const live=new Set(['1boy','short_hair']);
+  const dict={...dictionary,resolve:async(name:string)=>live.has(name)?dictionary.resolve(name,signal()):null};
+  const {result}=await run('He has silver hair, violet eyes, porcelain skin, a maid collar, overheating.',{traits},{sheet:{character:['choppy silver hair cut short','violet eyes']}},undefined,dict);
+  expect(result.sheet.always).toBe('synthetic humanoid');expect(result.sheet.outfit).toBe('maid collar');
+  // "silver hair" is inside the reviewer's longer phrase, so it is not repeated; "violet eyes" appears once.
+  expect(result.sheet.appearance).toBe('short hair, porcelain skin, violet eyes, choppy silver hair cut short');
+  expect(result.tags.map(t=>t.name)).toEqual(['1boy','short_hair']);expect(result.prompt).not.toContain('violet');
+  expect(result.notices).toContain('“silver_hair” is not a live booru tag, so the sheet keeps it as the plain words “silver hair”.');
+  expect(result.notices).toContain('“overheating” is not a live booru tag and was left out.');
+  expect(result.gaps.map(g=>g.what)).toEqual([]);
 });

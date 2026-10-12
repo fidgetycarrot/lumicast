@@ -189,11 +189,16 @@ export class Translator {
     if (size && wanted.has(size.tag)) notices.add(`${size.label} was converted to ${size.tag}.`);
     const order = (row: TagRow) => traits.findIndex(t => t.id === row.traitId);
     const candidates: TagRow[] = [];
+    // A guess the boorus do not have is not a tag, but its words still describe the character.
+    const unverified = new Map<string, Trait>();
     for (const [name, trait] of [...wanted].sort((a, b) => traits.indexOf(a[1]) - traits.indexOf(b[1]))) {
       signal.throwIfAborted();
       try {
         const resolved = await this.dictionary.resolve(name, signal);
-        if (!resolved) notices.add(`“${name}” is not a live Danbooru tag and was left out.`);
+        if (!resolved) {
+          unverified.set(name, trait);
+          notices.add(trait.group === 'moment' ? `“${name}” is not a live booru tag and was left out.` : `“${name}” is not a live booru tag, so the sheet keeps it as the plain words “${name.replace(/_/g, ' ')}”.`);
+        }
         else if (!candidates.some(r => r.name === resolved.name)) {
           // A weight is the user's number or nothing: it must appear in their notes.
           const weight = extraction.weights.get(name);
@@ -257,6 +262,16 @@ export class Translator {
           .replace(/^(?:(?:he|she|they|it) (?:has|have|wears?|is|are)|his|her|their|its) /, ''))
         .filter((v, i, a) => v && v.length <= 80 && a.indexOf(v) === i && !have.has(v) && !restates(v) && (v.match(/\d+/g) ?? []).every(n => grounded.includes(n))).slice(0, 6);
     };
+    // Plain words for unverified guesses come first (they often carry a hair or eye colour), then the reviewer's
+    // phrases, eight in all. Words already said by a tag or a longer phrase in the same field are skipped.
+    const extras = (groups: Group[], reviewed: unknown, tagList: string): string[] => {
+      const fallback = [...unverified].filter(([name, trait]) => groups.includes(trait.group) && !isCupSizeTag(name) && !BREAST_SIZE.test(name) && !/^(?:1girl|1boy|1other|solo)$/.test(name)).map(([name]) => name.replace(/_/g, ' '));
+      const out: string[] = [];
+      for (const v of [...fallback, ...phrases(reviewed, tagList)]) if (!out.includes(v)) out.push(v);
+      const wordsIn = (v: string) => v.split(/[^a-z0-9]+/).filter(Boolean);
+      const taken = [...said(tagList)];
+      return out.filter(v => !fallback.includes(v) || ![...taken, ...out.filter(o => o !== v && !fallback.includes(o))].some(o => wordsIn(v).every(w => wordsIn(o).includes(w)))).slice(0, 8);
+    };
     const groupOf = (row: TagRow) => traits.find(t => t.id === row.traitId)?.group;
     const COUNT = /^(?:1girl|1boy|1other)$/;
     const written = (rows: TagRow[]) => rows.map(t => formatWeighted(t, true)).join(', ');
@@ -266,9 +281,9 @@ export class Translator {
     const sheet: Sheet = {
       countTag: saved.find(t => COUNT.test(t.name))?.name ?? '',
       subject: optional(() => text(sheetIn.subject, 'subject phrase', 60), '').replace(/[,;.\n]+/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase(),
-      always: written(saved.filter(t => groupOf(t) === 'subject' && !COUNT.test(t.name))),
-      appearance: [appearanceTags, ...phrases(sheetIn.character, appearanceTags)].filter(Boolean).join(', '),
-      outfit: [outfitTags, ...phrases(sheetIn.outfit, outfitTags)].filter(Boolean).join(', '),
+      always: [written(saved.filter(t => groupOf(t) === 'subject' && !COUNT.test(t.name))), ...extras(['subject'], [], '')].filter(Boolean).join(', '),
+      appearance: [appearanceTags, ...extras(['body','hair','face'], sheetIn.character, appearanceTags)].filter(Boolean).join(', '),
+      outfit: [outfitTags, ...extras(['outfit'], sheetIn.outfit, outfitTags)].filter(Boolean).join(', '),
     };
     // Gaps: what would make the image model guess. The anchor checks are plain code over what was
     // extracted; only "vague" is the reviewer's judgement. Neither alters anything above.
@@ -322,7 +337,7 @@ export class Translator {
       signal.throwIfAborted();
       try {
         const resolved = await this.dictionary.resolve(tag, signal);
-        if (!resolved) notices.add(`“${tag}” is not a live Danbooru tag and was left out.`);
+        if (!resolved) notices.add(`“${tag}” is not a live booru tag and was left out.`);
         else if (!names.has(resolved.name) && !proposals.some(p => p.tag === resolved.name)) {
           const weight = weightOf(r);
           proposals.push({kind:'add', tag:resolved.name, ...(weight && weight !== 1 ? {weight} : {}), why:why(r), definition:resolved.wiki.replace(/\s+/g, ' ').slice(0, 220), url:resolved.url});

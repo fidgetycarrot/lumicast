@@ -132,3 +132,7 @@ The panel had grown one feature at a time. It is now three numbered steps (Descr
 
 Typecheck, 69 tests (522 assertions) and the build passed. The built panel was also rendered in headless Chromium at 520 px wide with a fixture translation and a fixture refinement, with no page errors; the sticky status line was checked there. That preview used canned backend replies, not Lumiverse.
 
+## v0.5.1: unverified guesses become words
+
+A live run reported `silver_hair` and `violet_eyes` as not live and dropped them, losing the hair and eye colour from the sheet unless the reviewer happened to write a phrase. The user noted that Anima reads plain words. Unverified proposals for subject, body, hair, face and outfit traits now enter the matching sheet field as plain words, ahead of the reviewer's phrases, skipped when a kept tag or longer phrase in that field already contains all their words, with at most eight extras per field. Scene-only guesses are still left out. The standalone tag list is unchanged: it still holds only verified tags. Notices say which way each guess went, and say "booru" since a guess is checked against Gelbooru too when it is configured. Typecheck, 70 tests and the build passed with controlled responses.
+

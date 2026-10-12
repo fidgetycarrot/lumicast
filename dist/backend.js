@@ -564,13 +564,15 @@ class Translator {
       notices.add(`${size.label} was converted to ${size.tag}.`);
     const order = (row) => traits.findIndex((t) => t.id === row.traitId);
     const candidates = [];
+    const unverified = new Map;
     for (const [name, trait] of [...wanted].sort((a, b) => traits.indexOf(a[1]) - traits.indexOf(b[1]))) {
       signal.throwIfAborted();
       try {
         const resolved = await this.dictionary.resolve(name, signal);
-        if (!resolved)
-          notices.add(`\u201C${name}\u201D is not a live Danbooru tag and was left out.`);
-        else if (!candidates.some((r) => r.name === resolved.name)) {
+        if (!resolved) {
+          unverified.set(name, trait);
+          notices.add(trait.group === "moment" ? `\u201C${name}\u201D is not a live booru tag and was left out.` : `\u201C${name}\u201D is not a live booru tag, so the sheet keeps it as the plain words \u201C${name.replace(/_/g, " ")}\u201D.`);
+        } else if (!candidates.some((r) => r.name === resolved.name)) {
           const weight = extraction.weights.get(name);
           candidates.push({ ...resolved, evidence: trait.evidence, traitId: trait.id, ...weight && notes.includes(String(weight)) ? { weight } : {} });
         }
@@ -638,6 +640,16 @@ class Translator {
       };
       return (Array.isArray(value) ? value : []).slice(0, 12).flatMap((v) => typeof v === "string" ? v.split(/[,;\n]+/) : []).map((v) => v.replace(/_/g, " ").replace(/\s+/g, " ").replace(/[.!?]+$/, "").trim().toLowerCase().replace(/^(?:(?:he|she|they|it) (?:has|have|wears?|is|are)|his|her|their|its) /, "")).filter((v, i, a) => v && v.length <= 80 && a.indexOf(v) === i && !have.has(v) && !restates(v) && (v.match(/\d+/g) ?? []).every((n) => grounded.includes(n))).slice(0, 6);
     };
+    const extras = (groups, reviewed, tagList) => {
+      const fallback = [...unverified].filter(([name, trait]) => groups.includes(trait.group) && !isCupSizeTag(name) && !BREAST_SIZE.test(name) && !/^(?:1girl|1boy|1other|solo)$/.test(name)).map(([name]) => name.replace(/_/g, " "));
+      const out = [];
+      for (const v of [...fallback, ...phrases(reviewed, tagList)])
+        if (!out.includes(v))
+          out.push(v);
+      const wordsIn = (v) => v.split(/[^a-z0-9]+/).filter(Boolean);
+      const taken = [...said(tagList)];
+      return out.filter((v) => !fallback.includes(v) || ![...taken, ...out.filter((o) => o !== v && !fallback.includes(o))].some((o) => wordsIn(v).every((w) => wordsIn(o).includes(w)))).slice(0, 8);
+    };
     const groupOf = (row) => traits.find((t) => t.id === row.traitId)?.group;
     const COUNT = /^(?:1girl|1boy|1other)$/;
     const written = (rows) => rows.map((t) => formatWeighted(t, true)).join(", ");
@@ -647,9 +659,9 @@ class Translator {
     const sheet = {
       countTag: saved.find((t) => COUNT.test(t.name))?.name ?? "",
       subject: optional(() => text(sheetIn.subject, "subject phrase", 60), "").replace(/[,;.\n]+/g, " ").replace(/\s+/g, " ").trim().toLowerCase(),
-      always: written(saved.filter((t) => groupOf(t) === "subject" && !COUNT.test(t.name))),
-      appearance: [appearanceTags, ...phrases(sheetIn.character, appearanceTags)].filter(Boolean).join(", "),
-      outfit: [outfitTags, ...phrases(sheetIn.outfit, outfitTags)].filter(Boolean).join(", ")
+      always: [written(saved.filter((t) => groupOf(t) === "subject" && !COUNT.test(t.name))), ...extras(["subject"], [], "")].filter(Boolean).join(", "),
+      appearance: [appearanceTags, ...extras(["body", "hair", "face"], sheetIn.character, appearanceTags)].filter(Boolean).join(", "),
+      outfit: [outfitTags, ...extras(["outfit"], sheetIn.outfit, outfitTags)].filter(Boolean).join(", ")
     };
     const gaps = [];
     const identity = traits.filter((t) => segmentOf(t.group) === "character");
@@ -721,7 +733,7 @@ class Translator {
       try {
         const resolved = await this.dictionary.resolve(tag, signal);
         if (!resolved)
-          notices.add(`\u201C${tag}\u201D is not a live Danbooru tag and was left out.`);
+          notices.add(`\u201C${tag}\u201D is not a live booru tag and was left out.`);
         else if (!names.has(resolved.name) && !proposals.some((p) => p.tag === resolved.name)) {
           const weight = weightOf(r);
           proposals.push({ kind: "add", tag: resolved.name, ...weight && weight !== 1 ? { weight } : {}, why: why(r), definition: resolved.wiki.replace(/\s+/g, " ").slice(0, 220), url: resolved.url });
@@ -818,7 +830,7 @@ function setupBackend(api) {
       await s.load;
       const settings = s.settings;
       const dictionary = () => s.dictionary ??= new BooruDictionary(async (url) => {
-        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.5.0 (tag metadata client)" } }));
+        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.5.1 (tag metadata client)" } }));
         if (typeof response.status !== "number" || typeof response.body !== "string")
           throw new Error("Invalid proxy response.");
         return { status: response.status, body: response.body };
@@ -855,7 +867,7 @@ function setupBackend(api) {
         const entered = gelCredentials(text(v.gelUser ?? "", "Gelbooru user", 300), v.gelKey ? text(v.gelKey, "Gelbooru key", 300) : "");
         const credentials = { user: entered.user || settings.gelUser, key: entered.key || settings.gelKey };
         const outcome = await testGelbooru(async (url) => {
-          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.5.0 (tag metadata client)" } }));
+          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.5.1 (tag metadata client)" } }));
           return { status: Number(response.status), body: typeof response.body === "string" ? response.body : "" };
         }, credentials);
         const unsaved = credentials.user !== settings.gelUser || credentials.key !== settings.gelKey;
