@@ -340,7 +340,14 @@ function setup(ctx) {
     const elsewhere = new Set([...splitTags(sheet.always.box.value), ...splitTags(sheet.outfit.box.value)].map((v) => v.replace(/^\((.+?):[\d.]+\)$/, "$1").trim().toLowerCase().replace(/_/g, " ")));
     sheet.appearance.box.value = editList(sheet.appearance.box.value, changes.filter((p) => p.kind !== "add" || !elsewhere.has(p.tag.replace(/_/g, " "))), true);
     let list = splitTags(tags.value).map(parseWeighted);
-    for (const p of changes) {
+    const before = tags.value;
+    const captionBefore = prose.value;
+    for (const p of chosen) {
+      if (p.tag && COUNT.test(p.tag) && p.kind === "add") {
+        list = list.filter((t) => !COUNT.test(t.name));
+        list.unshift({ name: p.tag });
+        continue;
+      }
       if (p.kind === "remove")
         list = list.filter((t) => t.name !== p.tag);
       if (p.kind === "weight")
@@ -357,7 +364,8 @@ function setup(ctx) {
     pending = [];
     proposed.replaceChildren();
     feedback.value = "";
-    notify("Changes applied to the character sheet. Paste the changed fields into Lumi Studio and generate again.");
+    const standalone = tags.value !== before || prose.value !== captionBefore;
+    notify(standalone ? "Changes applied to the character sheet and to the standalone prompt. Paste the changed fields into Lumi Studio and generate again." : "Changes applied to the character sheet. None of them touched a tag or the caption in the standalone prompt. Paste the changed fields into Lumi Studio and generate again.");
   });
   const notes = named(el("textarea"), "notes");
   notes.rows = 4;
@@ -447,7 +455,7 @@ function setup(ctx) {
     notify("Search complete. Popularity is not an Anima quality score.");
   });
   searchCard.append(field("Tag name or the start of one", query, "Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched."), search, found);
-  app.append(intro, settings, status, input, sheetCard, refine, output, searchCard, el("p", "LumiCast 0.5.1 · Draft stays in this tab until reload."));
+  app.append(intro, settings, status, input, sheetCard, refine, output, searchCard, el("p", "LumiCast 0.5.2 · Draft stays in this tab until reload."));
   const controls = [translate, again, save, refreshButton, testGel, saveNotes, verify, rebuild, copy, copyTags, copyProse, suggest, apply, search, ...Object.values(sheet).map((f) => f.copyField)];
   function showSheet() {
     if (!result)

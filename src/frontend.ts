@@ -156,9 +156,11 @@ export function setup(ctx:SpindleFrontendContext) {
     // A new tag lands in the appearance field for you to move if it is clothing.
     const elsewhere=new Set([...splitTags(sheet.always.box.value),...splitTags(sheet.outfit.box.value)].map(v=>v.replace(/^\((.+?):[\d.]+\)$/,'$1').trim().toLowerCase().replace(/_/g,' ')));
     sheet.appearance.box.value=editList(sheet.appearance.box.value,changes.filter(p=>p.kind!=='add'||!elsewhere.has(p.tag!.replace(/_/g,' '))),true);
-    // The standalone prompt gets the same changes where they apply to it.
-    let list=splitTags(tags.value).map(parseWeighted);
-    for(const p of changes) {
+    // The standalone prompt gets every change that names one of its tags, the count included; a change to a
+    // sheet-only phrase has nothing to change there.
+    let list=splitTags(tags.value).map(parseWeighted);const before=tags.value;const captionBefore=prose.value;
+    for(const p of chosen) {
+      if(p.tag&&COUNT.test(p.tag)&&p.kind==='add'){list=list.filter(t=>!COUNT.test(t.name));list.unshift({name:p.tag});continue;}
       if(p.kind==='remove')list=list.filter(t=>t.name!==p.tag);
       if(p.kind==='weight')list=list.map(t=>t.name===p.tag?(p.weight===1?{name:t.name}:{name:t.name,weight:p.weight}):t);
       if(p.kind==='add'&&!list.some(t=>t.name===p.tag))list.push({name:p.tag!,weight:p.weight});
@@ -167,7 +169,8 @@ export function setup(ctx:SpindleFrontendContext) {
     tags.value=list.map(t=>formatWeighted(t)).join(', ');edited=true;
     if(verified||!tags.value.trim())prompt.value=assemble(list,prose.value);
     pending=[];proposed.replaceChildren();feedback.value='';
-    notify('Changes applied to the character sheet. Paste the changed fields into Lumi Studio and generate again.');
+    const standalone=tags.value!==before||prose.value!==captionBefore;
+    notify(standalone?'Changes applied to the character sheet and to the standalone prompt. Paste the changed fields into Lumi Studio and generate again.':'Changes applied to the character sheet. None of them touched a tag or the caption in the standalone prompt. Paste the changed fields into Lumi Studio and generate again.');
   });
   const notes=named(el('textarea'),'notes');notes.rows=4;notes.maxLength=2000;notes.placeholder='e.g. Femboys: weight trap at 1.4. Androids: add visible panel seams at the shoulders and concealed joints.';
   const saveNotes=button('Save notes',async()=>{await rpc.request('saveNotes',{notes:notes.value});notify('Notes saved. They apply from the next translation or refinement.');});
@@ -223,7 +226,7 @@ export function setup(ctx:SpindleFrontendContext) {
   });
   searchCard.append(field('Tag name or the start of one',query,'Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched.'),search,found);
 
-  app.append(intro,settings,status,input,sheetCard,refine,output,searchCard,el('p','LumiCast 0.5.1 · Draft stays in this tab until reload.'));
+  app.append(intro,settings,status,input,sheetCard,refine,output,searchCard,el('p','LumiCast 0.5.2 · Draft stays in this tab until reload.'));
   const controls=[translate,again,save,refreshButton,testGel,saveNotes,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
 
   function showSheet(){

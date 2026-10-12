@@ -183,4 +183,7 @@ test('a gap is answered where it is shown: the inline box mirrors Known facts an
   expect(JSON.parse(((h.calls.filter(v=>(v as unknown[])[0]==='generation').pop() as unknown[])[1] as {messages:{content:string}[]}).messages[1].content).tags).toEqual(['1girl','red_hair','short_hair','green_eyes']);
   b('Apply selected').click();await until(()=>!b('Translate').disabled);
   expect(named(h.root,'countTag').value).toBe('1boy');expect(named(h.root,'appearance').value).toBe('red hair, short hair, green eyes, freckles');
+  // The standalone prompt follows the same changes, the count included.
+  expect(named(h.root,'tags').value).toBe('1boy, red_hair, short_hair, green_eyes, freckles');expect(named(h.root,'prompt').value).toBe('1boy, red hair, short hair, green eyes, freckles\n\nA woman. Short red hair. Green eyes.');
+  expect(h.root.textContent).toContain('applied to the character sheet and to the standalone prompt');
 });
