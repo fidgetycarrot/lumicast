@@ -204,7 +204,7 @@ export function setup(ctx:SpindleFrontendContext) {
     }
     tags.value=list.map(t=>formatWeighted(t)).join(', ');edited=true;
     const rebuilt=verified||!tags.value.trim();
-    if(rebuilt)prompt.value=withQuality(assemble(list,prose.value),quality.value,list.length>0);
+    if(rebuilt)prompt.value=built(list,prose.value);
     pending=[];proposed.replaceChildren();feedback.value='';share();
     const standalone=tags.value!==before||prose.value!==captionBefore;
     notify(standalone&&!rebuilt?'Changes applied to the tags and the character sheet, but the prompt was not rebuilt because the tags had unverified hand edits. Press Verify edited tags, then Rebuild.':standalone?'Changes applied to the Anima prompt and the character sheet. Copy the prompt and generate again.':'Changes applied to the character sheet. None of them touched a tag or the caption in the Anima prompt.');
@@ -217,7 +217,10 @@ export function setup(ctx:SpindleFrontendContext) {
   // ── Standalone prompt: for use without Lumi Studio ──
   const output=card('02 / Anima prompt');
   const quality=named(el('input'),'quality');quality.maxLength=600;quality.autocomplete='off';quality.placeholder='e.g. masterpiece, best quality, score_9, newest, safe';
-  const saveQuality=button('Save',async()=>{await rpc.request('savePrefs',{quality:quality.value});if(result&&verified)prompt.value=withQuality(assemble(splitTags(tags.value),prose.value),quality.value,!!tags.value.trim());notify('Quality tags saved. They go in front of every Anima prompt.');});saveQuality.className='lc-mini';
+  const saveQuality=button('Save',async()=>{await rpc.request('savePrefs',{quality:quality.value});if(result&&verified)prompt.value=built(splitTags(tags.value),prose.value);notify('Quality tags saved. They go in front of every Anima prompt.');});saveQuality.className='lc-mini';
+  // Remembered per browser: whether the Anima prompt carries a caption at all.
+  const captionMode=el('select');captionMode.append(option('Tags and a short caption','short'),option('Tags only, no caption','none'));
+  try{if(localStorage.getItem('lumicast.caption')==='none')captionMode.value='none';}catch{/* default */}
   const scope=el('select');scope.append(option('Character only — body, hair and face','character'),option('Character and outfit','outfit'),option('Everything — outfit, pose, expression and scene','scene'));
   const tags=named(el('textarea'),'tags');tags.rows=3;tags.maxLength=4000;tags.placeholder='Verified booru tags appear here';
   const prose=named(el('textarea'),'prose');prose.rows=6;prose.maxLength=16_000;prose.placeholder='A short caption for what the tags cannot say';
@@ -240,7 +243,7 @@ export function setup(ctx:SpindleFrontendContext) {
   const prompt=named(el('textarea'),'prompt');prompt.rows=8;prompt.maxLength=24_000;
   const rebuild=button('Rebuild from tags + detail',()=> {
     if(tags.value.trim()&&!verified)throw new Error('Verify edited tags before rebuilding.');
-    prompt.value=withQuality(assemble(splitTags(tags.value),prose.value),quality.value,!!tags.value.trim());notify('Prompt rebuilt.');
+    prompt.value=built(splitTags(tags.value),prose.value);notify('Prompt rebuilt.');
   });
   const copy=button('Copy prompt',async()=> {
     if(!prompt.value.trim())throw new Error('There is no prompt to copy yet.');
@@ -256,6 +259,7 @@ export function setup(ctx:SpindleFrontendContext) {
     el('p','Your quality tags, then booru tags, then a short caption: ready to paste into SwarmUI or any Anima setup.'),
     qualityField,
     field('Include',scope,'What this prompt covers. Switching needs no new translation.'),
+    field('Caption',captionMode,'Turn the caption off if its wording fights your tags. The tags stay the same.'),
     field('Prompt',prompt,'Rebuild applies edits from below and replaces this field. Copy copies exactly what is shown.'),row(copy,rebuild),
     editBox);
 
@@ -270,7 +274,7 @@ export function setup(ctx:SpindleFrontendContext) {
   });
   searchCard.append(field('Tag name or the start of one',query,'Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched.'),search,found);
 
-  app.append(intro,settings,status,input,gapsCard,output,refine,sheetCard,searchCard,el('p','LumiCast 0.8.0 · Draft stays in this tab until reload.'));
+  app.append(intro,settings,status,input,gapsCard,output,refine,sheetCard,searchCard,el('p','LumiCast 0.8.1 · Draft stays in this tab until reload.'));
   const controls=[translate,again,save,refreshButton,testGel,saveNotes,saveQuality,startOver,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
 
   // Every change to the sheet is offered to Lumi Studio, a moment after typing stops.
@@ -309,10 +313,12 @@ export function setup(ctx:SpindleFrontendContext) {
     share();
   }
   // Every scope comes back from one translation, so changing Include only re-renders this part.
+  /** The Anima prompt as shown: quality tags, booru tags, then the caption unless it is turned off. */
+  function built(list:(string|import('./contracts').Weighted)[],caption:string){return withQuality(assemble(list,captionMode.value==='none'?'':caption),quality.value,list.length>0);}
   function showStandalone(){
     if(!result)return;
     const view=result.views[scope.value as Scope];
-    tags.value=view.tags.map(t=>formatWeighted(t)).join(', ');prose.value=view.prose;prompt.value=withQuality(view.prompt,quality.value,view.tags.length>0);verified=true;edited=false;
+    tags.value=view.tags.map(t=>formatWeighted(t)).join(', ');prose.value=view.prose;prompt.value=built(view.tags.map(t=>({name:t.name,weight:t.weight})),view.prose);verified=true;edited=false;
     tagState.textContent=view.tags.length ? `${view.tags.length} tags, each a live booru tag. ${result.model}.` : `No verified tags to show here. ${result.model}.`;
     update();
   }
@@ -337,6 +343,7 @@ export function setup(ctx:SpindleFrontendContext) {
   source.addEventListener('input',()=>{revision++;if(result)notify('Description changed. Translate again to refresh the result.');});
   const factsChanged=(from:HTMLInputElement,to:HTMLInputElement)=>from.addEventListener('input',()=>{to.value=from.value;revision++;if(result)notify('Known facts changed. Translate again to refresh the result.');});
   factsChanged(stated,statedAgain);factsChanged(statedAgain,stated);
+  captionMode.addEventListener('change',()=>{try{localStorage.setItem('lumicast.caption',captionMode.value);}catch{/* not kept */}if(result&&(verified||!tags.value.trim()))prompt.value=built(splitTags(tags.value),prose.value);notify(captionMode.value==='none'?'Caption turned off. The prompt is tags only.':'Caption turned back on.');});
   scope.addEventListener('change',()=>{if(busy||!result)return;const replaced=edited;showStandalone();if(replaced)notify('Standalone fields reset from the translation; your manual edits there were replaced.');});
   tags.addEventListener('input',()=>{verified=false;edited=true;tagState.textContent='Tags edited — verify existence before rebuilding. Clear all tags to use the caption only.';update();});
   prose.addEventListener('input',()=>{edited=true;notify('Caption changed. Rebuild to apply it to the prompt.');});

@@ -454,7 +454,7 @@ function setup(ctx) {
     edited = true;
     const rebuilt = verified || !tags.value.trim();
     if (rebuilt)
-      prompt.value = withQuality(assemble(list, prose.value), quality.value, list.length > 0);
+      prompt.value = built(list, prose.value);
     pending = [];
     proposed.replaceChildren();
     feedback.value = "";
@@ -482,10 +482,16 @@ function setup(ctx) {
   const saveQuality = button("Save", async () => {
     await rpc.request("savePrefs", { quality: quality.value });
     if (result && verified)
-      prompt.value = withQuality(assemble(splitTags(tags.value), prose.value), quality.value, !!tags.value.trim());
+      prompt.value = built(splitTags(tags.value), prose.value);
     notify("Quality tags saved. They go in front of every Anima prompt.");
   });
   saveQuality.className = "lc-mini";
+  const captionMode = el("select");
+  captionMode.append(option("Tags and a short caption", "short"), option("Tags only, no caption", "none"));
+  try {
+    if (localStorage.getItem("lumicast.caption") === "none")
+      captionMode.value = "none";
+  } catch {}
   const scope = el("select");
   scope.append(option("Character only — body, hair and face", "character"), option("Character and outfit", "outfit"), option("Everything — outfit, pose, expression and scene", "scene"));
   const tags = named(el("textarea"), "tags");
@@ -520,7 +526,7 @@ function setup(ctx) {
   const rebuild = button("Rebuild from tags + detail", () => {
     if (tags.value.trim() && !verified)
       throw new Error("Verify edited tags before rebuilding.");
-    prompt.value = withQuality(assemble(splitTags(tags.value), prose.value), quality.value, !!tags.value.trim());
+    prompt.value = built(splitTags(tags.value), prose.value);
     notify("Prompt rebuilt.");
   });
   const copy = button("Copy prompt", async () => {
@@ -545,7 +551,7 @@ function setup(ctx) {
   const editBox = remembered(el("details"), "edit");
   editBox.className = "lc-sub";
   editBox.append(el("summary", "Edit tags and caption"), field("Booru tags — comma separated", tags, "Underscores here; the prompt uses spaces. Add emphasis as (tag:1.4)."), tagState, row(verify, copyTags), field("Caption", prose, "Edit freely; nothing the text leaves out is filled in."), copyProse);
-  output.append(el("p", "Your quality tags, then booru tags, then a short caption: ready to paste into SwarmUI or any Anima setup."), qualityField, field("Include", scope, "What this prompt covers. Switching needs no new translation."), field("Prompt", prompt, "Rebuild applies edits from below and replaces this field. Copy copies exactly what is shown."), row(copy, rebuild), editBox);
+  output.append(el("p", "Your quality tags, then booru tags, then a short caption: ready to paste into SwarmUI or any Anima setup."), qualityField, field("Include", scope, "What this prompt covers. Switching needs no new translation."), field("Caption", captionMode, "Turn the caption off if its wording fights your tags. The tags stay the same."), field("Prompt", prompt, "Rebuild applies edits from below and replaces this field. Copy copies exactly what is shown."), row(copy, rebuild), editBox);
   const searchCard = el("details");
   searchCard.className = "lc-card";
   searchCard.append(el("summary", "Find a real tag"));
@@ -569,7 +575,7 @@ function setup(ctx) {
     notify("Search complete. Popularity is not an Anima quality score.");
   });
   searchCard.append(field("Tag name or the start of one", query, "Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched."), search, found);
-  app.append(intro, settings, status, input, gapsCard, output, refine, sheetCard, searchCard, el("p", "LumiCast 0.8.0 · Draft stays in this tab until reload."));
+  app.append(intro, settings, status, input, gapsCard, output, refine, sheetCard, searchCard, el("p", "LumiCast 0.8.1 · Draft stays in this tab until reload."));
   const controls = [translate, again, save, refreshButton, testGel, saveNotes, saveQuality, startOver, verify, rebuild, copy, copyTags, copyProse, suggest, apply, search, ...Object.values(sheet).map((f) => f.copyField)];
   let shareTimer;
   function share() {
@@ -622,13 +628,16 @@ function setup(ctx) {
     reply.textContent = "";
     share();
   }
+  function built(list, caption) {
+    return withQuality(assemble(list, captionMode.value === "none" ? "" : caption), quality.value, list.length > 0);
+  }
   function showStandalone() {
     if (!result)
       return;
     const view = result.views[scope.value];
     tags.value = view.tags.map((t) => formatWeighted(t)).join(", ");
     prose.value = view.prose;
-    prompt.value = withQuality(view.prompt, quality.value, view.tags.length > 0);
+    prompt.value = built(view.tags.map((t) => ({ name: t.name, weight: t.weight })), view.prose);
     verified = true;
     edited = false;
     tagState.textContent = view.tags.length ? `${view.tags.length} tags, each a live booru tag. ${result.model}.` : `No verified tags to show here. ${result.model}.`;
@@ -716,6 +725,14 @@ function setup(ctx) {
   });
   factsChanged(stated, statedAgain);
   factsChanged(statedAgain, stated);
+  captionMode.addEventListener("change", () => {
+    try {
+      localStorage.setItem("lumicast.caption", captionMode.value);
+    } catch {}
+    if (result && (verified || !tags.value.trim()))
+      prompt.value = built(splitTags(tags.value), prose.value);
+    notify(captionMode.value === "none" ? "Caption turned off. The prompt is tags only." : "Caption turned back on.");
+  });
   scope.addEventListener("change", () => {
     if (busy || !result)
       return;

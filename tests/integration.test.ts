@@ -264,3 +264,16 @@ test('Refine remembers earlier rounds for this character, sends them with the lo
   named(h.root,'source').value='He is someone else, with short red hair.';b('Translate').click();await until(()=>!b('Translate').disabled);
   expect(historyBox.hidden).toBe(true);expect(historyBox.querySelectorAll('li').length).toBe(0);
 });
+test('the caption can be turned off, leaving quality tags and booru tags only',async()=> {
+  dom();const h=harness();cleanups.push(h.stop);const dispose=setup(h.ctx);cleanups.push(dispose);
+  const b=(name:string)=>Array.from(h.root.querySelectorAll('button')).find(x=>x.textContent===name)!;
+  await until(()=>!b('Translate').disabled);h.root.querySelector('select')!.value='c1';
+  named(h.root,'quality').value='masterpiece';
+  named(h.root,'source').value='Short red hair.';b('Translate').click();await until(()=>!b('Translate').disabled);
+  expect(named(h.root,'prompt').value).toBe('masterpiece, red hair\n\nShort red hair.');
+  const caption=Array.from(h.root.querySelectorAll('select')).find(s=>Array.from(s.options).some(o=>o.value==='none'))!;
+  caption.value='none';caption.dispatchEvent(new Event('change'));
+  expect(named(h.root,'prompt').value).toBe('masterpiece, red hair');expect(h.root.textContent).toContain('Caption turned off.');
+  b('Rebuild from tags + detail').click();await until(()=>!b('Translate').disabled);expect(named(h.root,'prompt').value).toBe('masterpiece, red hair');
+  caption.value='short';caption.dispatchEvent(new Event('change'));expect(named(h.root,'prompt').value).toBe('masterpiece, red hair\n\nShort red hair.');
+});

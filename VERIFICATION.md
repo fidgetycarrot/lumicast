@@ -172,3 +172,7 @@ Each refinement used to be independent, so a long back-and-forth on a hard chara
 
 While adding this, the backend was found not to pass `locked` to `Translator.refine`: the 0.5.3 protection for Always include tags was implemented and tested in the engine but never reached it from the panel. The integration test for 0.5.3 only checked an empty lock, so it did not catch this. The backend now passes `locked` and `history`, and a new panel-to-engine test asserts both arrive. Typecheck, 81 tests (594 assertions) and the build passed.
 
+## v0.8.1: captions that fight the tags
+
+A live prompt for a full-figured character paired `abs, toned` with a caption saying "a soft belly over real strength", and the caption carried undrawable impressions ("fertility goddess", "weight and presence", "a knowing curve to her mouth") and a "faint living-green undertone" likely to be drawn as green skin. The review prompt now limits captions to drawable words, forbids repeating or contradicting kept tags, and warns about tints; extraction and review both treat muscle-definition tags against a stated soft belly as a contradiction. These are prompt changes, untested against a live model. A Caption menu (tags and a short caption, or tags only) is applied in one place for display, rebuild, refinement and quality-tag changes, and is remembered in browser storage. Typecheck, 82 tests and the build passed.
+

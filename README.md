@@ -1,4 +1,6 @@
-# LumiCast 0.8.0
+# LumiCast 0.8.1
+
+**v0.8.1 plainer captions, and a way to turn them off.** The caption writer now uses only words an image model can draw (colours, shapes, lengths, placement), leaves out roles, moods and impressions such as "goddess" or "presence", never contradicts a kept tag, and skips what a tag already says. Tags such as `abs` are no longer proposed against a stated soft belly. A **Caption** menu in the Anima prompt can drop the caption entirely; the choice is remembered in this browser.
 
 **v0.8.0 gives Refine a memory.** While you work on one character, Refine keeps the last eight rounds: what you said, the suggestions you used and the ones you skipped. The model is told not to offer a skipped change again, and to go further or try something different when a problem comes back. **Earlier rounds** in the Refine card lists them; **Start over** clears them, and a new description starts fresh. This release also fixes the lock on Always include tags, which the 0.5.3 code checked but never actually received.
 
@@ -51,7 +53,7 @@ Prebuilt `dist/` files are committed for Lumiverse installation. If the tab does
 
 Requires **Lumiverse 1.2.5 or later**. Compatibility was checked against the current 1.2.5 source and SDK 0.6.40; older versions have not been verified.
 
-1. Unzip `lumicast-0.8.0-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
+1. Unzip `lumicast-0.8.1-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
 2. On the machine running your Lumiverse **server**, copy that folder into `<DATA_DIR>/extensions/`. The server's default DATA_DIR is `./data`, relative to where Lumiverse runs. For Docker, copy into the volume mounted as the server's data directory. Do not copy it into another extension's folder.
 3. As the Lumiverse owner/admin, open **Extensions**, open its add menu, and choose **Import Local**. Enable LumiCast and grant `generation` and `cors_proxy`. If the tab does not appear, reload Lumiverse.
 4. Open **LumiCast** in the sidebar drawer or find it in the command palette. Expand **Connection & tag services**, choose a saved generative connection, and save.
