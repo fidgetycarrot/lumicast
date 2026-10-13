@@ -1,4 +1,6 @@
-# LumiCast 0.8.2
+# LumiCast 0.8.3
+
+**v0.8.3 is faster at tag lookups and says where the time goes.** Tags are looked up all at once, Danbooru and Gelbooru are asked side by side (each still at its polite pace), and Gelbooru is asked only when Danbooru lacks a tag or knows it by another name. After each translation the status line says how long the model and the tag lookups took.
 
 **v0.8.2 copes with reasoning models.** The reply limit per call is now 16,000 tokens instead of 6,000, an answer a model leaves in its reasoning text or wraps in a sentence is still read, and a failed reply now says which step failed and whether the model ran out of room or sent nothing.
 
@@ -55,7 +57,7 @@ Prebuilt `dist/` files are committed for Lumiverse installation. If the tab does
 
 Requires **Lumiverse 1.2.5 or later**. Compatibility was checked against the current 1.2.5 source and SDK 0.6.40; older versions have not been verified.
 
-1. Unzip `lumicast-0.8.2-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
+1. Unzip `lumicast-0.8.3-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
 2. On the machine running your Lumiverse **server**, copy that folder into `<DATA_DIR>/extensions/`. The server's default DATA_DIR is `./data`, relative to where Lumiverse runs. For Docker, copy into the volume mounted as the server's data directory. Do not copy it into another extension's folder.
 3. As the Lumiverse owner/admin, open **Extensions**, open its add menu, and choose **Import Local**. Enable LumiCast and grant `generation` and `cors_proxy`. If the tab does not appear, reload Lumiverse.
 4. Open **LumiCast** in the sidebar drawer or find it in the command palette. Expand **Connection & tag services**, choose a saved generative connection, and save.
@@ -172,7 +174,7 @@ When both services verify an equivalent spelling (including an active Danbooru a
 - Keep nuance and multi-character ownership in the caption. Generic global tags can apply to the wrong character, so conflicting colors are removed together.
 - **Rebuild** explicitly replaces the final prompt with the edited tags and detail. **Copy** copies exactly the final field, including manual edits. If clipboard access is unavailable, the field is selected for your usual Copy shortcut.
 - Drafts stay in the open tab and are lost on reload. Pasted descriptions, feedback, AI outputs and prompts are not persisted by LumiCast. Your notes are persisted with your settings in per-user extension storage, unencrypted, and are sent to your selected provider with each translation and refinement. Provider-side handling follows your chosen provider's policy. Settings and optional Gelbooru credentials are persisted per user.
-- Public metadata caches are memory-only, bounded at 512 responses: positive entries expire after seven days; empty responses after one hour. Failures are not cached as missing tags; HTTP failures briefly pause requests to that host. Requests are serialized with 450 ms spacing, two per live tag, so a first translation with many new tags can spend most of a minute on lookups; repeated tags come from the cache.
+- Public metadata caches are memory-only, bounded at 512 responses: positive entries expire after seven days; empty responses after one hour. Failures are not cached as missing tags; HTTP failures briefly pause requests to that host. Requests to each site are serialized with 450 ms spacing (the two sites run side by side), two per live tag on Danbooru, with Gelbooru asked only for tags Danbooru lacks or aliases, so a first translation with many new tags can spend most of a minute on lookups; repeated tags come from the cache.
 - A translation has a four-minute limit and supports cancellation. Provider generation is aborted through Spindle. The CORS API has no cancellation signal; a tag lookup wait is capped at 12 seconds and the host applies its own network limits. Cancelling does not retroactively undo provider billing.
 - The latest character sheet and the first line of its description are shared with other extensions through Lumiverse's shared RPC pool so Lumi Studio can read them. They stay in memory on the Lumiverse server and are not persisted.
 - Frontend replies are scoped to the authenticated user and originating frontend session. Operator installations pass authenticated `userId` to connection and generation calls. Concurrent operations are limited to one per user.

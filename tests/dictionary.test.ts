@@ -26,8 +26,27 @@ test('Gelbooru spelling preferred only after alias equivalence and live exact ma
   expect((await d.resolve('large_breasts',signal()))?.name).toBe('large_breasts');
 });
 test('bad Gelbooru credentials keep Danbooru with clear notice',async()=> {
-  const d=new BooruDictionary(async url=>new URL(url).hostname==='gelbooru.com'?{status:401,body:'secret-test-key'}:{status:200,body:JSON.stringify(url.includes('/tags.json')?[{name:'blue_eyes',category:0,post_count:1}]:[])},{user:'1',key:'secret-test-key'},0);
-  expect((await d.resolve('blue_eyes',signal()))?.source).toBe('Danbooru');expect([...d.notices].join(' ')).not.toContain('secret-test-key');expect(d.notices.size).toBe(1);expect([...d.notices][0]).toContain('HTTP 401: it rejected the user ID or API key');
+  // Danbooru lacks the tag, so Gelbooru is asked, and refuses.
+  const d=new BooruDictionary(async url=>new URL(url).hostname==='gelbooru.com'?{status:401,body:'secret-test-key'}:{status:200,body:'[]'},{user:'1',key:'secret-test-key'},0);
+  expect(await d.resolve('silver_hair',signal())).toBeNull();expect([...d.notices].join(' ')).not.toContain('secret-test-key');expect(d.notices.size).toBe(1);expect([...d.notices][0]).toContain('HTTP 401: it rejected the user ID or API key');
+});
+test('Gelbooru is asked only when Danbooru lacks a tag or knows it by another name',async()=> {
+  const hosts:string[]=[];
+  const d=new BooruDictionary(async url=>{const u=new URL(url);hosts.push(`${u.hostname}${u.pathname}`);
+    if(u.hostname==='gelbooru.com')return{status:200,body:JSON.stringify({tag:[{name:u.searchParams.get('name'),type:0,count:9,ambiguous:0}].filter(t=>t.name==='silver_hair')})};
+    return{status:200,body:JSON.stringify(u.pathname==='/tags.json'&&u.searchParams.get('search[name]')==='blue_eyes'?[{name:'blue_eyes',category:0,post_count:5}]:[])};},{user:'1',key:'k'},0);
+  expect((await d.resolve('blue_eyes',signal()))?.source).toBe('Danbooru');expect(hosts.some(h=>h.startsWith('gelbooru'))).toBe(false);
+  const silver=await d.resolve('silver_hair',signal());expect(silver?.source).toBe('Gelbooru');expect(silver?.name).toBe('silver_hair');
+});
+test('each site has its own queue, so a slow site does not hold up the other',async()=> {
+  const order:string[]=[];let release:()=>void=()=>{};
+  const d=new BooruDictionary(async url=>{const host=new URL(url).hostname;
+    if(host==='danbooru.donmai.us'&&url.includes('wiki_pages'))await new Promise<void>(r=>{release=r;});
+    order.push(host);return{status:200,body:JSON.stringify(url.includes('/tags.json')?[{name:'red_hair',category:0,post_count:1}]:host==='gelbooru.com'?{tag:[]}:[])};},{user:'1',key:'k'},0);
+  const slow=d.resolve('red_hair',signal());
+  await Bun.sleep(5);
+  const gel=await (d as unknown as {request(b:string,q:Record<string,string>,s:AbortSignal):Promise<unknown>}).request('https://gelbooru.com/index.php',{name:'x'},signal());
+  expect(gel).toEqual({tag:[]});expect(order).toContain('gelbooru.com');release();await slow;
 });
 test('deprecated, nonexistent and artist tags cannot auto-verify',async()=> {
   for(const row of [null,{name:'x',category:1,post_count:1},{name:'x',category:0,post_count:1,is_deprecated:true},{name:'x',category:0,post_count:0}]) {

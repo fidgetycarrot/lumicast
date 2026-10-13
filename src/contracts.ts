@@ -40,7 +40,9 @@ export function nameFrom(description: string): string {
   const head = first.split(/\s+[—–-]\s+|:/)[0].replace(/[*_#"“”]/g, '').trim();
   return /^[A-Z][\p{L}\d'’.-]*(?:\s+[A-Z][\p{L}\d'’.-]*){0,3}$/u.test(head) && head.length <= 40 ? head : '';
 }
-export interface Translation extends View { issues: Issue[]; model: string; views: Record<Scope, View>; sheet: Sheet; gaps: Gap[] }
+/** Where a translation's time went, in milliseconds. */
+export interface Timing { model: number; lookups: number; total: number }
+export interface Translation extends View { issues: Issue[]; model: string; views: Record<Scope, View>; sheet: Sheet; gaps: Gap[]; timing: Timing }
 /** quality: the user's own prefix (quality, score, year, safety tags) for the Anima prompt. Never verified or changed. */
 export interface Settings { connectionId: string; gelUser: string; gelKey: string; notes: string; quality: string }
 export interface PublicSettings { connectionId: string; gelUser: string; hasGelKey: boolean; notes: string; quality: string }

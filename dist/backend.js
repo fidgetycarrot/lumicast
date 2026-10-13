@@ -141,8 +141,8 @@ class BooruDictionary {
   credentials;
   spacingMs;
   cache = new Map;
-  queue = Promise.resolve();
-  nextAt = 0;
+  queues = new Map;
+  nextAt = new Map;
   unavailable = new Map;
   notices = new Set;
   constructor(http, credentials = { user: "", key: "" }, spacingMs = 450) {
@@ -159,14 +159,15 @@ class BooruDictionary {
     const saved = this.cache.get(key);
     if (saved && saved.expires > Date.now())
       return saved.value;
-    const task = this.queue.catch(() => {}).then(async () => {
+    const host = url.hostname;
+    const task = (this.queues.get(host) ?? Promise.resolve()).catch(() => {}).then(async () => {
       signal.throwIfAborted();
       const hit = this.cache.get(key);
       if (hit && hit.expires > Date.now())
         return hit.value;
-      await new Promise((resolve) => setTimeout(resolve, Math.max(0, this.nextAt - Date.now())));
+      await new Promise((resolve) => setTimeout(resolve, Math.max(0, (this.nextAt.get(host) ?? 0) - Date.now())));
       signal.throwIfAborted();
-      this.nextAt = Date.now() + this.spacingMs;
+      this.nextAt.set(host, Date.now() + this.spacingMs);
       if (url.hostname === "gelbooru.com") {
         url.searchParams.set("user_id", this.credentials.user);
         url.searchParams.set("api_key", this.credentials.key);
@@ -201,7 +202,7 @@ class BooruDictionary {
       this.cache.set(key, { value, expires: Date.now() + (empty ? 3600000 : 7 * 86400000) });
       return value;
     });
-    this.queue = task;
+    this.queues.set(host, task);
     return task;
   }
   dan(path, query, signal) {
@@ -268,7 +269,7 @@ class BooruDictionary {
       if (requested !== canonical)
         result.aliasFrom = requested;
     }
-    if (this.credentials.user && this.credentials.key) {
+    if (this.credentials.user && this.credentials.key && (!result || requested !== canonical)) {
       for (const name of [...new Set([requested, canonical])]) {
         try {
           const data = await this.gel(name, signal);
@@ -557,6 +558,16 @@ class Translator {
     this.dictionary = dictionary;
   }
   async translate(input, signal, model, options = {}) {
+    const started = Date.now();
+    let modelMs = 0;
+    const timed = async (system, body) => {
+      const t = Date.now();
+      try {
+        return await this.generate(system, body, signal);
+      } finally {
+        modelMs += Date.now() - t;
+      }
+    };
     const source = text(input, "description (maximum 12,000 characters)", 12000);
     if (!source)
       throw new Error("Paste a character description first.");
@@ -566,7 +577,7 @@ class Translator {
     const notes = text(options.notes ?? "", "notes (maximum 2,000 characters)", 2000);
     const grounded = [stated, notes, source].filter(Boolean).join(`
 `);
-    const extraction = parseExtraction(await this.generate(EXTRACT, JSON.stringify({ ...stated ? { stated } : {}, ...notes ? { notes } : {}, description: source }), signal), grounded);
+    const extraction = parseExtraction(await timed(EXTRACT, JSON.stringify({ ...stated ? { stated } : {}, ...notes ? { notes } : {}, description: source })), grounded);
     if (!extraction.traits.length)
       throw new Error("No explicit visual traits were found. Describe the appearance you want translated.");
     const notices = new Set;
@@ -618,30 +629,39 @@ class Translator {
     const order = (row) => traits.findIndex((t) => t.id === row.traitId);
     const candidates = [];
     const unverified = new Map;
-    for (const [name, trait] of [...wanted].sort((a, b) => traits.indexOf(a[1]) - traits.indexOf(b[1]))) {
-      signal.throwIfAborted();
+    const lookupStarted = Date.now();
+    const ordered = [...wanted].sort((a, b) => traits.indexOf(a[1]) - traits.indexOf(b[1]));
+    const looked = await Promise.all(ordered.map(async ([name]) => {
       try {
-        const resolved = await this.dictionary.resolve(name, signal);
-        if (!resolved) {
-          unverified.set(name, trait);
-          notices.add(segmentOf(trait.group) === "scene" && trait.group !== "anatomy" ? `\u201C${name}\u201D is not a live booru tag and was left out.` : `\u201C${name}\u201D is not a live booru tag, so the sheet keeps it as the plain words \u201C${name.replace(/_/g, " ")}\u201D.`);
-        } else if (!candidates.some((r) => r.name === resolved.name)) {
-          const weight = extraction.weights.get(name);
-          candidates.push({ ...resolved, evidence: trait.evidence, traitId: trait.id, ...weight && notes.includes(String(weight)) ? { weight } : {} });
-        }
+        return { ok: true, resolved: await this.dictionary.resolve(name, signal) };
       } catch {
-        signal.throwIfAborted();
-        notices.add("A tag service was unavailable, so some tags could not be verified and were left out.");
+        return { ok: false, resolved: null };
       }
-    }
+    }));
+    signal.throwIfAborted();
+    const lookupMs = Date.now() - lookupStarted;
+    ordered.forEach(([name, trait], i) => {
+      const { ok, resolved } = looked[i];
+      if (!ok) {
+        notices.add("A tag service was unavailable, so some tags could not be verified and were left out.");
+        return;
+      }
+      if (!resolved) {
+        unverified.set(name, trait);
+        notices.add(segmentOf(trait.group) === "scene" && trait.group !== "anatomy" ? `\u201C${name}\u201D is not a live booru tag and was left out.` : `\u201C${name}\u201D is not a live booru tag, so the sheet keeps it as the plain words \u201C${name.replace(/_/g, " ")}\u201D.`);
+      } else if (!candidates.some((r) => r.name === resolved.name)) {
+        const weight = extraction.weights.get(name);
+        candidates.push({ ...resolved, evidence: trait.evidence, traitId: trait.id, ...weight && notes.includes(String(weight)) ? { weight } : {} });
+      }
+    });
     const fixed = size?.tag ?? "";
     let review = {};
     let reviewed = true;
     try {
-      review = json(await this.generate(REVIEW, JSON.stringify({
+      review = json(await timed(REVIEW, JSON.stringify({
         traits: traits.map(({ id, group, evidence, detail }) => ({ id, group, evidence, detail })),
         candidates: candidates.filter((r) => r.name !== fixed).map((r) => ({ name: r.name, traitId: r.traitId, definition: r.wiki.replace(/\s+/g, " ").slice(0, 300) }))
-      }), signal));
+      })));
     } catch (error) {
       if (!(error instanceof OutputError))
         throw error;
@@ -744,7 +764,7 @@ class Translator {
       if (trait && what && note && !gaps.some((g) => g.what === what))
         gaps.push({ kind: "vague", what, note });
     }
-    return { ...views[scope], issues, model, views, sheet, gaps };
+    return { ...views[scope], issues, model, views, sheet, gaps, timing: { model: modelMs, lookups: lookupMs, total: Date.now() - started } };
   }
   async refine(input, signal, model) {
     const feedback = text(input.feedback, "feedback (maximum 2,000 characters)", 2000);
@@ -904,7 +924,7 @@ function setupBackend(api) {
       await s.load;
       const settings = s.settings;
       const dictionary = () => s.dictionary ??= new BooruDictionary(async (url) => {
-        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.8.2 (tag metadata client)" } }));
+        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.8.3 (tag metadata client)" } }));
         if (typeof response.status !== "number" || typeof response.body !== "string")
           throw new Error("Invalid proxy response.");
         return { status: response.status, body: response.body };
@@ -961,7 +981,7 @@ function setupBackend(api) {
         const entered = gelCredentials(text(v.gelUser ?? "", "Gelbooru user", 300), v.gelKey ? text(v.gelKey, "Gelbooru key", 300) : "");
         const credentials = { user: entered.user || settings.gelUser, key: entered.key || settings.gelKey };
         const outcome = await testGelbooru(async (url) => {
-          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.8.2 (tag metadata client)" } }));
+          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.8.3 (tag metadata client)" } }));
           return { status: Number(response.status), body: typeof response.body === "string" ? response.body : "" };
         }, credentials);
         const unsaved = credentials.user !== settings.gelUser || credentials.key !== settings.gelKey;

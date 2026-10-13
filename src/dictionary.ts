@@ -37,8 +37,9 @@ export async function testGelbooru(http: HttpGet, credentials: {user: string; ke
 /** Only fixed public metadata endpoints, never post/image searches or user-supplied URLs. */
 export class BooruDictionary implements TagDictionary {
   private cache = new Map<string, Cached>();
-  private queue: Promise<unknown> = Promise.resolve();
-  private nextAt = 0;
+  // One queue and one pause per site, so Danbooru and Gelbooru lookups run side by side while each site is still asked politely.
+  private queues = new Map<string, Promise<unknown>>();
+  private nextAt = new Map<string, number>();
   private unavailable = new Map<string,number>();
   readonly notices = new Set<string>();
   constructor(private http: HttpGet, private credentials: {user: string; key: string} = {user:'',key:''}, private spacingMs = 450) {}
@@ -50,12 +51,13 @@ export class BooruDictionary implements TagDictionary {
     // Cache keys never contain credentials. Credentials are fixed for this dictionary instance.
     const key = url.toString(); const saved = this.cache.get(key);
     if (saved && saved.expires > Date.now()) return saved.value;
-    const task = this.queue.catch(() => {}).then(async () => {
+    const host = url.hostname;
+    const task = (this.queues.get(host) ?? Promise.resolve()).catch(() => {}).then(async () => {
       signal.throwIfAborted();
       const hit = this.cache.get(key);
       if (hit && hit.expires > Date.now()) return hit.value;
-      await new Promise(resolve => setTimeout(resolve, Math.max(0, this.nextAt - Date.now())));
-      signal.throwIfAborted(); this.nextAt = Date.now() + this.spacingMs;
+      await new Promise(resolve => setTimeout(resolve, Math.max(0, (this.nextAt.get(host) ?? 0) - Date.now())));
+      signal.throwIfAborted(); this.nextAt.set(host, Date.now() + this.spacingMs);
       if (url.hostname === 'gelbooru.com') {
         url.searchParams.set('user_id', this.credentials.user);
         url.searchParams.set('api_key', this.credentials.key);
@@ -83,7 +85,7 @@ export class BooruDictionary implements TagDictionary {
       this.cache.set(key, {value, expires:Date.now() + (empty ? 3_600_000 : 7*86_400_000)});
       return value;
     });
-    this.queue = task;
+    this.queues.set(host, task);
     return task;
   }
   private dan(path: string, query: Record<string,string>, signal: AbortSignal) { return this.request(`${DAN}/${path}.json`, {limit:'20',...query}, signal); }
@@ -132,7 +134,8 @@ export class BooruDictionary implements TagDictionary {
       } catch { signal.throwIfAborted(); }
       if (requested !== canonical) result.aliasFrom = requested;
     }
-    if (this.credentials.user && this.credentials.key) {
+    // Gelbooru matters only when Danbooru lacks the tag or knows it under another name; a live Danbooru tag is already right.
+    if (this.credentials.user && this.credentials.key && (!result || requested !== canonical)) {
       // A Danbooru alias establishes equivalence before trying the Gelbooru spelling.
       for (const name of [...new Set([requested,canonical])]) {
         try {

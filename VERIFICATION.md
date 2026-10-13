@@ -180,3 +180,7 @@ A live prompt for a full-figured character paired `abs, toned` with a caption sa
 
 After a Lumiverse staging update, every connection the user tried (two OpenRouter, one direct DeepSeek) failed with "The model returned empty or truncated text" after a long wait, while chat and the Gelbooru test worked. The single message could not say which call failed or why. The reading of Lumiverse's staging diff found no change to raw generation that would explain it, so the cause is not established. v0.8.2 raises the per-call output limit from 6,000 to 16,000 tokens (reasoning tokens count against it), returns a reply left in the reasoning field when content is empty, reads JSON wrapped in prose, and reports the stage and the kind of failure. Typecheck, tests and the build passed; a panel-to-backend test covers each reply shape.
 
+## v0.8.3: lookup speed and timing
+
+Translations became slow once Gelbooru credentials started working: every tag also queried Gelbooru, and all requests for both sites waited in one serialized queue, one tag at a time. Now each site has its own queue and pause, candidates are resolved concurrently and used in prompt order, and Gelbooru is consulted only when Danbooru has no live tag of that name or resolves it through an alias (the cases where the spellings can differ). Each translation reports its model time, lookup time and total. Whether the model or the lookups dominated the user's slow run is not known; the new timing line will show it. Typecheck, tests and the build passed.
+

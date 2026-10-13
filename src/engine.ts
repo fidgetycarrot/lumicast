@@ -171,6 +171,8 @@ const MAX_TAGS = 40;
 export class Translator {
   constructor(private generate: GenerateText, private dictionary: TagDictionary) {}
   async translate(input: string, signal: AbortSignal, model: string, options: TranslateOptions = {}): Promise<Translation> {
+    const started = Date.now(); let modelMs = 0;
+    const timed = async (system: string, body: string) => { const t = Date.now(); try { return await this.generate(system, body, signal); } finally { modelMs += Date.now() - t; } };
     const source = text(input, 'description (maximum 12,000 characters)', 12_000);
     if (!source) throw new Error('Paste a character description first.');
     const scope = options.scope ?? 'character';
@@ -179,7 +181,7 @@ export class Translator {
     const notes = text(options.notes ?? '', 'notes (maximum 2,000 characters)', 2000);
     // Stated facts and notes are quotable evidence too, so they are grounded alongside the description.
     const grounded = [stated, notes, source].filter(Boolean).join('\n');
-    const extraction = parseExtraction(await this.generate(EXTRACT, JSON.stringify({...(stated ? {stated} : {}), ...(notes ? {notes} : {}), description:source}), signal), grounded);
+    const extraction = parseExtraction(await timed(EXTRACT, JSON.stringify({...(stated ? {stated} : {}), ...(notes ? {notes} : {}), description:source})), grounded);
     if (!extraction.traits.length) throw new Error('No explicit visual traits were found. Describe the appearance you want translated.');
     const notices = new Set<string>();
     if (extraction.skipped) notices.add(`${extraction.skipped} extracted detail${extraction.skipped === 1 ? ' was' : 's were'} left out because the model did not quote your text for ${extraction.skipped === 1 ? 'it' : 'them'}.`);
@@ -223,31 +225,34 @@ export class Translator {
     const candidates: TagRow[] = [];
     // A guess the boorus do not have is not a tag, but its words still describe the character.
     const unverified = new Map<string, Trait>();
-    for (const [name, trait] of [...wanted].sort((a, b) => traits.indexOf(a[1]) - traits.indexOf(b[1]))) {
-      signal.throwIfAborted();
-      try {
-        const resolved = await this.dictionary.resolve(name, signal);
-        if (!resolved) {
-          unverified.set(name, trait);
-          notices.add(segmentOf(trait.group) === 'scene' && trait.group !== 'anatomy' ? `“${name}” is not a live booru tag and was left out.` : `“${name}” is not a live booru tag, so the sheet keeps it as the plain words “${name.replace(/_/g, ' ')}”.`);
-        }
-        else if (!candidates.some(r => r.name === resolved.name)) {
-          // A weight is the user's number or nothing: it must appear in their notes.
-          const weight = extraction.weights.get(name);
-          candidates.push({...resolved, evidence:trait.evidence, traitId:trait.id, ...(weight && notes.includes(String(weight)) ? {weight} : {})});
-        }
-      } catch {
-        signal.throwIfAborted();
-        notices.add('A tag service was unavailable, so some tags could not be verified and were left out.');
+    // Look every name up at once; the dictionary still paces each site. Results are used in prompt order.
+    const lookupStarted = Date.now();
+    const ordered = [...wanted].sort((a, b) => traits.indexOf(a[1]) - traits.indexOf(b[1]));
+    const looked = await Promise.all(ordered.map(async ([name]) => {
+      try { return {ok: true as const, resolved: await this.dictionary.resolve(name, signal)}; }
+      catch { return {ok: false as const, resolved: null}; }
+    }));
+    signal.throwIfAborted();
+    const lookupMs = Date.now() - lookupStarted;
+    ordered.forEach(([name, trait], i) => {
+      const {ok, resolved} = looked[i];
+      if (!ok) { notices.add('A tag service was unavailable, so some tags could not be verified and were left out.'); return; }
+      if (!resolved) {
+        unverified.set(name, trait);
+        notices.add(segmentOf(trait.group) === 'scene' && trait.group !== 'anatomy' ? `“${name}” is not a live booru tag and was left out.` : `“${name}” is not a live booru tag, so the sheet keeps it as the plain words “${name.replace(/_/g, ' ')}”.`);
+      } else if (!candidates.some(r => r.name === resolved.name)) {
+        // A weight is the user's number or nothing: it must appear in their notes.
+        const weight = extraction.weights.get(name);
+        candidates.push({...resolved, evidence:trait.evidence, traitId:trait.id, ...(weight && notes.includes(String(weight)) ? {weight} : {})});
       }
-    }
+    });
     const fixed = size?.tag ?? '';
     let review: Record<string, unknown> = {}; let reviewed = true;
     try {
-      review = json(await this.generate(REVIEW, JSON.stringify({
+      review = json(await timed(REVIEW, JSON.stringify({
         traits: traits.map(({id, group, evidence, detail}) => ({id, group, evidence, detail})),
         candidates: candidates.filter(r => r.name !== fixed).map(r => ({name:r.name, traitId:r.traitId, definition:r.wiki.replace(/\s+/g, ' ').slice(0, 300)})),
-      }), signal));
+      })));
     } catch (error) {
       if (!(error instanceof OutputError)) throw error;
       reviewed = false;
@@ -341,7 +346,7 @@ export class Translator {
       const what = optional(() => text(v.what, 'trait', 60), ''); const note = optional(() => text(v.why, 'reason', 200), '');
       if (trait && what && note && !gaps.some(g => g.what === what)) gaps.push({kind:'vague', what, note});
     }
-    return { ...views[scope], issues, model, views, sheet, gaps };
+    return { ...views[scope], issues, model, views, sheet, gaps, timing:{model:modelMs, lookups:lookupMs, total:Date.now() - started} };
   }
 
   /** Propose changes to a prompt from what the user saw in a generated image. Nothing is applied here. */

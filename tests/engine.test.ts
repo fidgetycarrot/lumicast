@@ -327,3 +327,7 @@ test('refine passes recent history to the model, trimmed and cleaned',async()=> 
   expect(sent.length).toBe(6);expect(sent[0].feedback).toBe('round 4');expect(sent[5].feedback).toBe('round 9');
   expect((await refineWith({reply:'ok'})).inputs[0]).not.toContain('history');
 });
+test('a translation reports where its time went',async()=> {
+  const {result}=await run('red hair',hair,{});
+  expect(result.timing.total).toBeGreaterThanOrEqual(result.timing.model);expect(result.timing.lookups).toBeGreaterThanOrEqual(0);
+});
