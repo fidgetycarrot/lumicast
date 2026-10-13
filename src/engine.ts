@@ -181,6 +181,7 @@ export class Translator {
     const notes = text(options.notes ?? '', 'notes (maximum 2,000 characters)', 2000);
     // Stated facts and notes are quotable evidence too, so they are grounded alongside the description.
     const grounded = [stated, notes, source].filter(Boolean).join('\n');
+    options.progress?.('Step 1 of 3: the model is reading the description…');
     const extraction = parseExtraction(await timed(EXTRACT, JSON.stringify({...(stated ? {stated} : {}), ...(notes ? {notes} : {}), description:source})), grounded);
     if (!extraction.traits.length) throw new Error('No explicit visual traits were found. Describe the appearance you want translated.');
     const notices = new Set<string>();
@@ -228,9 +229,10 @@ export class Translator {
     // Look every name up at once; the dictionary still paces each site. Results are used in prompt order.
     const lookupStarted = Date.now();
     const ordered = [...wanted].sort((a, b) => traits.indexOf(a[1]) - traits.indexOf(b[1]));
-    const looked = await Promise.all(ordered.map(async ([name]) => {
-      try { return {ok: true as const, resolved: await this.dictionary.resolve(name, signal)}; }
-      catch { return {ok: false as const, resolved: null}; }
+    options.progress?.(`Step 2 of 3: checking ${ordered.length} tag${ordered.length === 1 ? '' : 's'} on Danbooru…`);
+    const looked = this.dictionary.resolveMany ? await this.dictionary.resolveMany(ordered.map(([name]) => name), signal) : await Promise.all(ordered.map(async ([name]) => {
+      try { return {ok: true, resolved: await this.dictionary.resolve(name, signal)}; }
+      catch { return {ok: false, resolved: null}; }
     }));
     signal.throwIfAborted();
     const lookupMs = Date.now() - lookupStarted;
@@ -249,6 +251,7 @@ export class Translator {
     const fixed = size?.tag ?? '';
     let review: Record<string, unknown> = {}; let reviewed = true;
     try {
+      options.progress?.('Step 3 of 3: the model is checking the tags and writing the caption…');
       review = json(await timed(REVIEW, JSON.stringify({
         traits: traits.map(({id, group, evidence, detail}) => ({id, group, evidence, detail})),
         candidates: candidates.filter(r => r.name !== fixed).map(r => ({name:r.name, traitId:r.traitId, definition:r.wiki.replace(/\s+/g, ' ').slice(0, 300)})),

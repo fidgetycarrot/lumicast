@@ -87,6 +87,10 @@ function createRpc(ctx, timeout = 250000) {
   const pending = new Map;
   const off = ctx.onBackendMessage((value) => {
     const r = value;
+    if (r?.type === "lumicast:progress" && r.id && typeof r.stage === "string") {
+      pending.get(r.id)?.progress?.(r.stage.slice(0, 200));
+      return;
+    }
     if (!r || r.type !== "lumicast:response" || !r.id)
       return;
     const p = pending.get(r.id);
@@ -100,7 +104,7 @@ function createRpc(ctx, timeout = 250000) {
       p.resolve(r.result);
   });
   return {
-    request(action, input) {
+    request(action, input, progress) {
       if (closed)
         return Promise.reject(new Error("LumiCast is closed."));
       const id = crypto.randomUUID();
@@ -109,7 +113,7 @@ function createRpc(ctx, timeout = 250000) {
           pending.delete(id);
           reject(new Error("Lumiverse did not respond in time. Your edits are preserved."));
         }, timeout);
-        pending.set(id, { resolve: (v) => resolve(v), reject, timer });
+        pending.set(id, { resolve: (v) => resolve(v), reject, timer, progress });
         try {
           ctx.sendToBackend({ type: "lumicast:request", id, action, input });
         } catch (e) {
@@ -190,6 +194,13 @@ function setup(ctx) {
   settings.append(el("summary", "Connection & tag services"));
   const connection = el("select");
   connection.setAttribute("aria-label", "Generative connection");
+  const thinking = el("select");
+  thinking.setAttribute("aria-label", "Model thinking");
+  for (const [value, label] of [["light", "Light (recommended)"], ["off", "Off (fastest)"], ["inherit", "Same as this connection in Lumiverse"]]) {
+    const o = el("option", label);
+    o.value = value;
+    thinking.append(o);
+  }
   const gelUser = el("input");
   gelUser.inputMode = "numeric";
   gelUser.autocomplete = "off";
@@ -203,7 +214,7 @@ function setup(ctx) {
   const clearLabel = el("label", " Clear saved Gelbooru key");
   clearLabel.prepend(clearKey);
   const save = button("Save settings", async () => {
-    await rpc.request("save", { connectionId: connection.value, gelUser: gelUser.value, gelKey: gelKey.value, clearGelKey: clearKey.checked });
+    await rpc.request("save", { connectionId: connection.value, thinking: thinking.value, gelUser: gelUser.value, gelKey: gelKey.value, clearGelKey: clearKey.checked });
     gelKey.value = "";
     clearKey.checked = false;
     await refresh();
@@ -219,7 +230,7 @@ function setup(ctx) {
   });
   const credentialNotice = el("p");
   credentialNotice.className = "lc-muted";
-  settings.append(field("Generative connection", connection, "Uses the model saved in Lumiverse. Pick a fast text model that follows JSON instructions; Jev, Decisions and embedding models cannot translate."), field("Gelbooru user ID (optional)", gelUser, "The number, not your username. You can also paste Gelbooru’s whole “&api_key=…&user_id=…” line into the key box and leave this empty."), field("Gelbooru API key (optional)", gelKey, "Stored in your extension storage on the Lumiverse server. Never returned to this panel. Sent only to Gelbooru over HTTPS."), clearLabel, credentialNotice, row(testGel), gelResult, row(save, refreshButton));
+  settings.append(field("Generative connection", connection, "Uses the model saved in Lumiverse. Pick a fast text model that follows JSON instructions; Jev, Decisions and embedding models cannot translate."), field("Model thinking", thinking, "How long the model thinks before answering. Long thinking is most of the wait and rarely improves tags. If a model refuses to work with thinking off, choose Light."), field("Gelbooru user ID (optional)", gelUser, "The number, not your username. You can also paste Gelbooru’s whole “&api_key=…&user_id=…” line into the key box and leave this empty."), field("Gelbooru API key (optional)", gelKey, "Stored in your extension storage on the Lumiverse server. Never returned to this panel. Sent only to Gelbooru over HTTPS."), clearLabel, credentialNotice, row(testGel), gelResult, row(save, refreshButton));
   const input = card("01 / Describe");
   const source = named(el("textarea"), "source");
   source.rows = 7;
@@ -233,7 +244,7 @@ function setup(ctx) {
     if (!source.value.trim())
       throw new Error("Paste a character description first.");
     const currentRevision = revision;
-    const next = await rpc.request("translate", { description: source.value, stated: stated.value, connectionId: connection.value });
+    const next = await clocked("translate", { description: source.value, stated: stated.value, connectionId: connection.value });
     if (revision !== currentRevision) {
       notify("The description changed during translation. Translate again to use the new wording.");
       return;
@@ -388,7 +399,7 @@ function setup(ctx) {
     if (!feedback.value.trim())
       throw new Error("Say what the image got wrong first.");
     closeRound([]);
-    const next = await rpc.request("refine", { connectionId: connection.value, tags: entries, caption: prose.value, feedback: feedback.value, description: source.value, stated: stated.value, locked: splitTags(sheet.always.box.value), history: rounds });
+    const next = await clocked("refine", { connectionId: connection.value, tags: entries, caption: prose.value, feedback: feedback.value, description: source.value, stated: stated.value, locked: splitTags(sheet.always.box.value), history: rounds });
     roundFeedback = feedback.value.trim().slice(0, 600);
     pending = next.proposals;
     reply.textContent = next.reply;
@@ -577,7 +588,7 @@ function setup(ctx) {
     notify("Search complete. Popularity is not an Anima quality score.");
   });
   searchCard.append(field("Tag name or the start of one", query, "Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched."), search, found);
-  app.append(intro, settings, status, input, gapsCard, output, refine, sheetCard, searchCard, el("p", "LumiCast 0.8.3 · Draft stays in this tab until reload."));
+  app.append(intro, settings, status, input, gapsCard, output, refine, sheetCard, searchCard, el("p", "LumiCast 0.9.0 · Draft stays in this tab until reload."));
   const controls = [translate, again, save, refreshButton, testGel, saveNotes, saveQuality, startOver, verify, rebuild, copy, copyTags, copyProse, suggest, apply, search, ...Object.values(sheet).map((f) => f.copyField)];
   let shareTimer;
   function share() {
@@ -652,10 +663,25 @@ function setup(ctx) {
     apply.disabled = busy || !pending.length;
     copy.disabled = busy || !prompt.value.trim();
     cancel.hidden = !busy;
-    for (const node of [connection, gelUser, gelKey, clearKey])
+    for (const node of [connection, thinking, gelUser, gelKey, clearKey])
       node.disabled = busy;
     for (const node of [source, stated, statedAgain, feedback, notes, quality, tags, prose, prompt, ...Object.values(sheet).map((f) => f.box)])
       node.readOnly = busy;
+  }
+  async function clocked(action, input) {
+    const started = Date.now();
+    let stage = "Starting…";
+    const tick = () => notify(`${stage} ${Math.round((Date.now() - started) / 1000)} s`);
+    tick();
+    const clock = setInterval(tick, 1000);
+    try {
+      return await rpc.request(action, input, (next) => {
+        stage = next;
+        tick();
+      });
+    } finally {
+      clearInterval(clock);
+    }
   }
   function notify(message, error = false) {
     if (closed)
@@ -709,6 +735,7 @@ function setup(ctx) {
     connection.value = selected;
     gelUser.value = snapshot.settings.gelUser;
     notes.value = snapshot.settings.notes;
+    thinking.value = snapshot.settings.thinking || "light";
     quality.value = snapshot.settings.quality;
     credentialNotice.textContent = snapshot.settings.hasGelKey ? "Gelbooru key saved." : "Danbooru works without credentials. Gelbooru requires its account API key.";
     if (!connection.value)

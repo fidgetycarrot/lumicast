@@ -16,7 +16,7 @@ function harness(provider='openrouter',model='test/generative') {
     permissions:{has:()=>true},
     userStorage:{getJson:async(path:string,o:{fallback:unknown;userId?:string})=>storage.get(`${o.userId}:${path}`)??o.fallback,setJson:async(path:string,value:unknown,o:{userId?:string})=>{storage.set(`${o.userId}:${path}`,value);}},
     connections:{list:async()=>[{id:'c1',name:'Fast text',provider,model},{id:'c2',name:'Classifier',provider:'openrouter',model:'typesafe/jev-1.13'}],get:async(id:string,user?:string)=>{calls.push(['connection',id,user]);return id==='c1'?{id,name:'Fast text',provider,model}:null;}},
-    cors:async(url:string)=>{calls.push(['cors',url]);if(gel&&new URL(url).hostname==='gelbooru.com')return gel;return{status:200,body:JSON.stringify(url.includes('/tags.json')?[{name:new URL(url).searchParams.get('search[name]')??'red_hair',category:0,post_count:100}]:url.includes('/wiki_pages.json')?[{title:'red_hair',body:'Hair colored red.'}]:[])};},
+    cors:async(url:string)=>{calls.push(['cors',url]);if(gel&&new URL(url).hostname==='gelbooru.com')return gel;const q=new URL(url).searchParams;const list=q.get('search[name_comma]')?.split(',');return{status:200,body:JSON.stringify(url.includes('/tags.json')?(list??[q.get('search[name]')??'red_hair']).map(name=>({name,category:0,post_count:100})):url.includes('/wiki_pages.json')?(q.get('search[title_comma]')?.split(',')??['red_hair']).map(title=>({title,body:title==='red_hair'?'Hair colored red.':''})):[])};},
     generate:{raw:async(input:{messages:{content:string}[];signal:AbortSignal;userId?:string;provider?:string;model?:string;connection_id?:string})=> {
       calls.push(['generation',input]);latestSignal=input.signal;
       // Mirror prepareRawCall: connection supplies credentials, input supplies model.
@@ -102,7 +102,7 @@ test('panel prompt omits narration and scene while the source passages stay visi
   expect(areas[1].value).toBe('red_hair');expect(areas[2].value).toBe('Red hair.');expect(areas[5].value).toBe('red hair\n\nRed hair.');
   // The sources list covers what the sheet holds: the character and the outfit, whatever Include says.
   expect(h.root.querySelector('[data-lc="sources"]')?.textContent).toContain('Red hair, obviously!');expect(h.root.querySelector('[data-lc="sources"]')?.textContent).toContain('ribbon');expect(areas[5].value).not.toContain('ribbon');
-  const scope=h.root.querySelectorAll('select')[1];expect(scope.value).toBe('character');areas[2].value='my edit';areas[2].dispatchEvent(new Event('input'));scope.value='outfit';scope.dispatchEvent(new Event('change'));
+  const scope=h.root.querySelectorAll('select')[2];expect(scope.value).toBe('character');areas[2].value='my edit';areas[2].dispatchEvent(new Event('input'));scope.value='outfit';scope.dispatchEvent(new Event('change'));
   expect(areas[2].value).toBe('Red hair. She wears a ribbon.');expect(h.calls.filter(v=>(v as unknown[])[0]==='generation').length).toBe(2);expect(h.root.textContent).toContain('manual edits there were replaced');expect(h.root.querySelector('[data-lc="sources"]')?.textContent).toContain('ribbon');
 });
 test('direct DeepSeek adapter tolerates string evidence without discarding the panel result',async()=> {
@@ -283,7 +283,7 @@ test('odd model replies: cut off at the length limit, empty, or the answer left 
   dom();const h=harness();cleanups.push(h.stop);const rpc=createRpc(h.ctx);cleanups.push(()=>rpc.destroy());
   const ask=()=>rpc.request<Translation>('translate',{description:'Short red hair.',connectionId:'c1'}).then(r=>r,(e:Error)=>e);
   h.setResponses([{__raw:{content:'{"traits":[',reasoning:'x'.repeat(12000),finish_reason:'length'}}]);
-  expect(((await ask()) as Error).message).toBe('The model ran out of room during trait extraction (it stopped at the length limit after 12,000 characters of reasoning). Try a model with reasoning turned down or off, or a shorter description.');
+  expect(((await ask()) as Error).message).toBe('The model ran out of room during trait extraction (it stopped at the length limit after 12,000 characters of reasoning). Set Model thinking to Off or Light under Connection & tag services, or use a shorter description.');
   h.setResponses([{__raw:{content:'',finish_reason:'stop'}}]);
   expect(((await ask()) as Error).message).toBe('The model sent back an empty reply during trait extraction (finish reason: stop). Try again, or try another connection.');
   const extraction={traits:[{id:'t1',group:'hair',evidence:'Short red hair.',tags:['red_hair'],detail:'Short red hair'}]};
@@ -291,4 +291,20 @@ test('odd model replies: cut off at the length limit, empty, or the answer left 
   expect(((await ask()) as Translation).views.character.prompt).toBe('red hair\n\nShort red hair.');
   const sent=(h.calls.filter(v=>(v as unknown[])[0]==='generation').pop() as unknown[])[1] as {parameters:{max_tokens:number}};
   expect(sent.parameters.max_tokens).toBe(16000);
+});
+test('model thinking is light unless chosen otherwise, and each step is reported while it runs',async()=> {
+  dom();const h=harness();cleanups.push(h.stop);const rpc=createRpc(h.ctx);cleanups.push(()=>rpc.destroy());
+  const stages:string[]=[];
+  await rpc.request('translate',{description:'Short red hair.',connectionId:'c1'},s=>stages.push(s));
+  expect(stages).toEqual(['Step 1 of 3: the model is reading the description…','Step 2 of 3: checking 1 tag on Danbooru…','Step 3 of 3: the model is checking the tags and writing the caption…']);
+  const reasoning=()=>h.calls.filter(v=>(v as unknown[])[0]==='generation').map(v=>((v as unknown[])[1] as {reasoning?:unknown}).reasoning).at(-1);
+  expect(reasoning()).toEqual({source:'custom',apiReasoning:true,effort:'low'});
+  expect((await rpc.request<Snapshot>('snapshot')).settings.thinking).toBe('light');
+  await rpc.request('save',{connectionId:'c1',thinking:'off',gelUser:'',gelKey:''});
+  await rpc.request('translate',{description:'Short red hair.',connectionId:'c1'});expect(reasoning()).toEqual({source:'off'});
+  await rpc.request('save',{connectionId:'c1',thinking:'inherit',gelUser:'',gelKey:''});
+  await rpc.request('translate',{description:'Short red hair.',connectionId:'c1'});expect(reasoning()).toBeUndefined();
+  // Saving notes or other settings keeps the choice; an unknown value falls back to light.
+  await rpc.request('saveNotes',{notes:'x'});expect((await rpc.request<Snapshot>('snapshot')).settings.thinking).toBe('inherit');
+  await rpc.request('save',{connectionId:'c1',thinking:'max',gelUser:'',gelKey:''});expect((await rpc.request<Snapshot>('snapshot')).settings.thinking).toBe('light');
 });

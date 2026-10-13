@@ -4,21 +4,22 @@ import { removeConflicts } from './engine';
 
 export function createRpc(ctx: Pick<SpindleFrontendContext,'sendToBackend'|'onBackendMessage'>, timeout=250_000) {
   let closed=false;
-  const pending=new Map<string,{resolve(value:unknown):void;reject(e:Error):void;timer:ReturnType<typeof setTimeout>}>();
+  const pending=new Map<string,{resolve(value:unknown):void;reject(e:Error):void;timer:ReturnType<typeof setTimeout>;progress?:(stage:string)=>void}>();
   const off=ctx.onBackendMessage(value=> {
-    const r=value as {type?:string;id?:string;result?:unknown;error?:string};
+    const r=value as {type?:string;id?:string;result?:unknown;error?:string;stage?:unknown};
+    if (r?.type === 'lumicast:progress' && r.id && typeof r.stage === 'string') {pending.get(r.id)?.progress?.(r.stage.slice(0,200));return;}
     if (!r || r.type !== 'lumicast:response' || !r.id) return;
     const p=pending.get(r.id);if(!p)return;
     clearTimeout(p.timer);pending.delete(r.id);
     if(r.error)p.reject(new Error(r.error));else p.resolve(r.result);
   });
   return {
-    request<T>(action:string,input?:unknown):Promise<T> {
+    request<T>(action:string,input?:unknown,progress?:(stage:string)=>void):Promise<T> {
       if(closed)return Promise.reject(new Error('LumiCast is closed.'));
       const id=crypto.randomUUID();
       return new Promise((resolve,reject)=> {
         const timer=setTimeout(()=>{pending.delete(id);reject(new Error('Lumiverse did not respond in time. Your edits are preserved.'));},timeout);
-        pending.set(id,{resolve:v=>resolve(v as T),reject,timer});
+        pending.set(id,{resolve:v=>resolve(v as T),reject,timer,progress});
         try{ctx.sendToBackend({type:'lumicast:request',id,action,input});}catch(e){clearTimeout(timer);pending.delete(id);reject(e);}
       });
     },
@@ -58,12 +59,14 @@ export function setup(ctx:SpindleFrontendContext) {
   // ── Settings: only what connects LumiCast to other services ──
   const settings=el('details');settings.className='lc-card';settings.append(el('summary','Connection & tag services'));
   const connection=el('select');connection.setAttribute('aria-label','Generative connection');
+  const thinking=el('select');thinking.setAttribute('aria-label','Model thinking');
+  for(const [value,label] of [['light','Light (recommended)'],['off','Off (fastest)'],['inherit','Same as this connection in Lumiverse']]){const o=el('option',label);o.value=value;thinking.append(o);}
   const gelUser=el('input');gelUser.inputMode='numeric';gelUser.autocomplete='off';
   const gelKey=el('input');gelKey.type='password';gelKey.autocomplete='off';gelKey.placeholder='Leave blank to keep saved key';
   const clearKey=el('input');clearKey.type='checkbox';clearKey.style.width='auto';
   const clearLabel=el('label',' Clear saved Gelbooru key');clearLabel.prepend(clearKey);
   const save=button('Save settings',async()=> {
-    await rpc.request('save',{connectionId:connection.value,gelUser:gelUser.value,gelKey:gelKey.value,clearGelKey:clearKey.checked});
+    await rpc.request('save',{connectionId:connection.value,thinking:thinking.value,gelUser:gelUser.value,gelKey:gelKey.value,clearGelKey:clearKey.checked});
     gelKey.value='';clearKey.checked=false;await refresh();notify('Settings saved.');
   });
   const refreshButton=button('Refresh connections',refresh);
@@ -75,6 +78,7 @@ export function setup(ctx:SpindleFrontendContext) {
   const credentialNotice=el('p');credentialNotice.className='lc-muted';
   settings.append(
     field('Generative connection',connection,'Uses the model saved in Lumiverse. Pick a fast text model that follows JSON instructions; Jev, Decisions and embedding models cannot translate.'),
+    field('Model thinking',thinking,'How long the model thinks before answering. Long thinking is most of the wait and rarely improves tags. If a model refuses to work with thinking off, choose Light.'),
     field('Gelbooru user ID (optional)',gelUser,'The number, not your username. You can also paste Gelbooru’s whole “&api_key=…&user_id=…” line into the key box and leave this empty.'),
     field('Gelbooru API key (optional)',gelKey,'Stored in your extension storage on the Lumiverse server. Never returned to this panel. Sent only to Gelbooru over HTTPS.'),
     clearLabel,credentialNotice,row(testGel),gelResult,row(save,refreshButton));
@@ -86,7 +90,7 @@ export function setup(ctx:SpindleFrontendContext) {
   const runTranslate=async()=> {
     if(!source.value.trim())throw new Error('Paste a character description first.');
     const currentRevision=revision;
-    const next=await rpc.request<Translation>('translate',{description:source.value,stated:stated.value,connectionId:connection.value});
+    const next=await clocked<Translation>('translate',{description:source.value,stated:stated.value,connectionId:connection.value});
     if(revision!==currentRevision) {notify('The description changed during translation. Translate again to use the new wording.');return;}
     // Say what a re-run settled, so answering a gap never looks like nothing happened.
     const before=result?result.gaps.map(g=>g.what):[];
@@ -168,7 +172,7 @@ export function setup(ctx:SpindleFrontendContext) {
     if(!entries.length)throw new Error('Translate a character first.');
     if(!feedback.value.trim())throw new Error('Say what the image got wrong first.');
     closeRound([]);
-    const next=await rpc.request<Refinement>('refine',{connectionId:connection.value,tags:entries,caption:prose.value,feedback:feedback.value,description:source.value,stated:stated.value,locked:splitTags(sheet.always.box.value),history:rounds});
+    const next=await clocked<Refinement>('refine',{connectionId:connection.value,tags:entries,caption:prose.value,feedback:feedback.value,description:source.value,stated:stated.value,locked:splitTags(sheet.always.box.value),history:rounds});
     roundFeedback=feedback.value.trim().slice(0,600);pending=next.proposals;reply.textContent=next.reply;proposed.replaceChildren();
     pending.forEach((p,i)=> {
       const line=el('label');line.className='lc-proposal';const box=el('input');box.type='checkbox';box.checked=true;box.dataset.index=String(i);
@@ -275,7 +279,7 @@ export function setup(ctx:SpindleFrontendContext) {
   });
   searchCard.append(field('Tag name or the start of one',query,'Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched.'),search,found);
 
-  app.append(intro,settings,status,input,gapsCard,output,refine,sheetCard,searchCard,el('p','LumiCast 0.8.3 · Draft stays in this tab until reload.'));
+  app.append(intro,settings,status,input,gapsCard,output,refine,sheetCard,searchCard,el('p','LumiCast 0.9.0 · Draft stays in this tab until reload.'));
   const controls=[translate,again,save,refreshButton,testGel,saveNotes,saveQuality,startOver,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
 
   // Every change to the sheet is offered to Lumi Studio, a moment after typing stops.
@@ -326,8 +330,15 @@ export function setup(ctx:SpindleFrontendContext) {
   function update(){
     for(const c of controls)c.disabled=busy;
     rebuild.disabled=busy||(!verified&&!!tags.value.trim());apply.disabled=busy||!pending.length;copy.disabled=busy||!prompt.value.trim();cancel.hidden=!busy;
-    for(const node of [connection,gelUser,gelKey,clearKey])node.disabled=busy;
+    for(const node of [connection,thinking,gelUser,gelKey,clearKey])node.disabled=busy;
     for(const node of [source,stated,statedAgain,feedback,notes,quality,tags,prose,prompt,...Object.values(sheet).map(f=>f.box)])node.readOnly=busy;
+  }
+  // A long request shows its current step and a running clock, so a slow model never looks frozen.
+  async function clocked<T>(action:string,input:unknown):Promise<T>{
+    const started=Date.now();let stage='Starting…';
+    const tick=()=>notify(`${stage} ${Math.round((Date.now()-started)/1000)} s`);
+    tick();const clock=setInterval(tick,1000);
+    try{return await rpc.request<T>(action,input,next=>{stage=next;tick();});}finally{clearInterval(clock);}
   }
   function notify(message:string,error=false){if(closed)return;status.textContent=message;status.dataset.error=String(error);}
   function row(...children:HTMLElement[]){const n=el('div');n.className='lc-row';n.append(...children);return n;}
@@ -337,7 +348,7 @@ export function setup(ctx:SpindleFrontendContext) {
     const snapshot=await rpc.request<Snapshot>('snapshot');if(closed)return;
     const selected=connection.value||snapshot.settings.connectionId;connection.replaceChildren();connection.append(option('Select a generative connection',''));
     for(const c of snapshot.connections){const o=option(`${c.name} · ${c.provider} / ${c.model}${c.supported?'':' (not generative)'}`,c.id);o.disabled=!c.supported;connection.append(o);}
-    connection.value=selected;gelUser.value=snapshot.settings.gelUser;notes.value=snapshot.settings.notes;quality.value=snapshot.settings.quality;
+    connection.value=selected;gelUser.value=snapshot.settings.gelUser;notes.value=snapshot.settings.notes;thinking.value=snapshot.settings.thinking||'light';quality.value=snapshot.settings.quality;
     credentialNotice.textContent=snapshot.settings.hasGelKey?'Gelbooru key saved.':'Danbooru works without credentials. Gelbooru requires its account API key.';
     if(!connection.value)settings.open=true;
   }

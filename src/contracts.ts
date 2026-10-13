@@ -10,7 +10,7 @@ export const inScope = (group: Group, scope: Scope): boolean => scope === 'scene
 export interface Trait { id: string; group: Group; evidence: string; tags: string[]; detail: string }
 export interface Extraction { traits: Trait[]; skipped: number; weights: Map<string, number> }
 /** stated: facts the user asserts about the character ("femboy, android"), true even if the description never says them. */
-export interface TranslateOptions { scope?: Scope; stated?: string; /** The user's standing prompting guidance, saved in settings. */ notes?: string }
+export interface TranslateOptions { scope?: Scope; stated?: string; /** The user's standing prompting guidance, saved in settings. */ notes?: string; /** Called as each stage starts, with a plain sentence for the status line. */ progress?: (stage: string) => void }
 /** A prompt the user has generated from, and what they saw in the image. */
 export interface RefineInput { tags: string[]; caption: string; feedback: string; description?: string; stated?: string; notes?: string; /** Tags that define the character (the sheet's Always include). Removable only when the feedback names them. */ locked?: string[]; /** Earlier rounds for this character, oldest first. */ history?: RefineRound[] }
 /** One earlier round of Refine: what the user said, and which suggestions they took or turned down. */
@@ -44,8 +44,11 @@ export function nameFrom(description: string): string {
 export interface Timing { model: number; lookups: number; total: number }
 export interface Translation extends View { issues: Issue[]; model: string; views: Record<Scope, View>; sheet: Sheet; gaps: Gap[]; timing: Timing }
 /** quality: the user's own prefix (quality, score, year, safety tags) for the Anima prompt. Never verified or changed. */
-export interface Settings { connectionId: string; gelUser: string; gelKey: string; notes: string; quality: string }
-export interface PublicSettings { connectionId: string; gelUser: string; hasGelKey: boolean; notes: string; quality: string }
+/** How hard the model thinks: light is a short think, off skips it, inherit uses the connection's own reasoning setting. */
+export type Thinking = 'light' | 'off' | 'inherit';
+export const THINKING: Thinking[] = ['light', 'off', 'inherit'];
+export interface Settings { connectionId: string; gelUser: string; gelKey: string; notes: string; quality: string; thinking: Thinking }
+export interface PublicSettings { connectionId: string; gelUser: string; hasGelKey: boolean; notes: string; quality: string; thinking: Thinking }
 export interface Snapshot {
   connections: { id: string; name: string; provider: string; model: string; supported: boolean }[];
   settings: PublicSettings; permissions: boolean;
@@ -53,6 +56,8 @@ export interface Snapshot {
 export type GenerateText = (system: string, input: string, signal: AbortSignal) => Promise<string>;
 export interface TagDictionary {
   resolve(name: string, signal: AbortSignal): Promise<VerifiedTag | null>;
+  /** Many names at once, in input order; ok is false where a tag service failed. Optional; resolve() is used one by one without it. */
+  resolveMany?(names: string[], signal: AbortSignal): Promise<{ok: boolean; resolved: VerifiedTag | null}[]>;
   search(query: string, signal: AbortSignal): Promise<VerifiedTag[]>;
 }
 /** Gelbooru's account page shows the two values as one string, "&api_key=…&user_id=…". Accept that pasted into either box. */

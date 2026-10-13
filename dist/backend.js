@@ -10,6 +10,7 @@ function nameFrom(description) {
   const head = first.split(/\s+[\u2014\u2013-]\s+|:/)[0].replace(/[*_#"\u201C\u201D]/g, "").trim();
   return /^[A-Z][\p{L}\d'\u2019.-]*(?:\s+[A-Z][\p{L}\d'\u2019.-]*){0,3}$/u.test(head) && head.length <= 40 ? head : "";
 }
+var THINKING = ["light", "off", "inherit"];
 function gelCredentials(user, key) {
   const both = `${user} ${key}`;
   return {
@@ -284,6 +285,149 @@ class BooruDictionary {
       }
     }
     return result;
+  }
+  async danMany(path, field, names, extra, only, signal, chunk = 100) {
+    const parts = [];
+    for (let i = 0;i < names.length; i += chunk)
+      parts.push(names.slice(i, i + chunk));
+    const replies = await Promise.all(parts.map((part) => this.dan(path, { [`search[${field}_comma]`]: part.join(","), limit: "1000", only, ...extra }, signal)));
+    const rows = [];
+    for (const [i, data] of replies.entries()) {
+      const got = (Array.isArray(data) ? data : []).map(record);
+      if (got.some((r) => !parts[i].includes(String(r[field]))))
+        return null;
+      rows.push(...got);
+    }
+    return rows;
+  }
+  async gelMany(names, signal) {
+    const found = new Map;
+    const keep = (data, wanted) => {
+      const r = record(data);
+      const rows = Array.isArray(data) ? data : Array.isArray(r.tag) ? r.tag : [];
+      for (const row of rows) {
+        const v = this.valid(row, "Gelbooru");
+        if (v && wanted.includes(v.name))
+          found.set(v.name, v);
+      }
+      return rows.every((row) => wanted.includes(String(record(row).name)));
+    };
+    try {
+      let listed = true;
+      for (let i = 0;i < names.length && listed; i += 50) {
+        const part = names.slice(i, i + 50);
+        listed = keep(await this.request(GEL, { page: "dapi", s: "tag", q: "index", json: "1", limit: "100", names: part.join(" ") }, signal), part);
+      }
+      if (!listed) {
+        found.clear();
+        for (const name of names) {
+          try {
+            keep(await this.gel(name, signal), [name]);
+          } catch {
+            signal.throwIfAborted();
+          }
+        }
+      }
+    } catch {
+      signal.throwIfAborted();
+    }
+    return found;
+  }
+  async resolveMany(raws, signal) {
+    const one = async (raw) => {
+      try {
+        return { ok: true, resolved: await this.resolve(raw, signal) };
+      } catch {
+        signal.throwIfAborted();
+        return { ok: false, resolved: null };
+      }
+    };
+    const singly = () => Promise.all(raws.map(one));
+    const names = raws.map((raw) => {
+      try {
+        return tagName(raw);
+      } catch {
+        return null;
+      }
+    });
+    const asks = [...new Set(names.filter((n) => !!n && !isCupSizeTag(n)))];
+    const results = new Map;
+    try {
+      const live = new Map;
+      const fetchLive = async (list) => {
+        const todo = [...new Set(list.filter((n) => !live.has(n)))];
+        if (!todo.length)
+          return true;
+        const rows = await this.danMany("tags", "name", todo, {}, "name,category,post_count,is_deprecated", signal);
+        if (!rows)
+          return false;
+        for (const row of rows) {
+          const v = this.valid(row, "Danbooru");
+          if (v && todo.includes(v.name))
+            live.set(v.name, v);
+        }
+        return true;
+      };
+      if (!await fetchLive(asks))
+        return singly();
+      const canonical = new Map(asks.map((n) => [n, n]));
+      let pending = asks.filter((n) => !live.has(n));
+      for (let hop = 0;hop < 4 && pending.length; hop++) {
+        const heads = [...new Set(pending.map((n) => canonical.get(n)))];
+        const rows = await this.danMany("tag_aliases", "antecedent_name", heads, { "search[status]": "active" }, "antecedent_name,consequent_name,status", signal);
+        if (!rows)
+          return singly();
+        const next = new Map;
+        for (const r of rows)
+          if (r.status === "active") {
+            try {
+              next.set(String(r.antecedent_name), tagName(r.consequent_name));
+            } catch {}
+          }
+        const moved = pending.filter((n) => next.has(canonical.get(n)) && next.get(canonical.get(n)) !== n);
+        moved.forEach((n) => canonical.set(n, next.get(canonical.get(n))));
+        if (!await fetchLive(moved.map((n) => canonical.get(n))))
+          return singly();
+        pending = moved.filter((n) => !live.has(canonical.get(n)));
+      }
+      const wiki = new Map;
+      try {
+        const found = [...new Set(asks.map((n) => canonical.get(n)).filter((c) => live.has(c)))];
+        for (const r of await this.danMany("wiki_pages", "title", found, {}, "title,body,is_deleted", signal, 10) ?? [])
+          if (r.is_deleted !== true && typeof r.body === "string")
+            wiki.set(String(r.title), r.body.slice(0, 4000));
+      } catch {
+        signal.throwIfAborted();
+      }
+      for (const n of asks) {
+        const c = canonical.get(n);
+        const hit = live.get(c);
+        results.set(n, hit ? { ...hit, wiki: wiki.get(c) ?? "", ...n !== c ? { aliasFrom: n } : {} } : null);
+      }
+      if (this.credentials.user && this.credentials.key) {
+        const need = asks.filter((n) => !results.get(n) || canonical.get(n) !== n);
+        const gel = need.length ? await this.gelMany([...new Set(need.flatMap((n) => [n, canonical.get(n)]))], signal) : new Map;
+        for (const n of need) {
+          const c = canonical.get(n);
+          const result = results.get(n) ?? null;
+          for (const name of [...new Set([n, c])]) {
+            const g = gel.get(name);
+            if (g && (name === c || result?.aliasFrom === n)) {
+              results.set(n, { ...g, wiki: result?.wiki ?? "", ...n !== g.name ? { aliasFrom: n } : {} });
+              break;
+            }
+          }
+        }
+      }
+    } catch {
+      signal.throwIfAborted();
+      return names.map((n) => ({ ok: !!n && isCupSizeTag(n), resolved: null }));
+    }
+    return Promise.all(raws.map((raw, i) => {
+      const n = names[i];
+      const hit = n ? results.get(n) : null;
+      return n ? { ok: true, resolved: hit ? { ...hit } : null } : one(raw);
+    }));
   }
   async search(query, signal) {
     const name = tagName(query);
@@ -577,6 +721,7 @@ class Translator {
     const notes = text(options.notes ?? "", "notes (maximum 2,000 characters)", 2000);
     const grounded = [stated, notes, source].filter(Boolean).join(`
 `);
+    options.progress?.("Step 1 of 3: the model is reading the description\u2026");
     const extraction = parseExtraction(await timed(EXTRACT, JSON.stringify({ ...stated ? { stated } : {}, ...notes ? { notes } : {}, description: source })), grounded);
     if (!extraction.traits.length)
       throw new Error("No explicit visual traits were found. Describe the appearance you want translated.");
@@ -631,7 +776,8 @@ class Translator {
     const unverified = new Map;
     const lookupStarted = Date.now();
     const ordered = [...wanted].sort((a, b) => traits.indexOf(a[1]) - traits.indexOf(b[1]));
-    const looked = await Promise.all(ordered.map(async ([name]) => {
+    options.progress?.(`Step 2 of 3: checking ${ordered.length} tag${ordered.length === 1 ? "" : "s"} on Danbooru\u2026`);
+    const looked = this.dictionary.resolveMany ? await this.dictionary.resolveMany(ordered.map(([name]) => name), signal) : await Promise.all(ordered.map(async ([name]) => {
       try {
         return { ok: true, resolved: await this.dictionary.resolve(name, signal) };
       } catch {
@@ -658,6 +804,7 @@ class Translator {
     let review = {};
     let reviewed = true;
     try {
+      options.progress?.("Step 3 of 3: the model is checking the tags and writing the caption\u2026");
       review = json(await timed(REVIEW, JSON.stringify({
         traits: traits.map(({ id, group, evidence, detail }) => ({ id, group, evidence, detail })),
         candidates: candidates.filter((r) => r.name !== fixed).map((r) => ({ name: r.name, traitId: r.traitId, definition: r.wiki.replace(/\s+/g, " ").slice(0, 300) }))
@@ -887,7 +1034,9 @@ function generationError(error, provider, model, stage) {
 }
 
 // src/backend.ts
-var DEFAULTS = { connectionId: "", gelUser: "", gelKey: "", notes: "", quality: "" };
+var DEFAULTS = { connectionId: "", gelUser: "", gelKey: "", notes: "", quality: "", thinking: "light" };
+var thinking = (v) => THINKING.includes(v) ? v : "light";
+var REASONING = { light: { source: "custom", apiReasoning: true, effort: "low" }, off: { source: "off" }, inherit: undefined };
 function setupBackend(api) {
   const users = new Map;
   let closed = false;
@@ -902,6 +1051,12 @@ function setupBackend(api) {
       users.set(key, state);
     }
     const s = state;
+    const progress = (stage) => {
+      try {
+        if (!closed)
+          api.sendToFrontend({ type: "lumicast:progress", id: r.id, stage }, userId, { frontendSessionId });
+      } catch {}
+    };
     const reply = (result, error) => {
       if (!closed)
         api.sendToFrontend({ type: "lumicast:response", id: r.id, result, error }, userId, { frontendSessionId });
@@ -917,28 +1072,28 @@ function setupBackend(api) {
         throw new Error("Grant LumiCast generation and CORS proxy permissions in Extensions.");
       s.load ??= api.userStorage.getJson("settings.json", { fallback: { ...DEFAULTS }, userId }).then((saved) => {
         const v = record(saved);
-        s.settings = { connectionId: text(v.connectionId ?? "", "connection", 100), gelUser: text(v.gelUser ?? "", "Gelbooru user", 50), gelKey: text(v.gelKey ?? "", "Gelbooru key", 200), notes: text(v.notes ?? "", "notes", 2000), quality: text(v.quality ?? "", "quality tags", 600) };
+        s.settings = { connectionId: text(v.connectionId ?? "", "connection", 100), gelUser: text(v.gelUser ?? "", "Gelbooru user", 50), gelKey: text(v.gelKey ?? "", "Gelbooru key", 200), notes: text(v.notes ?? "", "notes", 2000), quality: text(v.quality ?? "", "quality tags", 600), thinking: thinking(v.thinking) };
       }).catch(() => {
         s.settings = { ...DEFAULTS };
       });
       await s.load;
       const settings = s.settings;
       const dictionary = () => s.dictionary ??= new BooruDictionary(async (url) => {
-        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.8.3 (tag metadata client)" } }));
+        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.9.0 (tag metadata client)" } }));
         if (typeof response.status !== "number" || typeof response.body !== "string")
           throw new Error("Invalid proxy response.");
         return { status: response.status, body: response.body };
       }, { user: settings.gelUser, key: settings.gelKey });
       if (r.action === "snapshot") {
         const connections = (await api.connections.list(userId)).map((c) => ({ id: c.id, name: c.name, provider: c.provider, model: c.model, supported: isGenerative(c.model) }));
-        return { connections, settings: { connectionId: settings.connectionId, gelUser: settings.gelUser, hasGelKey: !!settings.gelKey, notes: settings.notes, quality: settings.quality }, permissions: true };
+        return { connections, settings: { connectionId: settings.connectionId, gelUser: settings.gelUser, hasGelKey: !!settings.gelKey, notes: settings.notes, quality: settings.quality, thinking: settings.thinking }, permissions: true };
       }
       if (r.action === "save") {
         if (s.jobs.size)
           throw new Error("Wait for the current operation before changing settings.");
         const v = record(r.input);
         const entered = gelCredentials(text(v.gelUser, "Gelbooru user", 300), v.gelKey ? text(v.gelKey, "Gelbooru key", 300) : "");
-        const next = { connectionId: text(v.connectionId, "connection", 100), gelUser: entered.user, gelKey: v.clearGelKey === true ? "" : entered.key || settings.gelKey, notes: v.notes === undefined ? settings.notes : text(v.notes, "notes (maximum 2,000 characters)", 2000), quality: settings.quality };
+        const next = { connectionId: text(v.connectionId, "connection", 100), gelUser: entered.user, gelKey: v.clearGelKey === true ? "" : entered.key || settings.gelKey, notes: v.notes === undefined ? settings.notes : text(v.notes, "notes (maximum 2,000 characters)", 2000), quality: settings.quality, thinking: v.thinking === undefined ? settings.thinking : thinking(v.thinking) };
         if (next.gelUser && !/^\d+$/.test(next.gelUser))
           throw new Error("Gelbooru user ID must be numeric.");
         if (next.connectionId && !await api.connections.get(next.connectionId, userId))
@@ -981,7 +1136,7 @@ function setupBackend(api) {
         const entered = gelCredentials(text(v.gelUser ?? "", "Gelbooru user", 300), v.gelKey ? text(v.gelKey, "Gelbooru key", 300) : "");
         const credentials = { user: entered.user || settings.gelUser, key: entered.key || settings.gelKey };
         const outcome = await testGelbooru(async (url) => {
-          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.8.3 (tag metadata client)" } }));
+          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.9.0 (tag metadata client)" } }));
           return { status: Number(response.status), body: typeof response.body === "string" ? response.body : "" };
         }, credentials);
         const unsaved = credentials.user !== settings.gelUser || credentials.key !== settings.gelKey;
@@ -1017,7 +1172,7 @@ function setupBackend(api) {
         const translator = new Translator(async (system, content, signal) => {
           let value;
           const stage = refining ? "refinement" : ++modelCalls === 1 ? "trait extraction" : "tag review and caption";
-          const request = { type: "raw", connection_id: connection.id, provider: connection.provider, model: connection.model, userId, messages: [{ role: "system", content: system }, { role: "user", content }], parameters: { max_tokens: 16000 }, signal };
+          const request = { type: "raw", connection_id: connection.id, provider: connection.provider, model: connection.model, userId, messages: [{ role: "system", content: system }, { role: "user", content }], parameters: { max_tokens: 16000 }, ...REASONING[settings.thinking] ? { reasoning: { ...REASONING[settings.thinking] } } : {}, signal };
           try {
             value = await api.generate.raw(request);
           } catch (error) {
@@ -1029,7 +1184,7 @@ function setupBackend(api) {
           const reasoning = typeof response.reasoning === "string" ? response.reasoning : "";
           const finish = String(response.finish_reason ?? "");
           if (/length|max_tokens/.test(finish))
-            throw new Error(`The model ran out of room during ${stage} (it stopped at the length limit${reasoning ? ` after ${reasoning.length.toLocaleString()} characters of reasoning` : ""}). Try a model with reasoning turned down or off, or a shorter description.`);
+            throw new Error(`The model ran out of room during ${stage} (it stopped at the length limit${reasoning ? ` after ${reasoning.length.toLocaleString()} characters of reasoning` : ""}). Set Model thinking to Off or Light under Connection & tag services, or use a shorter description.`);
           if (!answer.trim() && reasoning.includes("{"))
             return reasoning;
           if (!answer.trim())
@@ -1038,12 +1193,13 @@ function setupBackend(api) {
         }, dictionary());
         const label = `${connection.provider} / ${connection.model}`;
         if (refining) {
+          progress("The model is thinking about your feedback\u2026");
           const refinement = await translator.refine({ tags: Array.isArray(input.tags) ? input.tags.map((v) => text(v, "tag", 120)) : [], caption: text(input.caption ?? "", "caption", 16000), feedback: text(input.feedback, "feedback (maximum 2,000 characters)", 2000), description: text(input.description ?? "", "description", 12000), stated: text(input.stated ?? "", "character type", 300), notes: settings.notes, locked: Array.isArray(input.locked) ? input.locked.map((v) => text(v, "tag", 120)) : [], history: Array.isArray(input.history) ? input.history : [] }, controller.signal, label);
           refinement.notices.push(...dictionary().notices);
           return refinement;
         }
         const scope = input.scope === "outfit" || input.scope === "scene" ? input.scope : "character";
-        const result = await translator.translate(text(input.description, "description", 12000), controller.signal, label, { scope, stated: text(input.stated ?? "", "known facts", 300), notes: settings.notes });
+        const result = await translator.translate(text(input.description, "description", 12000), controller.signal, label, { scope, stated: text(input.stated ?? "", "known facts", 300), notes: settings.notes, progress });
         for (const list of new Set([result.notices, ...Object.values(result.views).map((v) => v.notices)]))
           list.push(...[...dictionary().notices].filter((n) => !list.includes(n)));
         return result;

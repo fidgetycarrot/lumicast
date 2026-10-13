@@ -105,3 +105,48 @@ test('Gelbooru\'s combined credential line is accepted in either box',()=> {
   expect(gelCredentials('7','&api_key=abc123&user_id=42')).toEqual({user:'42',key:'abc123'});
   expect(gelCredentials('','')).toEqual({user:'',key:''});
 });
+
+/** A small fake Danbooru and Gelbooru that answer single-name and list lookups the way the sites do. */
+function site(options:{ignoreLists?:boolean;danDown?:boolean}={}) {
+  const tags=[{name:'blue_eyes',category:0,post_count:500},{name:'trap',category:0,post_count:300},{name:'grey_hair',category:0,post_count:200},{name:'big_breasts',category:0,post_count:900},{name:'hatsune_miku',category:4,post_count:900},{name:'old_tag',category:0,post_count:5,is_deprecated:true}];
+  const aliases=[{antecedent_name:'otoko_no_ko',consequent_name:'trap',status:'active'},{antecedent_name:'gray_hair',consequent_name:'grey_hair',status:'active'},{antecedent_name:'large_breasts',consequent_name:'big_breasts',status:'active'},{antecedent_name:'alias_gone',consequent_name:'gel_only',status:'active'}];
+  const wiki=[{title:'blue_eyes',body:'Blue eyes.'},{title:'trap',body:'A boy who looks like a girl.'},{title:'grey_hair',body:'Grey hair.'}];
+  const gel=[{name:'large_breasts',type:0,count:100,ambiguous:0},{name:'silver_hair',type:0,count:80,ambiguous:0},{name:'gel_only',type:0,count:20,ambiguous:0}];
+  const seen:string[]=[];
+  const pick=<T extends Record<string,unknown>>(rows:T[],field:string,q:URLSearchParams,one:string,list:string,sep=',')=>{
+    const many=q.get(list);if(many!==null)return options.ignoreLists?rows:rows.filter(r=>many.split(sep).includes(String(r[field])));
+    const single=q.get(one);return single===null?rows:rows.filter(r=>r[field]===single);
+  };
+  const http=async(url:string)=>{seen.push(url);const u=new URL(url);const q=u.searchParams;let value:unknown=[];
+    if(u.hostname==='gelbooru.com')value={'@attributes':{},tag:pick(gel,'name',q,'name','names',' ')};
+    else if(options.danDown)return{status:503,body:''};
+    else if(u.pathname==='/tags.json')value=pick(tags,'name',q,'search[name]','search[name_comma]');
+    else if(u.pathname==='/tag_aliases.json')value=pick(aliases,'antecedent_name',q,'search[antecedent_name]','search[antecedent_name_comma]');
+    else if(u.pathname==='/wiki_pages.json')value=pick(wiki,'title',q,'search[title]','search[title_comma]');
+    return{status:200,body:JSON.stringify(value)};};
+  return{http,seen};
+}
+const NAMES=['blue eyes','otoko_no_ko','gray_hair','large_breasts','silver_hair','hatsune_miku','old_tag','b_cup','nothing_like_this','alias_gone','bad*name','blue_eyes'];
+async function oneByOne(gelbooru:boolean){
+  const s=site();const d=new BooruDictionary(s.http,gelbooru?{user:'1',key:'k'}:undefined,0);
+  return Promise.all(NAMES.map(async n=>{try{return{ok:true,resolved:await d.resolve(n,signal())};}catch{return{ok:false,resolved:null};}}));
+}
+for (const gelbooru of [false,true]) test(`batched lookups give the same answers as one-by-one lookups${gelbooru?' with Gelbooru':''}, in far fewer requests`,async()=> {
+  const s=site();const d=new BooruDictionary(s.http,gelbooru?{user:'1',key:'k'}:undefined,0);
+  const batched=await d.resolveMany(NAMES,signal());
+  expect(batched).toEqual(await oneByOne(gelbooru));
+  expect(batched.map(r=>r.resolved?.name??null)).toEqual(['blue_eyes','trap','grey_hair',gelbooru?'large_breasts':'big_breasts',gelbooru?'silver_hair':null,null,null,null,null,gelbooru?'gel_only':null,null,'blue_eyes']);
+  expect(batched[1].resolved).toMatchObject({aliasFrom:'otoko_no_ko',wiki:'A boy who looks like a girl.'});
+  expect(batched[10].ok).toBe(false);
+  // tags, aliases, alias targets, wiki and one Gelbooru list, instead of several requests per name.
+  expect(s.seen.length).toBeLessThanOrEqual(gelbooru?6:5);
+});
+test('a site that ignores list lookups is noticed, and every name is then looked up on its own',async()=> {
+  const s=site({ignoreLists:true});const d=new BooruDictionary(s.http,{user:'1',key:'k'},0);
+  expect(await d.resolveMany(NAMES,signal())).toEqual(await oneByOne(true));
+});
+test('when Danbooru is down, batched lookups fail every name as one-by-one lookups would',async()=> {
+  const s=site({danDown:true});const d=new BooruDictionary(s.http,undefined,0);
+  const out=await d.resolveMany(['blue_eyes','b_cup','red_hair'],signal());
+  expect(out.map(r=>r.ok)).toEqual([false,true,false]);
+});

@@ -148,6 +148,108 @@ export class BooruDictionary implements TagDictionary {
     }
     return result;
   }
+  /**
+   * Danbooru rows for many names in a few requests (search[field_comma]). Returns null when a reply holds
+   * rows that were not asked for, which means the site ignored the list filter; the caller then asks one by one.
+   */
+  private async danMany(path: string, field: string, names: string[], extra: Record<string,string>, only: string, signal: AbortSignal, chunk = 100): Promise<Record<string,unknown>[] | null> {
+    const parts: string[][] = [];
+    for (let i = 0; i < names.length; i += chunk) parts.push(names.slice(i, i + chunk));
+    const replies = await Promise.all(parts.map(part => this.dan(path, {[`search[${field}_comma]`]:part.join(','), limit:'1000', only, ...extra}, signal)));
+    const rows: Record<string,unknown>[] = [];
+    for (const [i, data] of replies.entries()) {
+      const got = (Array.isArray(data) ? data : []).map(record);
+      if (got.some(r => !parts[i].includes(String(r[field])))) return null;
+      rows.push(...got);
+    }
+    return rows;
+  }
+  /** Gelbooru rows by exact name, using its space-separated "names" list, or one name at a time if that is ignored. */
+  private async gelMany(names: string[], signal: AbortSignal): Promise<Map<string, VerifiedTag>> {
+    const found = new Map<string, VerifiedTag>();
+    const keep = (data: unknown, wanted: string[]) => {
+      const r = record(data); const rows: unknown[] = Array.isArray(data) ? data : Array.isArray(r.tag) ? r.tag : [];
+      for (const row of rows) { const v = this.valid(row, 'Gelbooru'); if (v && wanted.includes(v.name)) found.set(v.name, v); }
+      return rows.every(row => wanted.includes(String(record(row).name)));
+    };
+    try {
+      let listed = true;
+      for (let i = 0; i < names.length && listed; i += 50) {
+        const part = names.slice(i, i + 50);
+        listed = keep(await this.request(GEL, {page:'dapi',s:'tag',q:'index',json:'1',limit:'100',names:part.join(' ')}, signal), part);
+      }
+      if (!listed) { found.clear(); for (const name of names) { try { keep(await this.gel(name, signal), [name]); } catch { signal.throwIfAborted(); } } }
+    } catch { signal.throwIfAborted(); }
+    return found;
+  }
+  /**
+   * The same answers as resolve(), for many names in about half a dozen requests instead of several per name.
+   * Results line up with the input; ok is false where a tag service failed.
+   */
+  async resolveMany(raws: string[], signal: AbortSignal): Promise<{ok: boolean; resolved: VerifiedTag | null}[]> {
+    const one = async (raw: string) => { try { return {ok:true, resolved:await this.resolve(raw, signal)}; } catch { signal.throwIfAborted(); return {ok:false, resolved:null}; } };
+    const singly = () => Promise.all(raws.map(one));
+    const names = raws.map(raw => { try { return tagName(raw); } catch { return null; } });
+    const asks = [...new Set(names.filter((n): n is string => !!n && !isCupSizeTag(n)))];
+    const results = new Map<string, VerifiedTag | null>();
+    try {
+      const live = new Map<string, VerifiedTag>();
+      const fetchLive = async (list: string[]) => {
+        const todo = [...new Set(list.filter(n => !live.has(n)))];
+        if (!todo.length) return true;
+        const rows = await this.danMany('tags', 'name', todo, {}, 'name,category,post_count,is_deprecated', signal);
+        if (!rows) return false;
+        for (const row of rows) { const v = this.valid(row, 'Danbooru'); if (v && todo.includes(v.name)) live.set(v.name, v); }
+        return true;
+      };
+      if (!await fetchLive(asks)) return singly();
+      // A live tag is already canonical, so aliases are followed only for misses.
+      const canonical = new Map(asks.map(n => [n, n]));
+      let pending = asks.filter(n => !live.has(n));
+      for (let hop = 0; hop < 4 && pending.length; hop++) {
+        const heads = [...new Set(pending.map(n => canonical.get(n)!))];
+        const rows = await this.danMany('tag_aliases', 'antecedent_name', heads, {'search[status]':'active'}, 'antecedent_name,consequent_name,status', signal);
+        if (!rows) return singly();
+        const next = new Map<string, string>();
+        for (const r of rows) if (r.status === 'active') { try { next.set(String(r.antecedent_name), tagName(r.consequent_name)); } catch { /* not a usable name */ } }
+        const moved = pending.filter(n => next.has(canonical.get(n)!) && next.get(canonical.get(n)!) !== n);
+        moved.forEach(n => canonical.set(n, next.get(canonical.get(n)!)!));
+        if (!await fetchLive(moved.map(n => canonical.get(n)!))) return singly();
+        pending = moved.filter(n => !live.has(canonical.get(n)!));
+      }
+      const wiki = new Map<string, string>();
+      try {
+        // Wiki bodies can be long, so fewer per request keeps each reply under the size cap.
+        const found = [...new Set(asks.map(n => canonical.get(n)!).filter(c => live.has(c)))];
+        for (const r of await this.danMany('wiki_pages', 'title', found, {}, 'title,body,is_deleted', signal, 10) ?? [])
+          if (r.is_deleted !== true && typeof r.body === 'string') wiki.set(String(r.title), r.body.slice(0, 4000));
+      } catch { signal.throwIfAborted(); }
+      for (const n of asks) {
+        const c = canonical.get(n)!; const hit = live.get(c);
+        results.set(n, hit ? {...hit, wiki:wiki.get(c) ?? '', ...(n !== c ? {aliasFrom:n} : {})} : null);
+      }
+      // Gelbooru matters only when Danbooru lacks the tag or knows it under another name.
+      if (this.credentials.user && this.credentials.key) {
+        const need = asks.filter(n => !results.get(n) || canonical.get(n) !== n);
+        const gel = need.length ? await this.gelMany([...new Set(need.flatMap(n => [n, canonical.get(n)!]))], signal) : new Map<string, VerifiedTag>();
+        for (const n of need) {
+          const c = canonical.get(n)!; const result = results.get(n) ?? null;
+          for (const name of [...new Set([n, c])]) {
+            const g = gel.get(name);
+            if (g && (name === c || result?.aliasFrom === n)) { results.set(n, {...g, wiki:result?.wiki ?? '', ...(n !== g.name ? {aliasFrom:n} : {})}); break; }
+          }
+        }
+      }
+    } catch {
+      signal.throwIfAborted();
+      // Danbooru itself failed, which fails every name, as one-by-one lookups would.
+      return names.map(n => ({ok:!!n && isCupSizeTag(n), resolved:null}));
+    }
+    return Promise.all(raws.map((raw, i) => {
+      const n = names[i]; const hit = n ? results.get(n) : null;
+      return n ? {ok:true, resolved:hit ? {...hit} : null} : one(raw);
+    }));
+  }
   async search(query: string, signal: AbortSignal): Promise<VerifiedTag[]> {
     const name = tagName(query);
     const rows = await this.dan('tags', {'search[name_matches]':`${name}*`,'search[order]':'count'},signal);

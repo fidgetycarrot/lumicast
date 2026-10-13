@@ -1,4 +1,6 @@
-# LumiCast 0.8.3
+# LumiCast 0.9.0
+
+**v0.9.0 is much faster.** Two things made a translation take minutes. First, the model was thinking for as long as your chat settings allow; LumiCast now asks for a short think by default. **Model thinking** under Connection & tag services sets it: **Light** (the default), **Off** (fastest, if your model allows it), or **Same as this connection in Lumiverse**. Second, tags were checked a few at a time; now all of them are checked in about half a dozen requests. While a translation runs, the status line shows which of the three steps it is on and a running clock.
 
 **v0.8.3 is faster at tag lookups and says where the time goes.** Tags are looked up all at once, Danbooru and Gelbooru are asked side by side (each still at its polite pace), and Gelbooru is asked only when Danbooru lacks a tag or knows it by another name. After each translation the status line says how long the model and the tag lookups took.
 
@@ -57,7 +59,7 @@ Prebuilt `dist/` files are committed for Lumiverse installation. If the tab does
 
 Requires **Lumiverse 1.2.5 or later**. Compatibility was checked against the current 1.2.5 source and SDK 0.6.40; older versions have not been verified.
 
-1. Unzip `lumicast-0.8.3-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
+1. Unzip `lumicast-0.9.0-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
 2. On the machine running your Lumiverse **server**, copy that folder into `<DATA_DIR>/extensions/`. The server's default DATA_DIR is `./data`, relative to where Lumiverse runs. For Docker, copy into the volume mounted as the server's data directory. Do not copy it into another extension's folder.
 3. As the Lumiverse owner/admin, open **Extensions**, open its add menu, and choose **Import Local**. Enable LumiCast and grant `generation` and `cors_proxy`. If the tab does not appear, reload Lumiverse.
 4. Open **LumiCast** in the sidebar drawer or find it in the command palette. Expand **Connection & tag services**, choose a saved generative connection, and save.
