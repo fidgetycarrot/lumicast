@@ -1,4 +1,6 @@
-# LumiCast 0.7.1
+# LumiCast 0.8.0
+
+**v0.8.0 gives Refine a memory.** While you work on one character, Refine keeps the last eight rounds: what you said, the suggestions you used and the ones you skipped. The model is told not to offer a skipped change again, and to go further or try something different when a problem comes back. **Earlier rounds** in the Refine card lists them; **Start over** clears them, and a new description starts fresh. This release also fixes the lock on Always include tags, which the 0.5.3 code checked but never actually received.
 
 **v0.7.0 hands characters to Lumi Studio.** LumiCast now shares its latest character sheet with Lumi Studio 1.8.2 or newer. In Lumi Studio, open a new reusable character or persona and choose **Fill from LumiCast**: the sheet fields, and a name guessed from the description's first line, are filled in one step for you to check and save. Edits you make to the sheet in LumiCast are shared too.
 
@@ -49,7 +51,7 @@ Prebuilt `dist/` files are committed for Lumiverse installation. If the tab does
 
 Requires **Lumiverse 1.2.5 or later**. Compatibility was checked against the current 1.2.5 source and SDK 0.6.40; older versions have not been verified.
 
-1. Unzip `lumicast-0.7.1-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
+1. Unzip `lumicast-0.8.0-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
 2. On the machine running your Lumiverse **server**, copy that folder into `<DATA_DIR>/extensions/`. The server's default DATA_DIR is `./data`, relative to where Lumiverse runs. For Docker, copy into the volume mounted as the server's data directory. Do not copy it into another extension's folder.
 3. As the Lumiverse owner/admin, open **Extensions**, open its add menu, and choose **Import Local**. Enable LumiCast and grant `generation` and `cors_proxy`. If the tab does not appear, reload Lumiverse.
 4. Open **LumiCast** in the sidebar drawer or find it in the command palette. Expand **Connection & tag services**, choose a saved generative connection, and save.
@@ -114,7 +116,7 @@ Nothing on this list changes the tags, the captions or the sheet, and nothing is
 
 ### Refining from a generated image
 
-LumiCast never sees an image. Under **03 / Refine**, say what the image got wrong ("reads too masculine", "eyes came out blue", "no visible seams") and choose **Suggest changes**. One generation call returns a short explanation and a list of proposals: tags to remove, tags to weight, tags to add, and a reworded detail. Tags to remove or weight must already be in your tags box. Tags to add are looked up on Danbooru first; ones that do not exist are dropped and named in a notice, and each survivor is shown with the start of its wiki definition. Refine reads the character sheet. Tags in **Always include** are locked: a suggestion to remove one is set aside with a notice unless your feedback names it, and the model is told to strengthen a weak trait instead of removing a strong one. A reworded caption must keep the current caption's scope. Nothing changes until you tick what you want and choose **Apply selected**, which edits the sheet fields (a count-tag change goes to Count tag, a new tag to Permanent appearance tags) and applies the same tag changes to the standalone prompt, including a count-tag change. A change to a phrase that exists only in the sheet has nothing to change there, and the status line says when no change reached the standalone prompt.
+LumiCast never sees an image. Under **03 / Refine**, say what the image got wrong ("reads too masculine", "eyes came out blue", "no visible seams") and choose **Suggest changes**. One generation call returns a short explanation and a list of proposals: tags to remove, tags to weight, tags to add, and a reworded detail. Tags to remove or weight must already be in your tags box. Tags to add are looked up on Danbooru first; ones that do not exist are dropped and named in a notice, and each survivor is shown with the start of its wiki definition. Refine reads the character sheet and remembers the earlier rounds for the current character. Tags in **Always include** are locked: a suggestion to remove one is set aside with a notice unless your feedback names it, and the model is told to strengthen a weak trait instead of removing a strong one. A reworded caption must keep the current caption's scope. Nothing changes until you tick what you want and choose **Apply selected**, which edits the sheet fields (a count-tag change goes to Count tag, a new tag to Permanent appearance tags) and applies the same tag changes to the standalone prompt, including a count-tag change. A change to a phrase that exists only in the sheet has nothing to change there, and the status line says when no change reached the standalone prompt.
 
 The model is given Anima's published prompting guidance, the current tags and detail, your feedback, the description and Character type from the panel, and your notes. Its suggestions are reasoning from your words, not from the picture, so judge them against what you saw.
 

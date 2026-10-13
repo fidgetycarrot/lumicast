@@ -320,3 +320,10 @@ test('a character name is taken from a heading line only when it looks like one'
   expect(nameFrom('Mei Tanaka — 21, college junior')).toBe('Mei Tanaka');
   expect(nameFrom('Slender synthetic frame, 175 cm')).toBe('');expect(nameFrom('She is short and blonde.')).toBe('');expect(nameFrom('')).toBe('');
 });
+test('refine passes recent history to the model, trimmed and cleaned',async()=> {
+  const many=Array.from({length:10},(_,i)=>({feedback:`round ${i}`,applied:[`weight (x:1.${i})`],declined:[]}));
+  const {inputs}=await refineWith({reply:'ok'},{history:[...many,{feedback:'',applied:[],declined:[]},{nonsense:true} as never]});
+  const sent=JSON.parse(inputs[0]).history;
+  expect(sent.length).toBe(6);expect(sent[0].feedback).toBe('round 4');expect(sent[5].feedback).toBe('round 9');
+  expect((await refineWith({reply:'ok'})).inputs[0]).not.toContain('history');
+});

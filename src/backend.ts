@@ -27,7 +27,7 @@ export function setupBackend(api: SpindleAPI) {
       await s.load;
       const settings=s.settings!;
       const dictionary=() => s.dictionary ??= new BooruDictionary(async url=> {
-        const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.7.1 (tag metadata client)'}}));
+        const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.8.0 (tag metadata client)'}}));
         if(typeof response.status!=='number'||typeof response.body!=='string')throw new Error('Invalid proxy response.');
         return {status:response.status,body:response.body};
       },{user:settings.gelUser,key:settings.gelKey});
@@ -72,7 +72,7 @@ export function setupBackend(api: SpindleAPI) {
         const entered=gelCredentials(text(v.gelUser ?? '','Gelbooru user',300),v.gelKey ? text(v.gelKey,'Gelbooru key',300) : '');
         const credentials={user:entered.user||settings.gelUser,key:entered.key||settings.gelKey};
         const outcome=await testGelbooru(async url=> {
-          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.7.1 (tag metadata client)'}}));
+          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.8.0 (tag metadata client)'}}));
           return {status:Number(response.status),body:typeof response.body==='string'?response.body:''};
         },credentials);
         const unsaved=credentials.user!==settings.gelUser||credentials.key!==settings.gelKey;
@@ -111,7 +111,7 @@ export function setupBackend(api: SpindleAPI) {
         },dictionary());
         const label=`${connection.provider} / ${connection.model}`;
         if (refining) {
-          const refinement=await translator.refine({tags:Array.isArray(input.tags)?input.tags.map(v=>text(v,'tag',120)):[],caption:text(input.caption ?? '','caption',16_000),feedback:text(input.feedback,'feedback (maximum 2,000 characters)',2000),description:text(input.description ?? '','description',12_000),stated:text(input.stated ?? '','character type',300),notes:settings.notes},controller.signal,label);
+          const refinement=await translator.refine({tags:Array.isArray(input.tags)?input.tags.map(v=>text(v,'tag',120)):[],caption:text(input.caption ?? '','caption',16_000),feedback:text(input.feedback,'feedback (maximum 2,000 characters)',2000),description:text(input.description ?? '','description',12_000),stated:text(input.stated ?? '','character type',300),notes:settings.notes,locked:Array.isArray(input.locked)?input.locked.map(v=>text(v,'tag',120)):[],history:Array.isArray(input.history)?input.history:[]},controller.signal,label);
           refinement.notices.push(...dictionary().notices);
           return refinement;
         }

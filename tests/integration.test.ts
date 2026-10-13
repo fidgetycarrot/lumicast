@@ -238,3 +238,29 @@ test('after Refine, the prompt rebuilds itself unless the tags carry unverified 
   expect(named(h.root,'tags').value).toBe('(red_hair:1.8), freckles');
   expect(named(h.root,'prompt').value).toBe('(red hair:1.5)\n\nShort red hair.');expect(h.root.querySelector('.lc-status')!.textContent).toContain('Press Verify edited tags, then Rebuild.');
 });
+test('Refine remembers earlier rounds for this character, sends them with the lock, and forgets on a new description',async()=> {
+  dom();const h=harness();cleanups.push(h.stop);const dispose=setup(h.ctx);cleanups.push(dispose);
+  const b=(name:string)=>Array.from(h.root.querySelectorAll('button')).find(x=>x.textContent===name)!;
+  await until(()=>!b('Translate').disabled);h.root.querySelector('select')!.value='c1';
+  const extraction={traits:[{id:'s',group:'subject',evidence:'He',tags:['1boy','android'],detail:'A male android'},{id:'1',group:'hair',evidence:'short red hair',tags:['red_hair','short_hair'],detail:'Short red hair'}]};
+  const review={drop:[],captions:{character:'A male android with short red hair.'},issues:[]};
+  const first={reply:'Weight the hair.',remove:[{tag:'android',why:'diluting'}],add:[],weight:[{tag:'red_hair',weight:1.4,why:'faint'}],caption:null};
+  const second={reply:'Going further.',remove:[],add:[{tag:'gradient_hair',why:'colour'}],weight:[{tag:'red_hair',weight:1.8,why:'still faint'}],caption:null};
+  h.setResponses([extraction,review,first,second,second,extraction,review,second]);
+  named(h.root,'source').value='He has short red hair.';b('Translate').click();await until(()=>!b('Translate').disabled);
+  const refineInputs=()=>h.calls.filter(v=>(v as unknown[])[0]==='generation').map(v=>JSON.parse(((v as unknown[])[1] as {messages:{content:string}[]}).messages[1].content)).filter(i=>'feedback' in i);
+  named(h.root,'feedback').value='Hair is too faint.';b('Suggest changes').click();await until(()=>!b('Translate').disabled);
+  expect(refineInputs()[0].locked).toEqual(['android']);expect(refineInputs()[0].history).toBeUndefined();
+  // "android" is locked, so only the weight is offered; apply it.
+  b('Apply selected').click();await until(()=>!b('Translate').disabled);
+  named(h.root,'feedback').value='Hair is still too faint.';b('Suggest changes').click();await until(()=>!b('Translate').disabled);
+  expect(refineInputs()[1].history).toEqual([{feedback:'Hair is too faint.',applied:['weight (red hair:1.4)'],declined:[]}]);
+  // Asking again without applying counts the unapplied suggestions as skipped.
+  named(h.root,'feedback').value='Try something else.';b('Suggest changes').click();await until(()=>!b('Translate').disabled);
+  expect(refineInputs()[2].history[1]).toEqual({feedback:'Hair is still too faint.',applied:[],declined:['weight (red hair:1.8)','add gradient hair']});
+  expect(h.root.textContent).toContain('Earlier rounds (2)');expect(h.root.textContent).toContain('Skipped: weight (red hair:1.8); add gradient hair.');
+  // A new description is a new character.
+  const historyBox=Array.from(h.root.querySelectorAll('details')).find(d=>d.textContent?.includes('Earlier rounds'))!;expect(historyBox.hidden).toBe(false);
+  named(h.root,'source').value='He is someone else, with short red hair.';b('Translate').click();await until(()=>!b('Translate').disabled);
+  expect(historyBox.hidden).toBe(true);expect(historyBox.querySelectorAll('li').length).toBe(0);
+});

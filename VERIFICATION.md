@@ -166,3 +166,9 @@ LumiCast: typecheck, 78 tests (576 assertions) and the build passed, including a
 
 After Apply selected, the status line claimed the Anima prompt was updated even when it had not been rebuilt (the tags box held unverified hand edits). It now says so and points to Verify edited tags and Rebuild. Typecheck, 79 tests and the build passed.
 
+## v0.8.0: Refine memory, and the lock that was never sent
+
+Each refinement used to be independent, so a long back-and-forth on a hard character could repeat declined suggestions or retry a weight the user had already found too weak. The panel now records each round (feedback, suggestions applied, suggestions left unapplied when the next round starts) and sends up to eight; the engine keeps the last six after cleaning, and the prompt says to avoid declined changes and to escalate or change approach when a problem returns. The memory lives in the open tab, resets on a new description or Start over, and is not saved.
+
+While adding this, the backend was found not to pass `locked` to `Translator.refine`: the 0.5.3 protection for Always include tags was implemented and tested in the engine but never reached it from the panel. The integration test for 0.5.3 only checked an empty lock, so it did not catch this. The backend now passes `locked` and `history`, and a new panel-to-engine test asserts both arrive. Typecheck, 81 tests (594 assertions) and the build passed.
+

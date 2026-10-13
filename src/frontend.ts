@@ -1,5 +1,5 @@
 import type { SpindleFrontendContext } from 'lumiverse-spindle-types';
-import { assemble, editList, formatWeighted, parseWeighted, splitTags, withQuality, type GelbooruTest, type Proposal, type Refinement, type Scope, type Snapshot, type Translation, type VerifiedTag } from './contracts';
+import { assemble, editList, formatWeighted, parseWeighted, splitTags, withQuality, type GelbooruTest, type Proposal, type RefineRound, type Refinement, type Scope, type Snapshot, type Translation, type VerifiedTag } from './contracts';
 import { removeConflicts } from './engine';
 
 export function createRpc(ctx: Pick<SpindleFrontendContext,'sendToBackend'|'onBackendMessage'>, timeout=250_000) {
@@ -38,6 +38,8 @@ const STYLES=`.lc-app{box-sizing:border-box;font:14px/1.55 system-ui,sans-serif;
 export function setup(ctx:SpindleFrontendContext) {
   let closed=false,busy=false,verified=false,edited=false,result:Translation|null=null,revision=0;
   let pending:Proposal[]=[];
+  // Refine's memory for the current character: kept until the description changes or Start over.
+  let rounds:RefineRound[]=[];let roundFeedback='';let translatedFrom='';
   const rpc=createRpc(ctx);
   const tab=ctx.ui.registerDrawerTab({id:'translator',title:'LumiCast',shortName:'LumiCast',description:'Turn a written appearance into an Anima prompt',keywords:['anima','booru','prompt','translator'],iconSvg:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 3H4v18h4M16 3h4v18h-4M9 8l3-3 3 3M9 16l3 3 3-3M12 5v14"/></svg>'});
     const removeStyle=ctx.dom.addStyle(STYLES);
@@ -88,6 +90,8 @@ export function setup(ctx:SpindleFrontendContext) {
     if(revision!==currentRevision) {notify('The description changed during translation. Translate again to use the new wording.');return;}
     // Say what a re-run settled, so answering a gap never looks like nothing happened.
     const before=result?result.gaps.map(g=>g.what):[];
+    // A new description is a new character, so Refine starts with a clean memory.
+    if(source.value!==translatedFrom){rounds=[];roundFeedback='';translatedFrom=source.value;showRounds();}
     result=next;showSheet();showStandalone();
     const still=next.gaps.map(g=>g.what);const closed=before.filter(w=>!still.includes(w));
     const outcome=before.length?[closed.length?`Pinned down: ${closed.join(', ')}.`:'',still.length?`Still open: ${still.join(', ')}.`:''].filter(Boolean).join(' '):'';
@@ -140,6 +144,21 @@ export function setup(ctx:SpindleFrontendContext) {
   const refine=card('03 / Refine');
   const feedback=named(el('textarea'),'feedback');feedback.rows=3;feedback.maxLength=2000;feedback.placeholder='Generate an image, then say what came out wrong: “reads too masculine”, “eyes came out blue”, “no visible seams”.';
   const reply=el('p');const proposed=el('div');
+  const said=(p:Proposal)=>{const tag=p.tag?formatWeighted({name:p.tag,weight:p.weight===1?undefined:p.weight},true):'';return p.kind==='add'?`add ${tag}`:p.kind==='remove'?`remove ${tag}`:p.kind==='weight'?(p.weight===1?`clear the weight on ${tag}`:`weight ${tag}`):'new caption';};
+  const historyList=el('ol');const historyBox=el('details');historyBox.className='lc-sub';historyBox.hidden=true;
+  const startOver=button('Start over',()=>{rounds=[];showRounds();notify('Refine has forgotten the earlier rounds for this character.');});startOver.className='lc-mini';
+  historyBox.append(el('summary','Earlier rounds'),el('small','Refine remembers these while you work on this character, so it does not repeat itself.'),historyList,startOver);
+  function showRounds(){
+    historyList.replaceChildren();historyBox.hidden=!rounds.length;
+    historyBox.querySelector('summary')!.textContent=`Earlier rounds (${rounds.length})`;
+    for(const r of rounds){const item=el('li',`“${r.feedback}”`);if(r.applied.length)item.append(el('small',` Used: ${r.applied.join('; ')}.`));if(r.declined.length)item.append(el('small',` Skipped: ${r.declined.join('; ')}.`));historyList.append(item);}
+  }
+  // Suggestions left unapplied when a new round starts count as turned down.
+  const closeRound=(applied:Proposal[])=>{
+    if(!roundFeedback)return;
+    rounds.push({feedback:roundFeedback,applied:applied.map(said),declined:pending.filter(p=>!applied.includes(p)).map(said)});
+    rounds=rounds.slice(-8);roundFeedback='';showRounds();
+  };
   // Refine sees every tag in use, from the Anima prompt and the sheet, once each.
   const inUse=()=>{const seen=new Set<string>();return [...splitTags(tags.value),...sheetEntries()].filter(v=>{const k=v.replace(/^\((.+?):[\d.]+\)$/,'$1').trim().toLowerCase().replace(/[\s_]+/g,' ');if(seen.has(k))return false;seen.add(k);return true;});};
   const sheetEntries=()=>[sheet.countTag.box.value,...splitTags(sheet.always.box.value),...splitTags(sheet.appearance.box.value),...splitTags(sheet.outfit.box.value),...splitTags(sheet.anatomy.box.value)].map(v=>v.trim()).filter(Boolean);
@@ -147,8 +166,9 @@ export function setup(ctx:SpindleFrontendContext) {
     const entries=inUse();
     if(!entries.length)throw new Error('Translate a character first.');
     if(!feedback.value.trim())throw new Error('Say what the image got wrong first.');
-    const next=await rpc.request<Refinement>('refine',{connectionId:connection.value,tags:entries,caption:prose.value,feedback:feedback.value,description:source.value,stated:stated.value,locked:splitTags(sheet.always.box.value)});
-    pending=next.proposals;reply.textContent=next.reply;proposed.replaceChildren();
+    closeRound([]);
+    const next=await rpc.request<Refinement>('refine',{connectionId:connection.value,tags:entries,caption:prose.value,feedback:feedback.value,description:source.value,stated:stated.value,locked:splitTags(sheet.always.box.value),history:rounds});
+    roundFeedback=feedback.value.trim().slice(0,600);pending=next.proposals;reply.textContent=next.reply;proposed.replaceChildren();
     pending.forEach((p,i)=> {
       const line=el('label');line.className='lc-proposal';const box=el('input');box.type='checkbox';box.checked=true;box.dataset.index=String(i);
       const shown=p.tag?formatWeighted({name:p.tag,weight:p.weight===1?undefined:p.weight},true):'';
@@ -163,6 +183,7 @@ export function setup(ctx:SpindleFrontendContext) {
   const apply=button('Apply selected',()=> {
     const chosen=Array.from(proposed.querySelectorAll('input')).filter(b=>b.checked).map(b=>pending[Number(b.dataset.index)]);
     if(!chosen.length)throw new Error('Tick at least one suggestion.');
+    closeRound(chosen);
     const COUNT=/^1(?:girl|boy|other)$/;
     // The count tag has its own box in Lumi Studio, so a count change goes there and nowhere else.
     for(const p of chosen)if(p.tag&&COUNT.test(p.tag)){if(p.kind==='add')sheet.countTag.box.value=p.tag;if(p.kind==='remove'&&sheet.countTag.box.value.trim()===p.tag)sheet.countTag.box.value='';}
@@ -191,7 +212,7 @@ export function setup(ctx:SpindleFrontendContext) {
   const notes=named(el('textarea'),'notes');notes.rows=4;notes.maxLength=2000;notes.placeholder='e.g. Femboys: weight trap at 1.4. Androids: add visible panel seams at the shoulders and concealed joints.';
   const saveNotes=button('Save notes',async()=>{await rpc.request('saveNotes',{notes:notes.value});notify('Notes saved. They apply from the next translation or refinement.');});
   const notesBox=el('details');notesBox.className='lc-sub';notesBox.append(el('summary','Your Anima notes'),field('What you have learned works',notes,'In your own words. Saved, and read on every translation and refinement. A weight is only ever applied when a note gives the number.'),saveNotes);
-  refine.append(field('What did the image get wrong?',feedback,'LumiCast cannot see the image. It works from what you say here, your description, your notes, the Anima prompt and the character sheet.'),row(suggest),reply,proposed,row(apply),notesBox);
+  refine.append(historyBox,field('What did the image get wrong?',feedback,'LumiCast cannot see the image. It works from what you say here, your description, your notes, the Anima prompt and the character sheet.'),row(suggest),reply,proposed,row(apply),notesBox);
 
   // ── Standalone prompt: for use without Lumi Studio ──
   const output=card('02 / Anima prompt');
@@ -249,8 +270,8 @@ export function setup(ctx:SpindleFrontendContext) {
   });
   searchCard.append(field('Tag name or the start of one',query,'Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched.'),search,found);
 
-  app.append(intro,settings,status,input,gapsCard,output,refine,sheetCard,searchCard,el('p','LumiCast 0.7.1 · Draft stays in this tab until reload.'));
-  const controls=[translate,again,save,refreshButton,testGel,saveNotes,saveQuality,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
+  app.append(intro,settings,status,input,gapsCard,output,refine,sheetCard,searchCard,el('p','LumiCast 0.8.0 · Draft stays in this tab until reload.'));
+  const controls=[translate,again,save,refreshButton,testGel,saveNotes,saveQuality,startOver,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
 
   // Every change to the sheet is offered to Lumi Studio, a moment after typing stops.
   let shareTimer:ReturnType<typeof setTimeout>|undefined;

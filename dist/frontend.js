@@ -153,6 +153,9 @@ var STYLES = `.lc-app{box-sizing:border-box;font:14px/1.55 system-ui,sans-serif;
 function setup(ctx) {
   let closed = false, busy = false, verified = false, edited = false, result = null, revision = 0;
   let pending = [];
+  let rounds = [];
+  let roundFeedback = "";
+  let translatedFrom = "";
   const rpc = createRpc(ctx);
   const tab = ctx.ui.registerDrawerTab({ id: "translator", title: "LumiCast", shortName: "LumiCast", description: "Turn a written appearance into an Anima prompt", keywords: ["anima", "booru", "prompt", "translator"], iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 3H4v18h4M16 3h4v18h-4M9 8l3-3 3 3M9 16l3 3 3-3M12 5v14"/></svg>' });
   const removeStyle = ctx.dom.addStyle(STYLES);
@@ -236,6 +239,12 @@ function setup(ctx) {
       return;
     }
     const before = result ? result.gaps.map((g) => g.what) : [];
+    if (source.value !== translatedFrom) {
+      rounds = [];
+      roundFeedback = "";
+      translatedFrom = source.value;
+      showRounds();
+    }
     result = next;
     showSheet();
     showStandalone();
@@ -323,6 +332,42 @@ function setup(ctx) {
   feedback.placeholder = "Generate an image, then say what came out wrong: “reads too masculine”, “eyes came out blue”, “no visible seams”.";
   const reply = el("p");
   const proposed = el("div");
+  const said = (p) => {
+    const tag = p.tag ? formatWeighted({ name: p.tag, weight: p.weight === 1 ? undefined : p.weight }, true) : "";
+    return p.kind === "add" ? `add ${tag}` : p.kind === "remove" ? `remove ${tag}` : p.kind === "weight" ? p.weight === 1 ? `clear the weight on ${tag}` : `weight ${tag}` : "new caption";
+  };
+  const historyList = el("ol");
+  const historyBox = el("details");
+  historyBox.className = "lc-sub";
+  historyBox.hidden = true;
+  const startOver = button("Start over", () => {
+    rounds = [];
+    showRounds();
+    notify("Refine has forgotten the earlier rounds for this character.");
+  });
+  startOver.className = "lc-mini";
+  historyBox.append(el("summary", "Earlier rounds"), el("small", "Refine remembers these while you work on this character, so it does not repeat itself."), historyList, startOver);
+  function showRounds() {
+    historyList.replaceChildren();
+    historyBox.hidden = !rounds.length;
+    historyBox.querySelector("summary").textContent = `Earlier rounds (${rounds.length})`;
+    for (const r of rounds) {
+      const item = el("li", `“${r.feedback}”`);
+      if (r.applied.length)
+        item.append(el("small", ` Used: ${r.applied.join("; ")}.`));
+      if (r.declined.length)
+        item.append(el("small", ` Skipped: ${r.declined.join("; ")}.`));
+      historyList.append(item);
+    }
+  }
+  const closeRound = (applied) => {
+    if (!roundFeedback)
+      return;
+    rounds.push({ feedback: roundFeedback, applied: applied.map(said), declined: pending.filter((p) => !applied.includes(p)).map(said) });
+    rounds = rounds.slice(-8);
+    roundFeedback = "";
+    showRounds();
+  };
   const inUse = () => {
     const seen = new Set;
     return [...splitTags(tags.value), ...sheetEntries()].filter((v) => {
@@ -340,7 +385,9 @@ function setup(ctx) {
       throw new Error("Translate a character first.");
     if (!feedback.value.trim())
       throw new Error("Say what the image got wrong first.");
-    const next = await rpc.request("refine", { connectionId: connection.value, tags: entries, caption: prose.value, feedback: feedback.value, description: source.value, stated: stated.value, locked: splitTags(sheet.always.box.value) });
+    closeRound([]);
+    const next = await rpc.request("refine", { connectionId: connection.value, tags: entries, caption: prose.value, feedback: feedback.value, description: source.value, stated: stated.value, locked: splitTags(sheet.always.box.value), history: rounds });
+    roundFeedback = feedback.value.trim().slice(0, 600);
     pending = next.proposals;
     reply.textContent = next.reply;
     proposed.replaceChildren();
@@ -370,6 +417,7 @@ function setup(ctx) {
     const chosen = Array.from(proposed.querySelectorAll("input")).filter((b) => b.checked).map((b) => pending[Number(b.dataset.index)]);
     if (!chosen.length)
       throw new Error("Tick at least one suggestion.");
+    closeRound(chosen);
     const COUNT = /^1(?:girl|boy|other)$/;
     for (const p of chosen)
       if (p.tag && COUNT.test(p.tag)) {
@@ -425,7 +473,7 @@ function setup(ctx) {
   const notesBox = el("details");
   notesBox.className = "lc-sub";
   notesBox.append(el("summary", "Your Anima notes"), field("What you have learned works", notes, "In your own words. Saved, and read on every translation and refinement. A weight is only ever applied when a note gives the number."), saveNotes);
-  refine.append(field("What did the image get wrong?", feedback, "LumiCast cannot see the image. It works from what you say here, your description, your notes, the Anima prompt and the character sheet."), row(suggest), reply, proposed, row(apply), notesBox);
+  refine.append(historyBox, field("What did the image get wrong?", feedback, "LumiCast cannot see the image. It works from what you say here, your description, your notes, the Anima prompt and the character sheet."), row(suggest), reply, proposed, row(apply), notesBox);
   const output = card("02 / Anima prompt");
   const quality = named(el("input"), "quality");
   quality.maxLength = 600;
@@ -521,8 +569,8 @@ function setup(ctx) {
     notify("Search complete. Popularity is not an Anima quality score.");
   });
   searchCard.append(field("Tag name or the start of one", query, "Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched."), search, found);
-  app.append(intro, settings, status, input, gapsCard, output, refine, sheetCard, searchCard, el("p", "LumiCast 0.7.1 · Draft stays in this tab until reload."));
-  const controls = [translate, again, save, refreshButton, testGel, saveNotes, saveQuality, verify, rebuild, copy, copyTags, copyProse, suggest, apply, search, ...Object.values(sheet).map((f) => f.copyField)];
+  app.append(intro, settings, status, input, gapsCard, output, refine, sheetCard, searchCard, el("p", "LumiCast 0.8.0 · Draft stays in this tab until reload."));
+  const controls = [translate, again, save, refreshButton, testGel, saveNotes, saveQuality, startOver, verify, rebuild, copy, copyTags, copyProse, suggest, apply, search, ...Object.values(sheet).map((f) => f.copyField)];
   let shareTimer;
   function share() {
     clearTimeout(shareTimer);
