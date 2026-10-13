@@ -469,9 +469,15 @@ function json(raw) {
   const clean = raw.trim().replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "");
   try {
     return record(JSON.parse(clean));
-  } catch {
-    throw new OutputError("The model did not return valid translator JSON. Select a generative model that follows JSON instructions and try again.");
+  } catch {}
+  const start = clean.indexOf("{");
+  const end = clean.lastIndexOf("}");
+  if (start >= 0 && end > start) {
+    try {
+      return record(JSON.parse(clean.slice(start, end + 1)));
+    } catch {}
   }
+  throw new OutputError("The model did not return valid translator JSON. Select a generative model that follows JSON instructions and try again.");
 }
 var fold = (s) => s.normalize("NFKC").replace(/[\u2018\u2019\u201A\u2032]/g, "'").replace(/[\u201C\u201D\u2033]/g, '"').replace(/\u2026/g, "...").replace(/\s*[\u2010-\u2015\u2212-]+\s*/g, "-").replace(/\s+/g, " ").trim().toLowerCase();
 var optional = (read, fallback) => {
@@ -898,7 +904,7 @@ function setupBackend(api) {
       await s.load;
       const settings = s.settings;
       const dictionary = () => s.dictionary ??= new BooruDictionary(async (url) => {
-        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.8.1 (tag metadata client)" } }));
+        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.8.2 (tag metadata client)" } }));
         if (typeof response.status !== "number" || typeof response.body !== "string")
           throw new Error("Invalid proxy response.");
         return { status: response.status, body: response.body };
@@ -955,7 +961,7 @@ function setupBackend(api) {
         const entered = gelCredentials(text(v.gelUser ?? "", "Gelbooru user", 300), v.gelKey ? text(v.gelKey, "Gelbooru key", 300) : "");
         const credentials = { user: entered.user || settings.gelUser, key: entered.key || settings.gelKey };
         const outcome = await testGelbooru(async (url) => {
-          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.8.1 (tag metadata client)" } }));
+          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.8.2 (tag metadata client)" } }));
           return { status: Number(response.status), body: typeof response.body === "string" ? response.body : "" };
         }, credentials);
         const unsaved = credentials.user !== settings.gelUser || credentials.key !== settings.gelKey;
@@ -991,7 +997,7 @@ function setupBackend(api) {
         const translator = new Translator(async (system, content, signal) => {
           let value;
           const stage = refining ? "refinement" : ++modelCalls === 1 ? "trait extraction" : "tag review and caption";
-          const request = { type: "raw", connection_id: connection.id, provider: connection.provider, model: connection.model, userId, messages: [{ role: "system", content: system }, { role: "user", content }], parameters: { max_tokens: 6000 }, signal };
+          const request = { type: "raw", connection_id: connection.id, provider: connection.provider, model: connection.model, userId, messages: [{ role: "system", content: system }, { role: "user", content }], parameters: { max_tokens: 16000 }, signal };
           try {
             value = await api.generate.raw(request);
           } catch (error) {
@@ -999,9 +1005,16 @@ function setupBackend(api) {
             throw generationError(error, connection.provider, connection.model, stage);
           }
           const response = record(value);
-          if (typeof response.content !== "string" || !response.content.trim() || /length|max_tokens/.test(String(response.finish_reason ?? "")))
-            throw new Error("The model returned empty or truncated text. Choose another connection or shorten the description.");
-          return response.content;
+          const answer = typeof response.content === "string" ? response.content : "";
+          const reasoning = typeof response.reasoning === "string" ? response.reasoning : "";
+          const finish = String(response.finish_reason ?? "");
+          if (/length|max_tokens/.test(finish))
+            throw new Error(`The model ran out of room during ${stage} (it stopped at the length limit${reasoning ? ` after ${reasoning.length.toLocaleString()} characters of reasoning` : ""}). Try a model with reasoning turned down or off, or a shorter description.`);
+          if (!answer.trim() && reasoning.includes("{"))
+            return reasoning;
+          if (!answer.trim())
+            throw new Error(`The model sent back an empty reply during ${stage} (finish reason: ${finish || "none given"}). Try again, or try another connection.`);
+          return answer;
         }, dictionary());
         const label = `${connection.provider} / ${connection.model}`;
         if (refining) {

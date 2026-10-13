@@ -103,7 +103,11 @@ export class OutputError extends Error {}
 function json(raw: string): Record<string, unknown> {
   if (raw.length > 48_000) throw new OutputError('The model returned too much text. Try a shorter description.');
   const clean = raw.trim().replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
-  try { return record(JSON.parse(clean)); } catch { throw new OutputError('The model did not return valid translator JSON. Select a generative model that follows JSON instructions and try again.'); }
+  try { return record(JSON.parse(clean)); } catch { /* try the outermost object below */ }
+  // Models sometimes wrap the JSON in a sentence or reasoning; take the outermost object if there is one.
+  const start = clean.indexOf('{'); const end = clean.lastIndexOf('}');
+  if (start >= 0 && end > start) { try { return record(JSON.parse(clean.slice(start, end + 1))); } catch { /* fall through */ } }
+  throw new OutputError('The model did not return valid translator JSON. Select a generative model that follows JSON instructions and try again.');
 }
 // Small models retype quotes and dashes when copying a passage; that is not fabrication.
 const fold = (s: string) => s.normalize('NFKC').replace(/[‘’‚′]/g, "'").replace(/[“”″]/g, '"').replace(/…/g, '...').replace(/\s*[‐-―−-]+\s*/g, '-').replace(/\s+/g, ' ').trim().toLowerCase();

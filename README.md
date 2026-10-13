@@ -1,4 +1,6 @@
-# LumiCast 0.8.1
+# LumiCast 0.8.2
+
+**v0.8.2 copes with reasoning models.** The reply limit per call is now 16,000 tokens instead of 6,000, an answer a model leaves in its reasoning text or wraps in a sentence is still read, and a failed reply now says which step failed and whether the model ran out of room or sent nothing.
 
 **v0.8.1 plainer captions, and a way to turn them off.** The caption writer now uses only words an image model can draw (colours, shapes, lengths, placement), leaves out roles, moods and impressions such as "goddess" or "presence", never contradicts a kept tag, and skips what a tag already says. Tags such as `abs` are no longer proposed against a stated soft belly. A **Caption** menu in the Anima prompt can drop the caption entirely; the choice is remembered in this browser.
 
@@ -53,7 +55,7 @@ Prebuilt `dist/` files are committed for Lumiverse installation. If the tab does
 
 Requires **Lumiverse 1.2.5 or later**. Compatibility was checked against the current 1.2.5 source and SDK 0.6.40; older versions have not been verified.
 
-1. Unzip `lumicast-0.8.1-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
+1. Unzip `lumicast-0.8.2-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
 2. On the machine running your Lumiverse **server**, copy that folder into `<DATA_DIR>/extensions/`. The server's default DATA_DIR is `./data`, relative to where Lumiverse runs. For Docker, copy into the volume mounted as the server's data directory. Do not copy it into another extension's folder.
 3. As the Lumiverse owner/admin, open **Extensions**, open its add menu, and choose **Import Local**. Enable LumiCast and grant `generation` and `cors_proxy`. If the tab does not appear, reload Lumiverse.
 4. Open **LumiCast** in the sidebar drawer or find it in the command palette. Expand **Connection & tag services**, choose a saved generative connection, and save.
@@ -69,7 +71,7 @@ LumiCast uses Lumiverse's `connections.list/get` and `generate.raw`. It does not
 
 Create a dedicated translator connection in Lumiverse using OpenRouter, an OpenAI-compatible endpoint, or any supported generative text provider. Choose a fast text model that reliably follows JSON instructions; run the examples in `SMOKE-TESTS.md` before trusting a cheaper model. Switch to a stronger generative model if the result is thin or JSON validation fails. The selector shows actual saved provider/model IDs, rather than a stale hardcoded catalog or prices. Refresh it after changing Connections.
 
-Jev, Decisions, embedding, reranking and moderation models are blocked by recognizable model names. This is a practical guard, not exhaustive capability discovery; a custom-named classifier will still fail the required text/JSON checks. No speculative Luna or Jev endpoint is used. Reasoning settings inherit your saved connection/host settings. Each translation makes **two generation calls** and each refinement makes **one**, with a 6,000 output-token limit per call. There are no automatic paid retries.
+Jev, Decisions, embedding, reranking and moderation models are blocked by recognizable model names. This is a practical guard, not exhaustive capability discovery; a custom-named classifier will still fail the required text/JSON checks. No speculative Luna or Jev endpoint is used. Reasoning settings inherit your saved connection/host settings. Each translation makes **two generation calls** and each refinement makes **one**, with a 16,000 output-token limit per call, since reasoning models spend part of it thinking. There are no automatic paid retries.
 
 ## How a translation works
 

@@ -23,6 +23,8 @@ function harness(provider='openrouter',model='test/generative') {
       if(input.model!==model||input.provider!==provider||input.connection_id!=='c1')throw new Error('API error 400: missing or invalid model');
       if(fail)throw new Error('Invalid API key SECRET-DO-NOT-LEAK');
       if(block)await new Promise((_,reject)=>input.signal.addEventListener('abort',()=>reject(new DOMException('aborted','AbortError')),{once:true}));
+      // A queued {__raw:…} is returned as the host's reply exactly, to test odd provider replies.
+      if(responses&&(responses[0] as {__raw?:unknown})?.__raw)return (responses.shift() as {__raw:unknown}).__raw;
       return{content:JSON.stringify(responses ? responses.shift() : input.messages[0].content.includes('one trait per visual fact')?{traits:[{id:'t1',group:'hair',evidence:'Short red hair.',tags:['red_hair'],detail:'Short red hair'}]}:{drop:[],captions:{character:'Short red hair.'},issues:[]}),finish_reason:'stop'};
     }},
     onFrontendMessage:(fn:typeof handler)=>{handler=fn;return()=>{handler=undefined;};},
@@ -276,4 +278,17 @@ test('the caption can be turned off, leaving quality tags and booru tags only',a
   expect(named(h.root,'prompt').value).toBe('masterpiece, red hair');expect(h.root.textContent).toContain('Caption turned off.');
   b('Rebuild from tags + detail').click();await until(()=>!b('Translate').disabled);expect(named(h.root,'prompt').value).toBe('masterpiece, red hair');
   caption.value='short';caption.dispatchEvent(new Event('change'));expect(named(h.root,'prompt').value).toBe('masterpiece, red hair\n\nShort red hair.');
+});
+test('odd model replies: cut off at the length limit, empty, or the answer left in reasoning',async()=> {
+  dom();const h=harness();cleanups.push(h.stop);const rpc=createRpc(h.ctx);cleanups.push(()=>rpc.destroy());
+  const ask=()=>rpc.request<Translation>('translate',{description:'Short red hair.',connectionId:'c1'}).then(r=>r,(e:Error)=>e);
+  h.setResponses([{__raw:{content:'{"traits":[',reasoning:'x'.repeat(12000),finish_reason:'length'}}]);
+  expect(((await ask()) as Error).message).toBe('The model ran out of room during trait extraction (it stopped at the length limit after 12,000 characters of reasoning). Try a model with reasoning turned down or off, or a shorter description.');
+  h.setResponses([{__raw:{content:'',finish_reason:'stop'}}]);
+  expect(((await ask()) as Error).message).toBe('The model sent back an empty reply during trait extraction (finish reason: stop). Try again, or try another connection.');
+  const extraction={traits:[{id:'t1',group:'hair',evidence:'Short red hair.',tags:['red_hair'],detail:'Short red hair'}]};
+  h.setResponses([{__raw:{content:'',reasoning:`Let me think. The answer is ${JSON.stringify(extraction)} and that is all.`,finish_reason:'stop'}},{drop:[],captions:{character:'Short red hair.'},issues:[]}]);
+  expect(((await ask()) as Translation).views.character.prompt).toBe('red hair\n\nShort red hair.');
+  const sent=(h.calls.filter(v=>(v as unknown[])[0]==='generation').pop() as unknown[])[1] as {parameters:{max_tokens:number}};
+  expect(sent.parameters.max_tokens).toBe(16000);
 });
