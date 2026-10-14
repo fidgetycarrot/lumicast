@@ -47,8 +47,9 @@ export interface Translation extends View { issues: Issue[]; model: string; view
 /** How hard the model thinks: light is a short think, off skips it, inherit uses the connection's own reasoning setting. */
 export type Thinking = 'light' | 'off' | 'inherit';
 export const THINKING: Thinking[] = ['light', 'off', 'inherit'];
-export interface Settings { connectionId: string; gelUser: string; gelKey: string; notes: string; quality: string; thinking: Thinking }
-export interface PublicSettings { connectionId: string; gelUser: string; hasGelKey: boolean; notes: string; quality: string; thinking: Thinking }
+/** castConnectionId: the model that cleans up [ooc] replies; empty means the main connection. */
+export interface Settings { connectionId: string; castConnectionId: string; gelUser: string; gelKey: string; notes: string; quality: string; thinking: Thinking }
+export interface PublicSettings { connectionId: string; castConnectionId: string; gelUser: string; hasGelKey: boolean; notes: string; quality: string; thinking: Thinking }
 export interface Snapshot {
   connections: { id: string; name: string; provider: string; model: string; supported: boolean }[];
   settings: PublicSettings; permissions: boolean;

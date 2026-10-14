@@ -153,7 +153,7 @@ function field(label, input, hint) {
     wrapper.append(el("small", hint));
   return wrapper;
 }
-var STYLES = `.lc-app{box-sizing:border-box;font:14px/1.55 system-ui,sans-serif;color:var(--lumiverse-text,#eee);padding:24px;max-width:860px;margin:auto}.lc-app *{box-sizing:border-box}.lc-app h1{font-size:32px;letter-spacing:-1px;margin:2px 0}.lc-app h2{font-size:18px;margin:0 0 12px}.lc-app p{margin:8px 0}.lc-kicker{color:#d4b7ff;font-size:11px;letter-spacing:2px;text-transform:uppercase}.lc-muted,.lc-app small{color:var(--lumiverse-text-muted,#b4adc1);font-size:12px}.lc-card{border:1px solid #81708e55;background:#83709c0a;border-radius:16px;padding:18px;margin-top:18px}.lc-field{display:flex;flex-direction:column;gap:7px;margin:12px 0}.lc-field>span{font-size:13px;font-weight:600}.lc-app textarea,.lc-app input,.lc-app select{width:100%;border:1px solid #9484a566;border-radius:9px;background:var(--lumiverse-bg,#211c29);color:inherit;padding:11px;font:inherit}.lc-app textarea{resize:vertical;min-height:95px;line-height:1.55}.lc-app button{border:1px solid #a18caf66;border-radius:9px;padding:9px 15px;background:#8b719025;color:inherit;font:inherit;cursor:pointer}.lc-app button.lc-primary{background:#d0adf3;color:#261733;border-color:#d0adf3;font-weight:650}.lc-app button:disabled{opacity:.45;cursor:default}.lc-app :focus-visible{outline:2px solid #d0adf3;outline-offset:3px}.lc-row{display:flex;flex-wrap:wrap;gap:9px;align-items:center}.lc-status{padding:10px 0;white-space:pre-wrap;min-height:45px;position:sticky;top:0;z-index:2;background:var(--lumiverse-bg,#17131d);border-bottom:1px solid #81708e33}.lc-head{display:flex;justify-content:space-between;align-items:center;gap:8px}.lc-head>span{font-size:13px;font-weight:600}.lc-app button.lc-mini{padding:3px 11px;font-size:12px}.lc-status[data-error=true]{color:#ffa7a7}.lc-app summary{cursor:pointer;font-weight:600}.lc-app a{color:#d4b7ff}.lc-gaps{border-left:3px solid #d0adf3;padding:6px 12px;margin:10px 0}.lc-gaps .lc-row{margin-top:8px}.lc-gaps input{flex:1;min-width:180px}.lc-sub{margin-top:14px}.lc-sub>summary{font-weight:600}.lc-gaps ul{margin:6px 0;padding-left:18px}.lc-proposal{display:flex;gap:9px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #81708e33}.lc-proposal input{width:auto;margin-top:4px}.lc-proposal small{display:block}.lc-provenance{overflow-wrap:anywhere;padding:9px 0;border-bottom:1px solid #81708e33}.lc-provenance blockquote{margin:4px 0 0;padding-left:12px;border-left:2px solid #8b7190;font-size:12px}.lc-app [hidden]{display:none!important}@media(max-width:450px){.lc-app{padding:14px}.lc-card{padding:13px}}`;
+var STYLES = `.lc-app{box-sizing:border-box;font:14px/1.55 system-ui,sans-serif;color:var(--lumiverse-text,#eee);padding:24px;max-width:860px;margin:auto}.lc-app *{box-sizing:border-box}.lc-app h1{font-size:32px;letter-spacing:-1px;margin:2px 0}.lc-app h2{font-size:18px;margin:0 0 12px}.lc-app p{margin:8px 0}.lc-kicker{color:#d4b7ff;font-size:11px;letter-spacing:2px;text-transform:uppercase}.lc-muted,.lc-app small{color:var(--lumiverse-text-muted,#b4adc1);font-size:12px}.lc-card{border:1px solid #81708e55;background:#83709c0a;border-radius:16px;padding:18px;margin-top:18px}.lc-field{display:flex;flex-direction:column;gap:7px;margin:12px 0}.lc-field>span{font-size:13px;font-weight:600}.lc-app textarea,.lc-app input,.lc-app select{width:100%;border:1px solid #9484a566;border-radius:9px;background:var(--lumiverse-bg,#211c29);color:inherit;padding:11px;font:inherit}.lc-app textarea{resize:vertical;min-height:95px;line-height:1.55}.lc-app button{border:1px solid #a18caf66;border-radius:9px;padding:9px 15px;background:#8b719025;color:inherit;font:inherit;cursor:pointer}.lc-app button.lc-primary{background:#d0adf3;color:#261733;border-color:#d0adf3;font-weight:650}.lc-app button:disabled{opacity:.45;cursor:default}.lc-app :focus-visible{outline:2px solid #d0adf3;outline-offset:3px}.lc-row{display:flex;flex-wrap:wrap;gap:9px;align-items:center}.lc-status{padding:10px 0;white-space:pre-wrap;min-height:45px;position:sticky;top:0;z-index:2;background:var(--lumiverse-bg,#17131d);border-bottom:1px solid #81708e33}.lc-head{display:flex;justify-content:space-between;align-items:center;gap:8px}.lc-head>span{font-size:13px;font-weight:600}.lc-app button.lc-mini{padding:3px 11px;font-size:12px}.lc-status[data-error=true]{color:#ffa7a7}.lc-app summary{cursor:pointer;font-weight:600}.lc-app a{color:#d4b7ff}.lc-gaps,.lc-news{border-left:3px solid #d0adf3;padding:6px 12px;margin:10px 0}.lc-gaps .lc-row{margin-top:8px}.lc-gaps input{flex:1;min-width:180px}.lc-sub{margin-top:14px}.lc-sub>summary{font-weight:600}.lc-gaps ul{margin:6px 0;padding-left:18px}.lc-proposal{display:flex;gap:9px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #81708e33}.lc-proposal input{width:auto;margin-top:4px}.lc-proposal small{display:block}.lc-provenance{overflow-wrap:anywhere;padding:9px 0;border-bottom:1px solid #81708e33}.lc-provenance blockquote{margin:4px 0 0;padding-left:12px;border-left:2px solid #8b7190;font-size:12px}.lc-app [hidden]{display:none!important}@media(max-width:450px){.lc-app{padding:14px}.lc-card{padding:13px}}`;
 function setup(ctx) {
   let closed = false, busy = false, verified = false, edited = false, result = null, revision = 0;
   let pending = [];
@@ -194,6 +194,8 @@ function setup(ctx) {
   settings.append(el("summary", "Connection & tag services"));
   const connection = el("select");
   connection.setAttribute("aria-label", "Generative connection");
+  const castConnection = el("select");
+  castConnection.setAttribute("aria-label", "Model for [ooc] replies");
   const thinking = el("select");
   thinking.setAttribute("aria-label", "Model thinking");
   for (const [value, label] of [["light", "Light (recommended)"], ["off", "Off (fastest)"], ["inherit", "Same as this connection in Lumiverse"]]) {
@@ -214,7 +216,7 @@ function setup(ctx) {
   const clearLabel = el("label", " Clear saved Gelbooru key");
   clearLabel.prepend(clearKey);
   const save = button("Save settings", async () => {
-    await rpc.request("save", { connectionId: connection.value, thinking: thinking.value, gelUser: gelUser.value, gelKey: gelKey.value, clearGelKey: clearKey.checked });
+    await rpc.request("save", { connectionId: connection.value, castConnectionId: castConnection.value, thinking: thinking.value, gelUser: gelUser.value, gelKey: gelKey.value, clearGelKey: clearKey.checked });
     gelKey.value = "";
     clearKey.checked = false;
     await refresh();
@@ -230,7 +232,69 @@ function setup(ctx) {
   });
   const credentialNotice = el("p");
   credentialNotice.className = "lc-muted";
-  settings.append(field("Generative connection", connection, "Uses the model saved in Lumiverse. Pick a fast text model that follows JSON instructions; Jev, Decisions and embedding models cannot translate."), field("Model thinking", thinking, "How long the model thinks before answering. Long thinking is most of the wait and rarely improves tags. If a model refuses to work with thinking off, choose Light."), field("Gelbooru user ID (optional)", gelUser, "The number, not your username. You can also paste Gelbooru’s whole “&api_key=…&user_id=…” line into the key box and leave this empty."), field("Gelbooru API key (optional)", gelKey, "Stored in your extension storage on the Lumiverse server. Never returned to this panel. Sent only to Gelbooru over HTTPS."), clearLabel, credentialNotice, row(testGel), gelResult, row(save, refreshButton));
+  settings.append(field("Generative connection", connection, "Uses the model saved in Lumiverse. Pick a fast text model that follows JSON instructions; Jev, Decisions and embedding models cannot translate."), field("Model for [ooc] replies", castConnection, "Cleans up a story model’s [ooc] answer into plain descriptions for the lorebook. A small job, so a stronger model costs little here."), field("Model thinking", thinking, "How long the model thinks before answering. Long thinking is most of the wait and rarely improves tags. If a model refuses to work with thinking off, choose Light."), field("Gelbooru user ID (optional)", gelUser, "The number, not your username. You can also paste Gelbooru’s whole “&api_key=…&user_id=…” line into the key box and leave this empty."), field("Gelbooru API key (optional)", gelKey, "Stored in your extension storage on the Lumiverse server. Never returned to this panel. Sent only to Gelbooru over HTTPS."), clearLabel, credentialNotice, row(testGel), gelResult, row(save, refreshButton));
+  const castCard = card("From your story");
+  const castNews = el("p");
+  castNews.className = "lc-news";
+  castNews.hidden = true;
+  const castList = el("div");
+  const castButtons = [];
+  const readOoc = button("Use the last [ooc] reply", async () => {
+    const read = await clocked("castRead", { connectionId: connection.value });
+    castNews.hidden = true;
+    readOoc.className = "";
+    castList.replaceChildren(el("p", `From your [ooc] message “${read.question.length > 120 ? `${read.question.slice(0, 120)}…` : read.question}”. Check each description, then save it.`));
+    castButtons.splice(0);
+    for (const member of read.characters)
+      castList.append(castEntry(member));
+    update();
+    notify(`${read.characters.length === 1 ? "1 character" : `${read.characters.length} characters`} found: ${read.characters.map((c) => c.name).join(", ")}.`);
+  });
+  function castEntry(member) {
+    const box = el("div");
+    box.className = "lc-sub";
+    box.dataset.cast = member.name;
+    const name = el("input");
+    name.value = member.name;
+    name.maxLength = 80;
+    name.autocomplete = "off";
+    const aliases = el("input");
+    aliases.value = member.aliases.join(", ");
+    aliases.maxLength = 300;
+    aliases.autocomplete = "off";
+    aliases.placeholder = "e.g. the dockmaster, Mare";
+    const description = el("textarea");
+    description.value = member.description;
+    description.rows = 6;
+    description.maxLength = 3000;
+    const state = el("small");
+    state.className = "lc-muted";
+    const saveEntry = button("Save to Cast lorebook", async () => {
+      const saved = await rpc.request("castSave", { name: name.value, aliases: splitTags(aliases.value), description: description.value });
+      state.textContent = `${saved.updated ? "Updated" : "Saved"} in “${saved.book}”${saved.createdBook ? `, a new lorebook attached to ${saved.attached}’s card` : ""}. You can delete the [ooc] exchange from the chat now.`;
+      notify(`${name.value.trim()} ${saved.updated ? "updated" : "saved"} in the Cast lorebook.`);
+    }, true);
+    const toPrompt = button("Make the Anima prompt", async () => {
+      const who = name.value.trim();
+      const text = description.value.trim();
+      source.value = text.toLowerCase().startsWith(who.toLowerCase()) ? text : `${who}
+${text}`;
+      revision++;
+      await runTranslate();
+      input.scrollIntoView?.({ block: "start" });
+    });
+    castButtons.push(saveEntry, toPrompt);
+    box.append(el("h2", member.name), field("Name", name), field("Other names", aliases, "Comma separated. Any of these names in the story brings the description into the story model’s context."), field("Description", description, "Goes into the lorebook as written, and the Anima prompt is built from it. Edit anything first."), row(saveEntry, toPrompt), state);
+    return box;
+  }
+  castCard.append(el("p", "Ask the story model about someone with a message that starts with [ooc]. When it answers, bring the answer in here: LumiCast keeps only the description, one per character, and saves it to a Cast lorebook so the story stays consistent."), castNews, row(readOoc), castList);
+  const offOoc = ctx.onBackendMessage((value) => {
+    if (value?.type !== "lumicast:ooc" || closed)
+      return;
+    castNews.textContent = "Your [ooc] message has a reply.";
+    castNews.hidden = false;
+    readOoc.className = "lc-primary";
+  });
   const input = card("01 / Describe");
   const source = named(el("textarea"), "source");
   source.rows = 7;
@@ -274,7 +338,7 @@ function setup(ctx) {
   cancel.addEventListener("click", () => {
     rpc.request("cancel").then(() => notify("Cancellation requested.")).catch((e) => notify(e.message, true));
   });
-  input.append(field("Character description", source, "Only this pasted description is sent to your selected provider. No chat history is read."), field("Known facts (optional)", stated, "Anything you know that the description leaves out or leaves vague: what the character is, an eye colour. Treated as true and translated into the matching tags."), row(translate, cancel));
+  input.append(field("Character description", source, "Only this description is sent to your selected provider."), field("Known facts (optional)", stated, "Anything you know that the description leaves out or leaves vague: what the character is, an eye colour. Treated as true and translated into the matching tags."), row(translate, cancel));
   const copyText = async (value, what) => {
     if (!value.trim())
       throw new Error(`There is no ${what} to copy yet.`);
@@ -588,8 +652,8 @@ function setup(ctx) {
     notify("Search complete. Popularity is not an Anima quality score.");
   });
   searchCard.append(field("Tag name or the start of one", query, "Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched."), search, found);
-  app.append(intro, settings, status, input, gapsCard, output, refine, sheetCard, searchCard, el("p", "LumiCast 0.9.0 · Draft stays in this tab until reload."));
-  const controls = [translate, again, save, refreshButton, testGel, saveNotes, saveQuality, startOver, verify, rebuild, copy, copyTags, copyProse, suggest, apply, search, ...Object.values(sheet).map((f) => f.copyField)];
+  app.append(intro, settings, status, castCard, input, gapsCard, output, refine, sheetCard, searchCard, el("p", "LumiCast 0.10.0 · Draft stays in this tab until reload."));
+  const controls = [readOoc, translate, again, save, refreshButton, testGel, saveNotes, saveQuality, startOver, verify, rebuild, copy, copyTags, copyProse, suggest, apply, search, ...Object.values(sheet).map((f) => f.copyField)];
   let shareTimer;
   function share() {
     clearTimeout(shareTimer);
@@ -657,13 +721,13 @@ function setup(ctx) {
     update();
   }
   function update() {
-    for (const c of controls)
+    for (const c of [...controls, ...castButtons])
       c.disabled = busy;
     rebuild.disabled = busy || !verified && !!tags.value.trim();
     apply.disabled = busy || !pending.length;
     copy.disabled = busy || !prompt.value.trim();
     cancel.hidden = !busy;
-    for (const node of [connection, thinking, gelUser, gelKey, clearKey])
+    for (const node of [connection, castConnection, thinking, gelUser, gelKey, clearKey])
       node.disabled = busy;
     for (const node of [source, stated, statedAgain, feedback, notes, quality, tags, prose, prompt, ...Object.values(sheet).map((f) => f.box)])
       node.readOnly = busy;
@@ -732,6 +796,14 @@ function setup(ctx) {
       o.disabled = !c.supported;
       connection.append(o);
     }
+    const castSelected = castConnection.options.length ? castConnection.value : snapshot.settings.castConnectionId;
+    castConnection.replaceChildren(option("Same as the connection above", ""));
+    for (const c of snapshot.connections) {
+      const o = option(`${c.name} · ${c.provider} / ${c.model}`, c.id);
+      o.disabled = !c.supported;
+      castConnection.append(o);
+    }
+    castConnection.value = castSelected;
     connection.value = selected;
     gelUser.value = snapshot.settings.gelUser;
     notes.value = snapshot.settings.notes;
@@ -794,6 +866,7 @@ function setup(ctx) {
   return () => {
     closed = true;
     ctx.sendToBackend({ type: "lumicast:request", id: crypto.randomUUID(), action: "cancel" });
+    offOoc();
     rpc.destroy();
     removeStyle();
     tab.destroy();

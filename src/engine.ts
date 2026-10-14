@@ -100,7 +100,7 @@ Make the smallest set of changes that answers the feedback. Do not restyle the c
 
 /** The model's text was unusable, as opposed to the request failing. */
 export class OutputError extends Error {}
-function json(raw: string): Record<string, unknown> {
+export function json(raw: string): Record<string, unknown> {
   if (raw.length > 48_000) throw new OutputError('The model returned too much text. Try a shorter description.');
   const clean = raw.trim().replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
   try { return record(JSON.parse(clean)); } catch { /* try the outermost object below */ }
@@ -110,7 +110,7 @@ function json(raw: string): Record<string, unknown> {
   throw new OutputError('The model did not return valid translator JSON. Select a generative model that follows JSON instructions and try again.');
 }
 // Small models retype quotes and dashes when copying a passage; that is not fabrication.
-const fold = (s: string) => s.normalize('NFKC').replace(/[‘’‚′]/g, "'").replace(/[“”″]/g, '"').replace(/…/g, '...').replace(/\s*[‐-―−-]+\s*/g, '-').replace(/\s+/g, ' ').trim().toLowerCase();
+export const fold = (s: string) => s.normalize('NFKC').replace(/[‘’‚′]/g, "'").replace(/[“”″]/g, '"').replace(/…/g, '...').replace(/\s*[‐-―−-]+\s*/g, '-').replace(/\s+/g, ' ').trim().toLowerCase();
 const optional = <T>(read: () => T, fallback: T): T => { try { return read(); } catch { return fallback; } };
 
 /** Ungrounded traits and malformed tags are skipped singly; one slip does not void the rest. */

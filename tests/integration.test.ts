@@ -12,8 +12,23 @@ function harness(provider='openrouter',model='test/generative') {
   let fail=false,block=false;let latestSignal:AbortSignal|undefined;let responses:unknown[]|undefined;
   let gel:{status:number;body:string}|undefined;
   let noPool=false;
+  // A small story: one chat on one character card, its messages, and lorebooks.
+  const story={chat:{id:'chat1',character_id:'card1',name:'Harbour story'} as {id:string;character_id:string;name:string}|null,
+    card:{id:'card1',name:'Narrator',world_book_ids:['other']},messages:[] as {id:string;role:string;content:string}[],
+    books:new Map<string,{id:string;name:string;metadata:Record<string,unknown>}>([['other',{id:'other',name:'World',metadata:{}}]]),
+    entries:[] as {id:string;world_book_id:string;key:string[];content:string;comment:string}[],denied:[] as string[]};
+  const events=new Map<string,(payload:unknown,user?:string)=>void>();
   const api={
-    permissions:{has:()=>true},
+    permissions:{has:(p:string)=>!story.denied.includes(p)},
+    on:(event:string,fn:(payload:unknown,user?:string)=>void)=>{events.set(event,fn);return()=>events.delete(event);},
+    chats:{getActive:async()=>story.chat},
+    chat:{getMessages:async(id:string)=>id==='chat1'?story.messages.map(m=>({...m,is_user:m.role==='user'})):[]},
+    characters:{get:async(id:string)=>id===story.card.id?{...story.card}:null,update:async(id:string,v:{world_book_ids:string[]})=>{calls.push(['attach',id,v.world_book_ids]);story.card.world_book_ids=v.world_book_ids;return story.card;}},
+    world_books:{get:async(id:string)=>story.books.get(id)??null,create:async(v:{name:string;metadata:Record<string,unknown>})=>{const b={id:`b${story.books.size}`,...v};story.books.set(b.id,b);return b;},
+      entries:{list:async(id:string)=>({data:story.entries.filter(e=>e.world_book_id===id),total:0}),
+        create:async(id:string,v:{key:string[];content:string;comment:string})=>{const e={id:`e${story.entries.length}`,world_book_id:id,...v};story.entries.push(e);return e;},
+        update:async(id:string,v:{key:string[];content:string;comment:string})=>{const e=story.entries.find(x=>x.id===id)!;Object.assign(e,v);return e;}}},
+
     userStorage:{getJson:async(path:string,o:{fallback:unknown;userId?:string})=>storage.get(`${o.userId}:${path}`)??o.fallback,setJson:async(path:string,value:unknown,o:{userId?:string})=>{storage.set(`${o.userId}:${path}`,value);}},
     connections:{list:async()=>[{id:'c1',name:'Fast text',provider,model},{id:'c2',name:'Classifier',provider:'openrouter',model:'typesafe/jev-1.13'}],get:async(id:string,user?:string)=>{calls.push(['connection',id,user]);return id==='c1'?{id,name:'Fast text',provider,model}:null;}},
     cors:async(url:string)=>{calls.push(['cors',url]);if(gel&&new URL(url).hostname==='gelbooru.com')return gel;const q=new URL(url).searchParams;const list=q.get('search[name_comma]')?.split(',');return{status:200,body:JSON.stringify(url.includes('/tags.json')?(list??[q.get('search[name]')??'red_hair']).map(name=>({name,category:0,post_count:100})):url.includes('/wiki_pages.json')?(q.get('search[title_comma]')?.split(',')??['red_hair']).map(title=>({title,body:title==='red_hair'?'Hair colored red.':''})):[])};},
@@ -29,12 +44,13 @@ function harness(provider='openrouter',model='test/generative') {
     }},
     onFrontendMessage:(fn:typeof handler)=>{handler=fn;return()=>{handler=undefined;};},
     rpcPool:{sync:(endpoint:string,value:unknown,policy:unknown)=>{if(noPool)throw new Error('pool unavailable');calls.push(['sync',endpoint,value,policy]);return `lumicast.${endpoint}`;}},
-    sendToFrontend:(payload:unknown,user?:string,options?:{frontendSessionId?:string})=>{replies.push({payload,user,session:options?.frontendSessionId});if(user==='u1'&&options?.frontendSessionId==='s1')listeners.forEach(fn=>fn(payload));},
+    sendToFrontend:(payload:unknown,user?:string,options?:{frontendSessionId?:string})=>{replies.push({payload,user,session:options?.frontendSessionId});// No session means every open panel of that user, as the host does.
+      if(user==='u1'&&(options?.frontendSessionId??'s1')==='s1')listeners.forEach(fn=>fn(payload));},
   } as unknown as SpindleAPI;
   const root=document.createElement('div');document.body.append(root);
   const ctx={sendToBackend:(payload:unknown)=>handler?.(payload,'u1','s1'),onBackendMessage:(fn:(payload:unknown)=>void)=>{listeners.add(fn);return()=>{listeners.delete(fn);};},ui:{registerDrawerTab:()=>({root,destroy:()=>root.remove()})},dom:{addStyle:()=>()=>{}}} as unknown as SpindleFrontendContext;
   const stop=setupBackend(api);
-  return{ctx,root,calls,replies,storage,stop,emit:(payload:unknown,user='u1',session='s1')=>handler?.(payload,user,session),setFail:()=>{fail=true;},setBlock:()=>{block=true;},setResponses:(values:unknown[])=>{responses=values;},setGel:(value:{status:number;body:string})=>{gel=value;},setNoPool:()=>{noPool=true;},signal:()=>latestSignal};
+  return{ctx,root,calls,replies,storage,stop,emit:(payload:unknown,user='u1',session='s1')=>handler?.(payload,user,session),setFail:()=>{fail=true;},setBlock:()=>{block=true;},setResponses:(values:unknown[])=>{responses=values;},setGel:(value:{status:number;body:string})=>{gel=value;},setNoPool:()=>{noPool=true;},story,events,signal:()=>latestSignal};
 }
 const named=(root:Element,name:string)=>(root.querySelector(`[data-lc="${name}"]`)??root.querySelector(`[data-sheet="${name}"]`)) as HTMLTextAreaElement;
 /** [description, tags, caption, appearance, outfit, prompt] */
@@ -102,7 +118,7 @@ test('panel prompt omits narration and scene while the source passages stay visi
   expect(areas[1].value).toBe('red_hair');expect(areas[2].value).toBe('Red hair.');expect(areas[5].value).toBe('red hair\n\nRed hair.');
   // The sources list covers what the sheet holds: the character and the outfit, whatever Include says.
   expect(h.root.querySelector('[data-lc="sources"]')?.textContent).toContain('Red hair, obviously!');expect(h.root.querySelector('[data-lc="sources"]')?.textContent).toContain('ribbon');expect(areas[5].value).not.toContain('ribbon');
-  const scope=h.root.querySelectorAll('select')[2];expect(scope.value).toBe('character');areas[2].value='my edit';areas[2].dispatchEvent(new Event('input'));scope.value='outfit';scope.dispatchEvent(new Event('change'));
+  const scope=Array.from(h.root.querySelectorAll('select')).find(s=>Array.from(s.options).some(o=>o.value==='character'))!;expect(scope.value).toBe('character');areas[2].value='my edit';areas[2].dispatchEvent(new Event('input'));scope.value='outfit';scope.dispatchEvent(new Event('change'));
   expect(areas[2].value).toBe('Red hair. She wears a ribbon.');expect(h.calls.filter(v=>(v as unknown[])[0]==='generation').length).toBe(2);expect(h.root.textContent).toContain('manual edits there were replaced');expect(h.root.querySelector('[data-lc="sources"]')?.textContent).toContain('ribbon');
 });
 test('direct DeepSeek adapter tolerates string evidence without discarding the panel result',async()=> {
@@ -307,4 +323,43 @@ test('model thinking is light unless chosen otherwise, and each step is reported
   // Saving notes or other settings keeps the choice; an unknown value falls back to light.
   await rpc.request('saveNotes',{notes:'x'});expect((await rpc.request<Snapshot>('snapshot')).settings.thinking).toBe('inherit');
   await rpc.request('save',{connectionId:'c1',thinking:'max',gelUser:'',gelKey:''});expect((await rpc.request<Snapshot>('snapshot')).settings.thinking).toBe('light');
+});
+test('an [ooc] reply becomes clean descriptions, saved once to a Cast lorebook on the story card and updated after',async()=> {
+  dom();const h=harness();cleanups.push(h.stop);const dispose=setup(h.ctx);cleanups.push(dispose);
+  const b=(name:string)=>Array.from(h.root.querySelectorAll('button')).find(x=>x.textContent===name)!;
+  await until(()=>!b('Translate').disabled);h.root.querySelector('select')!.value='c1';
+  const answer='Ooh, two at once! Maren Holt, the dockmaster: tall, sun-browned, a grey-streaked black braid. Tobin is a wiry kid with a shaved head. Fun, right?';
+  h.story.messages.push({id:'m1',role:'user',content:'Story.'},{id:'m2',role:'user',content:'[ooc] describe the two new people'},{id:'m3',role:'assistant',content:answer});
+  // The story reply finishing tells the panel; nothing is read until asked.
+  h.events.get('GENERATION_ENDED')!({chatId:'chat1',messageId:'m3',generationId:'g'},'u1');
+  await until(()=>!(h.root.querySelector('.lc-news') as HTMLElement).hidden);
+  expect(h.calls.filter(c=>(c as unknown[])[0]==='generation').length).toBe(0);
+  h.setResponses([{characters:[{name:'Maren',aliases:['the dockmaster'],description:'Maren is tall and sun-browned, with a grey-streaked black braid.'},{name:'Tobin',aliases:[],description:'Tobin is a wiry boy with a shaved head.'}]}]);
+  b('Use the last [ooc] reply').click();await until(()=>!b('Translate').disabled);
+  const sent=(h.calls.filter(c=>(c as unknown[])[0]==='generation').at(-1) as unknown[])[1] as {messages:{content:string}[]};
+  expect(JSON.parse(sent.messages[1].content)).toEqual({question:'[ooc] describe the two new people',answer});
+  expect(sent.messages[0].content).toContain('any narrator or assistant persona');
+  const entries=Array.from(h.root.querySelectorAll('[data-cast]'));expect(entries.map(e=>(e as HTMLElement).dataset.cast)).toEqual(['Maren','Tobin']);
+  const maren=entries[0];const save=Array.from(maren.querySelectorAll('button')).find(x=>x.textContent==='Save to Cast lorebook')!;
+  save.click();await until(()=>maren.textContent!.includes('Saved in'));
+  expect(maren.textContent).toContain('Saved in “Cast · Narrator”, a new lorebook attached to Narrator’s card.');
+  expect(h.story.card.world_book_ids).toEqual(['other','b1']);
+  expect(h.story.entries).toEqual([{id:'e0',world_book_id:'b1',key:['Maren','the dockmaster'],content:"[Maren's appearance]\nMaren is tall and sun-browned, with a grey-streaked black braid.",comment:'LumiCast: Maren',constant:false,selective:false,disabled:false,case_sensitive:false,match_whole_words:true} as never]);
+  // Saving again after an edit updates the same entry in the same book.
+  const box=maren.querySelector('textarea')!;box.value='Maren is tall.';save.click();await until(()=>maren.textContent!.includes('Updated in'));
+  expect(h.story.entries.length).toBe(1);expect(h.story.entries[0].content).toBe("[Maren's appearance]\nMaren is tall.");expect(h.story.books.size).toBe(2);
+  expect(h.calls.filter(c=>(c as unknown[])[0]==='attach').length).toBe(1);
+  // The description can go straight into the Anima prompt.
+  h.setResponses([{traits:[{id:'t1',group:'hair',evidence:'shaved head',tags:['very_short_hair'],detail:'A shaved head'}]},{drop:[],captions:{character:'A shaved head.'},issues:[]}]);
+  Array.from(entries[1].querySelectorAll('button')).find(x=>x.textContent==='Make the Anima prompt')!.click();await until(()=>named(h.root,'tags').value!=='');
+  expect(named(h.root,'source').value).toBe('Tobin is a wiry boy with a shaved head.');
+});
+test('[ooc] replies explain what is missing: no chat, no question, no reply yet, permissions',async()=> {
+  dom();const h=harness();cleanups.push(h.stop);const rpc=createRpc(h.ctx);cleanups.push(()=>rpc.destroy());
+  const ask=()=>rpc.request('castRead',{connectionId:'c1'}).then(()=>'ok',(e:Error)=>e.message);
+  expect(await ask()).toContain('No [ooc] message with a reply');
+  h.story.messages.push({id:'m1',role:'user',content:'(OOC: describe her)'});expect(await ask()).toContain('has no reply yet');
+  h.story.chat=null;expect(await ask()).toContain('Open your story chat first');
+  h.story.denied.push('chat_mutation');expect(await ask()).toBe('Grant LumiCast these permissions in Extensions to use [ooc] replies: chat_mutation.');
+  expect(await rpc.request('castSave',{name:'Maren',aliases:[],description:'Tall.'}).then(()=>'ok',(e:Error)=>e.message)).toContain('Open your story chat first');
 });
