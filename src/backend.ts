@@ -36,21 +36,39 @@ export function setupBackend(api: SpindleAPI) {
       const need=(list:string[])=>{const missing=list.filter(p=>!api.permissions.has(p as never));if(missing.length)throw new Error(`Grant LumiCast these permissions in Extensions to use [ooc] replies: ${missing.join(', ')}.`);};
       const chatLines=async(chatId:string):Promise<ChatLine[]>=>(await api.chat.getMessages(chatId)).map(m=>({id:m.id,role:m.role,content:typeof m.content==='string'?m.content:''}));
       /**
-       * The Cast lorebook belongs to the story's character card, so its people only show up in that story.
-       * One entry per character, found again by its comment, so saving twice updates instead of duplicating.
+       * The Cast lorebook belongs to the chat, so a character met in one story never turns up in a replay of
+       * the same card. One entry per character, found again by its comment, so saving twice updates instead of
+       * duplicating. A Cast book that 0.10.0 put on the character card is moved onto this chat.
        */
       const saveToCast=async(name:string,aliases:string[],description:string):Promise<CastSaved>=>{
-        const chat=await api.chats.getActive(userId);
-        if (!chat) throw new Error('Open your story chat first. The Cast lorebook is attached to that chat’s character card.');
-        const card=chat.character_id?await api.characters.get(chat.character_id,userId):null;
-        if (!card) throw new Error('This chat has no single character card to attach a Cast lorebook to.');
+        const active=await api.chats.getActive(userId);
+        if (!active) throw new Error('Open your story chat first. The Cast lorebook is attached to the chat that is open.');
+        const isCast=(b:{metadata?:Record<string,unknown>}|null)=>record(b?.metadata).lumicast==='cast';
+        const chatBooks=()=>{const ids=record(active.metadata).chat_world_book_ids;return Array.isArray(ids)?ids.filter((v):v is string=>typeof v==='string'):[];};
         let book=null as Awaited<ReturnType<typeof api.world_books.get>>;
-        for (const id of card.world_book_ids ?? []) {const b=await api.world_books.get(id,userId);if(record(b?.metadata).lumicast==='cast'){book=b;break;}}
+        for (const id of chatBooks()) {const b=await api.world_books.get(id,userId);if(isCast(b)){book=b;break;}}
+        // 0.10.0 attached the book to the card, which leaks the cast into every chat on that card.
+        let moved=false;
+        if (api.permissions.has('characters' as never) && active.character_id) {
+          const card=await api.characters.get(active.character_id,userId);
+          for (const id of card?.world_book_ids ?? []) {
+            const b=await api.world_books.get(id,userId);
+            // Only the book this chat uses (or will use) is moved; another chat's Cast book on the card is left alone.
+            if (!isCast(b) || (book && b!.id!==book.id)) continue;
+            await api.characters.update(card!.id,{world_book_ids:card!.world_book_ids.filter(x=>x!==id)},userId);
+            book ??= b;moved=true;card!.world_book_ids=card!.world_book_ids.filter(x=>x!==id);
+          }
+        }
         let createdBook=false;
         if (!book) {
-          book=await api.world_books.create({name:`Cast · ${card.name}`.slice(0,100),description:'Character descriptions saved by LumiCast from [ooc] replies.',metadata:{lumicast:'cast'}},userId);
-          await api.characters.update(card.id,{world_book_ids:[...(card.world_book_ids ?? []),book.id]},userId);
+          book=await api.world_books.create({name:`Cast · ${active.name || 'story'}`.slice(0,100),description:'Character descriptions saved by LumiCast from [ooc] replies, for one chat.',metadata:{lumicast:'cast',chatId:active.id}},userId);
           createdBook=true;
+        }
+        if (!chatBooks().includes(book.id)) {
+          // Chat metadata is replaced whole, so read it fresh and change only the lorebook list.
+          const fresh=await api.chats.get(active.id,userId);
+          const metadata=record(fresh?.metadata);const ids=Array.isArray(metadata.chat_world_book_ids)?metadata.chat_world_book_ids:[];
+          await api.chats.update(active.id,{metadata:{...metadata,chat_world_book_ids:[...ids.filter(x=>x!==book!.id),book.id]}},userId);
         }
         const entries:{id:string;comment:string}[]=[];
         for (let offset=0;offset<2000;offset+=200) {const page=await api.world_books.entries.list(book.id,{limit:200,offset,userId});entries.push(...page.data);if(page.data.length<200)break;}
@@ -58,10 +76,10 @@ export function setupBackend(api: SpindleAPI) {
         const entry={key:[name,...aliases],content:entryContent(name,description),comment:entryComment(name),constant:false,selective:false,disabled:false,case_sensitive:false,match_whole_words:true};
         if (existing) await api.world_books.entries.update(existing.id,entry,userId);
         else await api.world_books.entries.create(book.id,entry,userId);
-        return {book:book.name,createdBook,attached:card.name,updated:!!existing};
+        return {book:book.name,createdBook,moved,chat:active.name,updated:!!existing};
       };
       const dictionary=() => s.dictionary ??= new BooruDictionary(async url=> {
-        const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.10.0 (tag metadata client)'}}));
+        const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.10.1 (tag metadata client)'}}));
         if(typeof response.status!=='number'||typeof response.body!=='string')throw new Error('Invalid proxy response.');
         return {status:response.status,body:response.body};
       },{user:settings.gelUser,key:settings.gelKey});
@@ -102,7 +120,7 @@ export function setupBackend(api: SpindleAPI) {
         return pool.sync('sheet.latest',shared,{requires:[]});
       }
       if (r.action === 'castSave') {
-        need(['chats','characters','world_books']);
+        need(['chats','world_books']);
         const v=record(r.input);
         const name=text(v.name,'name (maximum 80 characters)',80).replace(/\s+/g,' ');
         const description=text(v.description,'description (maximum 3,000 characters)',3000);
@@ -116,7 +134,7 @@ export function setupBackend(api: SpindleAPI) {
         const entered=gelCredentials(text(v.gelUser ?? '','Gelbooru user',300),v.gelKey ? text(v.gelKey,'Gelbooru key',300) : '');
         const credentials={user:entered.user||settings.gelUser,key:entered.key||settings.gelKey};
         const outcome=await testGelbooru(async url=> {
-          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.10.0 (tag metadata client)'}}));
+          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.10.1 (tag metadata client)'}}));
           return {status:Number(response.status),body:typeof response.body==='string'?response.body:''};
         },credentials);
         const unsaved=credentials.user!==settings.gelUser||credentials.key!==settings.gelKey;
@@ -195,7 +213,7 @@ export function setupBackend(api: SpindleAPI) {
     })().then(result=>reply(result)).catch(error=> {
       // Provider errors may embed URLs, headers or keys. Never forward raw upstream errors.
       const message=error instanceof Error ? error.message : '';
-      const trusted=/^(Grant LumiCast|Open your story|Your latest|No \[ooc\]|No character descriptions|This chat has|The connection for|Give the character|Wait for|This connection|Gelbooru user|Unknown LumiCast|An operation|Use at most|Use a tag|This Lumiverse|Select a saved|The model |Invalid |Use a plain|Paste a |No explicit|Too many|Conflicting|Tag service|Tag lookup|Cyclic tag|Tag alias|Oversized|Unexpected)/.test(message);
+      const trusted=/^(Grant LumiCast|Open your story|Your latest|No \[ooc\]|No character descriptions|The connection for|Give the character|Wait for|This connection|Gelbooru user|Unknown LumiCast|An operation|Use at most|Use a tag|This Lumiverse|Select a saved|The model |Invalid |Use a plain|Paste a |No explicit|Too many|Conflicting|Tag service|Tag lookup|Cyclic tag|Tag alias|Oversized|Unexpected)/.test(message);
       reply(undefined,error instanceof Error && error.name==='AbortError' ? 'Operation cancelled or timed out. Your edits are preserved.' : error instanceof ModelRequestError || trusted ? message : 'The operation failed. Check your connection, provider status and tag-service access. Your edits are preserved.');
     });
   });

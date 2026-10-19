@@ -271,7 +271,7 @@ function setup(ctx) {
     state.className = "lc-muted";
     const saveEntry = button("Save to Cast lorebook", async () => {
       const saved = await rpc.request("castSave", { name: name.value, aliases: splitTags(aliases.value), description: description.value });
-      state.textContent = `${saved.updated ? "Updated" : "Saved"} in “${saved.book}”${saved.createdBook ? `, a new lorebook attached to ${saved.attached}’s card` : ""}. You can delete the [ooc] exchange from the chat now.`;
+      state.textContent = `${saved.updated ? "Updated" : "Saved"} in “${saved.book}”${saved.createdBook ? ", a new lorebook for this chat only" : ""}.${saved.moved ? " The Cast lorebook was taken off the character card and attached to this chat, so it stays with this story." : ""} You can delete the [ooc] exchange from the chat now.`;
       notify(`${name.value.trim()} ${saved.updated ? "updated" : "saved"} in the Cast lorebook.`);
     }, true);
     const toPrompt = button("Make the Anima prompt", async () => {
@@ -287,7 +287,7 @@ ${text}`;
     box.append(el("h2", member.name), field("Name", name), field("Other names", aliases, "Comma separated. Any of these names in the story brings the description into the story model’s context."), field("Description", description, "Goes into the lorebook as written, and the Anima prompt is built from it. Edit anything first."), row(saveEntry, toPrompt), state);
     return box;
   }
-  castCard.append(el("p", "Ask the story model about someone with a message that starts with [ooc]. When it answers, bring the answer in here: LumiCast keeps only the description, one per character, and saves it to a Cast lorebook so the story stays consistent."), castNews, row(readOoc), castList);
+  castCard.append(el("p", "Ask the story model about someone with a message that starts with [ooc]. When it answers, bring the answer in here: LumiCast keeps only the description, one per character, and saves it to this chat’s Cast lorebook so the story stays consistent. A new chat on the same card starts with an empty cast."), castNews, row(readOoc), castList);
   const offOoc = ctx.onBackendMessage((value) => {
     if (value?.type !== "lumicast:ooc" || closed)
       return;
@@ -652,7 +652,7 @@ ${text}`;
     notify("Search complete. Popularity is not an Anima quality score.");
   });
   searchCard.append(field("Tag name or the start of one", query, "Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched."), search, found);
-  app.append(intro, settings, status, castCard, input, gapsCard, output, refine, sheetCard, searchCard, el("p", "LumiCast 0.10.0 · Draft stays in this tab until reload."));
+  app.append(intro, settings, status, castCard, input, gapsCard, output, refine, sheetCard, searchCard, el("p", "LumiCast 0.10.1 · Draft stays in this tab until reload."));
   const controls = [readOoc, translate, again, save, refreshButton, testGel, saveNotes, saveQuality, startOver, verify, rebuild, copy, copyTags, copyProse, suggest, apply, search, ...Object.values(sheet).map((f) => f.copyField)];
   let shareTimer;
   function share() {

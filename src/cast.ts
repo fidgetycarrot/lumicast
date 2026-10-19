@@ -10,7 +10,8 @@ export interface OocExchange { questionId: string; question: string; answerId: s
 /** One character the [ooc] reply describes, cleaned up for a lorebook. */
 export interface CastMember { name: string; aliases: string[]; description: string }
 export interface CastRead { question: string; answerId: string; characters: CastMember[]; chat: string }
-export interface CastSaved { book: string; createdBook: boolean; attached: string; updated: boolean }
+/** moved: the book was taken off the character card (where 0.10.0 put it) and attached to this chat. */
+export interface CastSaved { book: string; createdBook: boolean; moved: boolean; chat: string; updated: boolean }
 
 /**
  * The newest [ooc] question that has a reply. System messages in between are skipped. Returns null when the

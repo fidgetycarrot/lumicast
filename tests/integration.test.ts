@@ -13,15 +13,15 @@ function harness(provider='openrouter',model='test/generative') {
   let gel:{status:number;body:string}|undefined;
   let noPool=false;
   // A small story: one chat on one character card, its messages, and lorebooks.
-  const story={chat:{id:'chat1',character_id:'card1',name:'Harbour story'} as {id:string;character_id:string;name:string}|null,
+  const story={chat:{id:'chat1',character_id:'card1',name:'Harbour story',metadata:{chat_world_book_ids:['mine'],theme:'kept'}} as {id:string;character_id:string;name:string;metadata:Record<string,unknown>}|null,
     card:{id:'card1',name:'Narrator',world_book_ids:['other']},messages:[] as {id:string;role:string;content:string}[],
-    books:new Map<string,{id:string;name:string;metadata:Record<string,unknown>}>([['other',{id:'other',name:'World',metadata:{}}]]),
+    books:new Map<string,{id:string;name:string;metadata:Record<string,unknown>}>([['other',{id:'other',name:'World',metadata:{}}],['mine',{id:'mine',name:'My notes',metadata:{}}]]),
     entries:[] as {id:string;world_book_id:string;key:string[];content:string;comment:string}[],denied:[] as string[]};
   const events=new Map<string,(payload:unknown,user?:string)=>void>();
   const api={
     permissions:{has:(p:string)=>!story.denied.includes(p)},
     on:(event:string,fn:(payload:unknown,user?:string)=>void)=>{events.set(event,fn);return()=>events.delete(event);},
-    chats:{getActive:async()=>story.chat},
+    chats:{getActive:async()=>story.chat&&structuredClone(story.chat),get:async(id:string)=>story.chat?.id===id?structuredClone(story.chat):null,update:async(id:string,v:{metadata:Record<string,unknown>})=>{calls.push(['chatUpdate',id,v.metadata]);story.chat!.metadata=v.metadata;return story.chat;}},
     chat:{getMessages:async(id:string)=>id==='chat1'?story.messages.map(m=>({...m,is_user:m.role==='user'})):[]},
     characters:{get:async(id:string)=>id===story.card.id?{...story.card}:null,update:async(id:string,v:{world_book_ids:string[]})=>{calls.push(['attach',id,v.world_book_ids]);story.card.world_book_ids=v.world_book_ids;return story.card;}},
     world_books:{get:async(id:string)=>story.books.get(id)??null,create:async(v:{name:string;metadata:Record<string,unknown>})=>{const b={id:`b${story.books.size}`,...v};story.books.set(b.id,b);return b;},
@@ -342,13 +342,14 @@ test('an [ooc] reply becomes clean descriptions, saved once to a Cast lorebook o
   const entries=Array.from(h.root.querySelectorAll('[data-cast]'));expect(entries.map(e=>(e as HTMLElement).dataset.cast)).toEqual(['Maren','Tobin']);
   const maren=entries[0];const save=Array.from(maren.querySelectorAll('button')).find(x=>x.textContent==='Save to Cast lorebook')!;
   save.click();await until(()=>maren.textContent!.includes('Saved in'));
-  expect(maren.textContent).toContain('Saved in “Cast · Narrator”, a new lorebook attached to Narrator’s card.');
-  expect(h.story.card.world_book_ids).toEqual(['other','b1']);
-  expect(h.story.entries).toEqual([{id:'e0',world_book_id:'b1',key:['Maren','the dockmaster'],content:"[Maren's appearance]\nMaren is tall and sun-browned, with a grey-streaked black braid.",comment:'LumiCast: Maren',constant:false,selective:false,disabled:false,case_sensitive:false,match_whole_words:true} as never]);
+  expect(maren.textContent).toContain('Saved in “Cast · Harbour story”, a new lorebook for this chat only.');
+  // The book goes on this chat, after its own lorebooks and without touching other chat settings; the card is left alone.
+  expect(h.story.chat!.metadata).toEqual({chat_world_book_ids:['mine','b2'],theme:'kept'});expect(h.story.card.world_book_ids).toEqual(['other']);
+  expect(h.story.entries).toEqual([{id:'e0',world_book_id:'b2',key:['Maren','the dockmaster'],content:"[Maren's appearance]\nMaren is tall and sun-browned, with a grey-streaked black braid.",comment:'LumiCast: Maren',constant:false,selective:false,disabled:false,case_sensitive:false,match_whole_words:true} as never]);
   // Saving again after an edit updates the same entry in the same book.
   const box=maren.querySelector('textarea')!;box.value='Maren is tall.';save.click();await until(()=>maren.textContent!.includes('Updated in'));
-  expect(h.story.entries.length).toBe(1);expect(h.story.entries[0].content).toBe("[Maren's appearance]\nMaren is tall.");expect(h.story.books.size).toBe(2);
-  expect(h.calls.filter(c=>(c as unknown[])[0]==='attach').length).toBe(1);
+  expect(h.story.entries.length).toBe(1);expect(h.story.entries[0].content).toBe("[Maren's appearance]\nMaren is tall.");expect(h.story.books.size).toBe(3);
+  expect(h.calls.filter(c=>(c as unknown[])[0]==='chatUpdate').length).toBe(1);expect(h.calls.filter(c=>(c as unknown[])[0]==='attach').length).toBe(0);
   // The description can go straight into the Anima prompt.
   h.setResponses([{traits:[{id:'t1',group:'hair',evidence:'shaved head',tags:['very_short_hair'],detail:'A shaved head'}]},{drop:[],captions:{character:'A shaved head.'},issues:[]}]);
   Array.from(entries[1].querySelectorAll('button')).find(x=>x.textContent==='Make the Anima prompt')!.click();await until(()=>named(h.root,'tags').value!=='');
@@ -362,4 +363,16 @@ test('[ooc] replies explain what is missing: no chat, no question, no reply yet,
   h.story.chat=null;expect(await ask()).toContain('Open your story chat first');
   h.story.denied.push('chat_mutation');expect(await ask()).toBe('Grant LumiCast these permissions in Extensions to use [ooc] replies: chat_mutation.');
   expect(await rpc.request('castSave',{name:'Maren',aliases:[],description:'Tall.'}).then(()=>'ok',(e:Error)=>e.message)).toContain('Open your story chat first');
+});
+test('a Cast lorebook that 0.10.0 put on the character card moves onto the chat, keeping its entries',async()=> {
+  dom();const h=harness();cleanups.push(h.stop);const rpc=createRpc(h.ctx);cleanups.push(()=>rpc.destroy());
+  h.story.books.set('old',{id:'old',name:'Cast · Narrator',metadata:{lumicast:'cast'}});h.story.card.world_book_ids=['other','old'];
+  h.story.entries.push({id:'e9',world_book_id:'old',key:['Maren'],content:'x',comment:'LumiCast: Maren'});
+  const saved=await rpc.request<{moved:boolean;updated:boolean;book:string}>('castSave',{name:'Maren',aliases:[],description:'Maren is tall.'});
+  expect(saved).toMatchObject({moved:true,updated:true,book:'Cast · Narrator'});
+  expect(h.story.card.world_book_ids).toEqual(['other']);expect(h.story.chat!.metadata.chat_world_book_ids).toEqual(['mine','old']);
+  expect(h.story.entries.length).toBe(1);
+  // Attached by hand as well: still one copy on the chat, and nothing more to move.
+  const again=await rpc.request<{moved:boolean}>('castSave',{name:'Tobin',aliases:[],description:'Tobin is wiry.'});
+  expect(again.moved).toBe(false);expect(h.story.chat!.metadata.chat_world_book_ids).toEqual(['mine','old']);
 });
