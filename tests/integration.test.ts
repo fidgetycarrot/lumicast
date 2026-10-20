@@ -12,6 +12,7 @@ function harness(provider='openrouter',model='test/generative') {
   let fail=false,block=false;let latestSignal:AbortSignal|undefined;let responses:unknown[]|undefined;
   let gel:{status:number;body:string}|undefined;
   let noPool=false;let studio:unknown;
+  let applyStudio:(()=>unknown)|undefined;
   // A small story: one chat on one character card, its messages, and lorebooks.
   const story={chat:{id:'chat1',character_id:'card1',name:'Harbour story',metadata:{chat_world_book_ids:['mine'],theme:'kept'}} as {id:string;character_id:string;name:string;metadata:Record<string,unknown>}|null,
     card:{id:'card1',name:'Narrator',world_book_ids:['other']},messages:[] as {id:string;role:string;content:string}[],
@@ -43,14 +44,14 @@ function harness(provider='openrouter',model='test/generative') {
       return{content:JSON.stringify(responses ? responses.shift() : input.messages[0].content.includes('one trait per visual fact')?{traits:[{id:'t1',group:'hair',evidence:'Short red hair.',tags:['red_hair'],detail:'Short red hair'}]}:{drop:[],captions:{character:'Short red hair.'},issues:[]}),finish_reason:'stop'};
     }},
     onFrontendMessage:(fn:typeof handler)=>{handler=fn;return()=>{handler=undefined;};},
-    rpcPool:{read:async(endpoint:string)=>{calls.push(['read',endpoint]);if(endpoint!=='lumidraw_studio.lumicast.tweak'||studio===undefined)throw new Error('no value');return studio;},sync:(endpoint:string,value:unknown,policy:unknown)=>{if(noPool)throw new Error('pool unavailable');calls.push(['sync',endpoint,value,policy]);return `lumicast.${endpoint}`;}},
+    rpcPool:{read:async(endpoint:string)=>{calls.push(['read',endpoint]);if(endpoint==='lumidraw_studio.lumicast.apply'){if(!applyStudio)throw new Error('Shared RPC endpoint "lumidraw_studio.lumicast.apply" is not registered');return applyStudio();}if(endpoint!=='lumidraw_studio.lumicast.tweak'||studio===undefined)throw new Error('no value');return studio;},sync:(endpoint:string,value:unknown,policy:unknown)=>{if(noPool)throw new Error('pool unavailable');calls.push(['sync',endpoint,value,policy]);return `lumicast.${endpoint}`;}},
     sendToFrontend:(payload:unknown,user?:string,options?:{frontendSessionId?:string})=>{replies.push({payload,user,session:options?.frontendSessionId});// No session means every open panel of that user, as the host does.
       if(user==='u1'&&(options?.frontendSessionId??'s1')==='s1')listeners.forEach(fn=>fn(payload));},
   } as unknown as SpindleAPI;
   const root=document.createElement('div');document.body.append(root);
   const ctx={sendToBackend:(payload:unknown)=>handler?.(payload,'u1','s1'),onBackendMessage:(fn:(payload:unknown)=>void)=>{listeners.add(fn);return()=>{listeners.delete(fn);};},ui:{registerDrawerTab:()=>({root,destroy:()=>root.remove()})},dom:{addStyle:()=>()=>{}}} as unknown as SpindleFrontendContext;
   const stop=setupBackend(api);
-  return{ctx,root,calls,replies,storage,stop,emit:(payload:unknown,user='u1',session='s1')=>handler?.(payload,user,session),setFail:()=>{fail=true;},setBlock:()=>{block=true;},setResponses:(values:unknown[])=>{responses=values;},setGel:(value:{status:number;body:string})=>{gel=value;},setNoPool:()=>{noPool=true;},story,events,setStudio:(v:unknown)=>{studio=v;},signal:()=>latestSignal};
+  return{ctx,root,calls,replies,storage,stop,emit:(payload:unknown,user='u1',session='s1')=>handler?.(payload,user,session),setFail:()=>{fail=true;},setBlock:()=>{block=true;},setResponses:(values:unknown[])=>{responses=values;},setGel:(value:{status:number;body:string})=>{gel=value;},setNoPool:()=>{noPool=true;},story,events,setStudio:(v:unknown)=>{studio=v;},setApply:(fn:()=>unknown)=>{applyStudio=fn;},signal:()=>latestSignal};
 }
 const named=(root:Element,name:string)=>(root.querySelector(`[data-lc="${name}"]`)??root.querySelector(`[data-sheet="${name}"]`)) as HTMLTextAreaElement;
 /** [description, tags, caption, appearance, outfit, prompt] */
@@ -410,7 +411,7 @@ test('a Lumi Studio character loads on its own for Refine, with its Cast descrip
   b('Not now').click();expect(news().hidden).toBe(true);await Bun.sleep(120);expect(news().hidden).toBe(true);
   b('Apply selected').click();await until(()=>!b('Translate').disabled);
   expect(sheetValue('appearance')).toBe('black hair, braid, tall female, streaked hair');expect(named(h.root,'prompt').value).toBe('');
-  expect(status()).toContain('choose Fill from LumiCast on this character');
+  expect(status()).toContain('Press Update Maren in Lumi Studio to save them there.');
   await Bun.sleep(450);
   const shared=h.calls.filter(c=>(c as unknown[])[0]==='sync').at(-1) as unknown[];
   expect((shared[2] as {sheet:{appearance:string}}).sheet.appearance).toBe('black hair, braid, tall female, streaked hair');
@@ -423,4 +424,33 @@ test('a Lumi Studio character loads on its own for Refine, with its Cast descrip
   named(h.root,'feedback').value='';
   h.setStudio({version:1,name:'X',userId:'u2',sentAt:Date.now()+3,sheet:{appearance:'other'}});await Bun.sleep(150);
   expect(sheetValue('appearance')).toBe('short hair');expect(news().textContent).not.toContain('X was sent');
+});
+test('the revised sheet goes back to the Lumi Studio entry it came from, and only to it',async()=> {
+  dom();const h=harness();cleanups.push(h.stop);const dispose=setup(h.ctx,{studioPollMs:20});cleanups.push(dispose);
+  const b=(name:string)=>Array.from(h.root.querySelectorAll('button')).find(x=>x.textContent===name)!;
+  await until(()=>!b('Translate').disabled);h.root.querySelector('select')!.value='c1';
+  const status=()=>h.root.querySelector('.lc-status')!.textContent!;
+  const sheetBox=(key:string)=>h.root.querySelector(`[data-sheet="${key}"]`) as HTMLInputElement;
+  // Not saved in Lumi Studio yet: there is nothing to update.
+  h.setStudio({version:1,name:'Riley',anchor:'Riley',userId:'u1',sentAt:Date.now(),id:'',kind:'character',sheet:{countTag:'1girl',appearance:'glasses, round eyewear',outfit:''}});
+  await until(()=>!!b('Update Riley in Lumi Studio'));await until(()=>!b('Translate').disabled);
+  b('Update Riley in Lumi Studio').click();await until(()=>!b('Translate').disabled);expect(status()).toContain('Save this character in Lumi Studio first');
+  // Saved there: the edited sheet goes back, empty fields included, and Lumi Studio's answer is shown.
+  const sentAt=Date.now()+1;
+  h.setStudio({version:1,name:'Riley',anchor:'Riley',userId:'u1',sentAt,id:'character_7',kind:'character',sheet:{countTag:'1girl',appearance:'glasses, round eyewear',outfit:'hoodie'}});
+  await until(()=>sheetBox('outfit').value==='hoodie');await until(()=>!b('Translate').disabled);
+  sheetBox('appearance').value='round eyewear';sheetBox('outfit').value='';
+  let asked=0;h.setApply(()=>{asked++;return {ok:true,name:'Riley'};});
+  b('Update Riley in Lumi Studio').click();await until(()=>status().includes('updated in Lumi Studio'));
+  const result=h.calls.filter(c=>(c as unknown[])[0]==='sync'&&(c as unknown[])[1]==='tweak.result').at(-1) as unknown[];
+  expect(result[2]).toEqual({version:1,id:'character_7',kind:'character',sentAt,userId:'u1',sheet:{countTag:'1girl',subject:'',always:'',appearance:'round eyewear',outfit:'',anatomy:''}});
+  expect(result[3]).toEqual({requires:[]});expect(asked).toBe(1);
+  expect(h.root.querySelector('.lc-studio')!.textContent).toContain('Riley is updated in Lumi Studio.');
+  // Lumi Studio's refusal is passed on; an older Lumi Studio says so plainly.
+  h.setApply(()=>{throw new Error('Error: That character is no longer in Lumi Studio.');});
+  b('Update Riley in Lumi Studio').click();await until(()=>!b('Translate').disabled);expect(status()).toBe('Lumi Studio did not save it: That character is no longer in Lumi Studio.');
+  // Someone else translated over Riley: the button goes, so they are never sent over her.
+  h.setResponses([{traits:[{id:'1',group:'hair',evidence:'Short red hair.',tags:['red_hair'],detail:'Short red hair'}]},{drop:[],captions:{character:'Short red hair.'},issues:[]}]);
+  named(h.root,'source').value='Short red hair.';named(h.root,'source').dispatchEvent(new Event('input'));b('Translate').click();await until(()=>!b('Translate').disabled);
+  expect((h.root.querySelector('.lc-studio') as HTMLElement).hidden).toBe(true);expect(status()).not.toContain('Update Riley');
 });

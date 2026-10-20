@@ -1,4 +1,6 @@
-# LumiCast 0.11.2
+# LumiCast 0.12.0
+
+**v0.12.0 sends a tweaked character straight back.** When a character came from Lumi Studio 1.8.7 or newer, the note at the top has **Update <name> in Lumi Studio**. It saves the six sheet fields into that same character there, empty fields included, and leaves everything else about the character alone. Refine or translate again, then press it; you can send as often as you like. A character that was never saved in Lumi Studio can't be updated this way; save it there and press Tweak in LumiCast again. If you translate a description that no longer names that character, the button goes away so nobody else is sent over them. Fill from LumiCast still works as before.
 
 **v0.11.2 keeps sheets shorter.** Near-duplicates are trimmed: a plain tag is dropped when a more specific one says the same thing (`glasses` beside `round_eyewear`, `piercing` beside `ear_piercing`), the reviewer is told to keep only the one or two tags that say the most about one item, and a field holds at most two entries about one item such as eyewear, piercings or hair tips. Tags that make Anima draw several views or copies of a character (`multiple_views`, `reference_sheet`, `turnaround`, `split_screen`, `2girls`, `twins` and the like) are never used in a translation and never offered by Refine.
 

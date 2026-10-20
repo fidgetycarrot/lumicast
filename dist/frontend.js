@@ -320,6 +320,10 @@ ${text}`;
       translatedFrom = source.value;
       showRounds();
     }
+    if (studioRef && studioRef.name && !source.value.toLowerCase().includes(studioRef.name.toLowerCase())) {
+      studioRef = null;
+      studioNews.hidden = true;
+    }
     result = next;
     fromStudio = false;
     showSheet();
@@ -329,7 +333,7 @@ ${text}`;
     const outcome = before.length ? [closed.length ? `Pinned down: ${closed.join(", ")}.` : "", still.length ? `Still open: ${still.join(", ")}.` : ""].filter(Boolean).join(" ") : "";
     const secs = (ms) => `${Math.round(ms / 1000)} s`;
     const took = next.timing ? `Took ${secs(next.timing.total)}: model ${secs(next.timing.model)}, tag lookups ${secs(next.timing.lookups)}.` : "";
-    notify([before.length ? `Translated again. ${outcome}` : "Translation ready.", took, !gelUser.value ? "Gelbooru is not configured; verified tags use Danbooru." : "", ...next.views.scene.notices].filter(Boolean).join(`
+    notify([before.length ? `Translated again. ${outcome}` : "Translation ready.", took, studioRef ? `Press ${sendBack.textContent} to send the new sheet there.` : "", !gelUser.value ? "Gelbooru is not configured; verified tags use Danbooru." : "", ...next.views.scene.notices].filter(Boolean).join(`
 `));
   };
   const translate = button("Translate", runTranslate, true);
@@ -357,7 +361,10 @@ ${text}`;
     b.addEventListener("click", action);
     return b;
   };
+  let studioRef = null;
   const applyStudio = (got) => {
+    studioRef = { id: got.id, kind: got.kind, sentAt: got.sentAt, name: got.name };
+    sendBack.textContent = `Update ${got.name || "this character"} in Lumi Studio`;
     for (const key of Object.keys(sheet))
       sheet[key].box.value = got.sheet[key];
     source.value = got.description;
@@ -390,14 +397,23 @@ ${text}`;
     notify([
       `${got.name || "The character"} loaded from Lumi Studio${minutes === null ? "" : minutes < 1 ? " (sent just now)" : ` (sent ${minutes} min ago)`}.`,
       got.description ? `The description comes from the lorebook “${got.book}”.` : "No description was found in this chat’s Cast lorebook, so Refine works from the tags alone. Paste one into the description box to help it.",
-      "Say what the images get wrong in 03 / Refine. When you are done, choose Fill from LumiCast on the same character in Lumi Studio, then save."
+      `Say what the images get wrong in 03 / Refine. When you are done, press ${sendBack.textContent}.`
     ].join(`
 `));
     markSeen(got.sentAt);
-    studioText.textContent = `${got.name || "The character"} came from Lumi Studio. Its tags are in 04 / Lumi Studio character sheet. Say what the pictures get wrong in 03 / Refine.`;
-    studioButtons.replaceChildren(showTags, hideNews);
+    studioText.textContent = `${got.name || "The character"} came from Lumi Studio. Its tags are in 04 / Lumi Studio character sheet. Say what the pictures get wrong in 03 / Refine, then send the new sheet back.`;
+    studioButtons.replaceChildren(sendBack, showTags, hideNews);
     studioNews.hidden = false;
   };
+  const sendBack = button("Update in Lumi Studio", async () => {
+    if (!studioRef)
+      throw new Error("Load a character from Lumi Studio first.");
+    const values = Object.fromEntries(Object.keys(sheet).map((k) => [k, sheet[k].box.value]));
+    const done = await rpc.request("toStudio", { id: studioRef.id, kind: studioRef.kind, sentAt: studioRef.sentAt, sheet: values });
+    const who = done.name || studioRef.name || "The character";
+    studioText.textContent = `${who} is updated in Lumi Studio. Generate a new picture there to check it. You can keep refining and send it again.`;
+    notify(`${who} updated in Lumi Studio.`);
+  }, true);
   const studio = button("Load it", async () => applyStudio(await rpc.request("fromStudio")), true);
   const notNow = plain("Not now", () => {
     markSeen(studioOffered);
@@ -633,7 +649,7 @@ ${text}`;
       proposed.replaceChildren();
       feedback.value = "";
       share();
-      notify("Changes applied to the character sheet. In Lumi Studio, choose Fill from LumiCast on this character, then save.");
+      notify(studioRef ? `Changes applied to the character sheet. Press ${sendBack.textContent} to save them there.` : "Changes applied to the character sheet.");
       return;
     }
     let list = splitTags(tags.value).map(parseWeighted);
@@ -779,8 +795,8 @@ ${text}`;
     notify("Search complete. Popularity is not an Anima quality score.");
   });
   searchCard.append(field("Tag name or the start of one", query, "Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched."), search, found);
-  app.append(intro, settings, status, studioNews, castCard, input, gapsCard, output, refine, sheetCard, searchCard, el("p", "LumiCast 0.11.2 · Draft stays in this tab until reload."));
-  const controls = [readOoc, translate, studio, again, save, refreshButton, testGel, saveNotes, saveQuality, startOver, verify, rebuild, copy, copyTags, copyProse, suggest, apply, search, ...Object.values(sheet).map((f) => f.copyField)];
+  app.append(intro, settings, status, studioNews, castCard, input, gapsCard, output, refine, sheetCard, searchCard, el("p", "LumiCast 0.12.0 · Draft stays in this tab until reload."));
+  const controls = [readOoc, translate, studio, sendBack, again, save, refreshButton, testGel, saveNotes, saveQuality, startOver, verify, rebuild, copy, copyTags, copyProse, suggest, apply, search, ...Object.values(sheet).map((f) => f.copyField)];
   let shareTimer;
   function share() {
     clearTimeout(shareTimer);

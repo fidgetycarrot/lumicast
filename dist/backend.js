@@ -1256,7 +1256,7 @@ function setupBackend(api) {
         return { book: book.name, createdBook, moved, chat: active.name, updated: !!existing };
       };
       const dictionary = () => s.dictionary ??= new BooruDictionary(async (url) => {
-        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.11.2 (tag metadata client)" } }));
+        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.12.0 (tag metadata client)" } }));
         if (typeof response.status !== "number" || typeof response.body !== "string")
           throw new Error("Invalid proxy response.");
         return { status: response.status, body: response.body };
@@ -1342,7 +1342,9 @@ function setupBackend(api) {
           name: names[0] ?? "",
           sentAt: Number(shared.sentAt) || 0,
           description: "",
-          book: ""
+          book: "",
+          id: typeof shared.id === "string" ? shared.id.slice(0, 120) : "",
+          kind: shared.kind === "persona" ? "persona" : "character"
         };
         try {
           if (names.length && api.permissions.has("chats") && api.permissions.has("world_books")) {
@@ -1370,6 +1372,37 @@ function setupBackend(api) {
         } catch {}
         return out;
       }
+      if (r.action === "toStudio") {
+        const v = record(r.input);
+        const sheet = record(v.sheet);
+        const id = text(v.id ?? "", "character id", 120);
+        if (!id)
+          throw new Error("Save this character in Lumi Studio first, then press Tweak in LumiCast again, so LumiCast knows which one to update.");
+        const field = (key, max = 4000) => text(sheet[key] ?? "", key, max);
+        const pool = api.rpcPool;
+        if (typeof pool?.sync !== "function" || typeof pool.read !== "function")
+          throw new Error("This Lumiverse version cannot share data between extensions.");
+        pool.sync("tweak.result", {
+          version: 1,
+          id,
+          kind: v.kind === "persona" ? "persona" : "character",
+          sentAt: Number(v.sentAt) || 0,
+          userId: userId ?? "",
+          sheet: { countTag: field("countTag", 40), subject: field("subject", 200), always: field("always"), appearance: field("appearance"), outfit: field("outfit"), anatomy: field("anatomy") }
+        }, { requires: [] });
+        let answer;
+        try {
+          answer = record(await pool.read("lumidraw_studio.lumicast.apply"));
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "";
+          if (/not registered/i.test(message))
+            throw new Error("This Lumi Studio cannot take updates from LumiCast yet. Update Lumi Studio, or use Fill from LumiCast there.");
+          throw new Error(`Lumi Studio did not save it: ${message.replace(/^.*?:\s*(?=[A-Z])/, "").slice(0, 240) || "no reason given"}`);
+        }
+        if (answer.ok !== true)
+          throw new Error("Lumi Studio did not save it: no reason given");
+        return { name: typeof answer.name === "string" ? answer.name.slice(0, 80) : "" };
+      }
       if (r.action === "studioWaiting") {
         const nothing = { sentAt: 0, name: "" };
         const pool = api.rpcPool;
@@ -1392,7 +1425,7 @@ function setupBackend(api) {
         const entered = gelCredentials(text(v.gelUser ?? "", "Gelbooru user", 300), v.gelKey ? text(v.gelKey, "Gelbooru key", 300) : "");
         const credentials = { user: entered.user || settings.gelUser, key: entered.key || settings.gelKey };
         const outcome = await testGelbooru(async (url) => {
-          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.11.2 (tag metadata client)" } }));
+          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.12.0 (tag metadata client)" } }));
           return { status: Number(response.status), body: typeof response.body === "string" ? response.body : "" };
         }, credentials);
         const unsaved = credentials.user !== settings.gelUser || credentials.key !== settings.gelKey;
@@ -1486,7 +1519,7 @@ function setupBackend(api) {
       }
     })().then((result) => reply(result)).catch((error) => {
       const message = error instanceof Error ? error.message : "";
-      const trusted = /^(Grant LumiCast|Nothing sent from|Lumi Studio sent|The character sent|Open your story|Your latest|No \[ooc\]|No character descriptions|The connection for|Give the character|Wait for|This connection|Gelbooru user|Unknown LumiCast|An operation|Use at most|Use a tag|This Lumiverse|Select a saved|The model |Invalid |Use a plain|Paste a |No explicit|Too many|Conflicting|Tag service|Tag lookup|Cyclic tag|Tag alias|Oversized|Unexpected)/.test(message);
+      const trusted = /^(Grant LumiCast|Save this character in Lumi Studio|This Lumi Studio cannot|Lumi Studio did not save|Nothing sent from|Lumi Studio sent|The character sent|Open your story|Your latest|No \[ooc\]|No character descriptions|The connection for|Give the character|Wait for|This connection|Gelbooru user|Unknown LumiCast|An operation|Use at most|Use a tag|This Lumiverse|Select a saved|The model |Invalid |Use a plain|Paste a |No explicit|Too many|Conflicting|Tag service|Tag lookup|Cyclic tag|Tag alias|Oversized|Unexpected)/.test(message);
       reply(undefined, error instanceof Error && error.name === "AbortError" ? "Operation cancelled or timed out. Your edits are preserved." : error instanceof ModelRequestError || trusted ? message : "The operation failed. Check your connection, provider status and tag-service access. Your edits are preserved.");
     });
   });

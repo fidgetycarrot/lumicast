@@ -140,11 +140,13 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
     const before=result?result.gaps.map(g=>g.what):[];
     // A new description is a new character, so Refine starts with a clean memory.
     if(source.value!==translatedFrom){rounds=[];roundFeedback='';translatedFrom=source.value;showRounds();}
+    // A description that no longer names the Lumi Studio character is someone else; it must not be sent over them.
+    if(studioRef&&studioRef.name&&!source.value.toLowerCase().includes(studioRef.name.toLowerCase())){studioRef=null;studioNews.hidden=true;}
     result=next;fromStudio=false;showSheet();showStandalone();
     const still=next.gaps.map(g=>g.what);const closed=before.filter(w=>!still.includes(w));
     const outcome=before.length?[closed.length?`Pinned down: ${closed.join(', ')}.`:'',still.length?`Still open: ${still.join(', ')}.`:''].filter(Boolean).join(' '):'';
     const secs=(ms:number)=>`${Math.round(ms/1000)} s`;const took=next.timing?`Took ${secs(next.timing.total)}: model ${secs(next.timing.model)}, tag lookups ${secs(next.timing.lookups)}.`:'';
-    notify([before.length?`Translated again. ${outcome}`:'Translation ready.',took,!gelUser.value ? 'Gelbooru is not configured; verified tags use Danbooru.' : '',...next.views.scene.notices].filter(Boolean).join('\n'));
+    notify([before.length?`Translated again. ${outcome}`:'Translation ready.',took,studioRef?`Press ${sendBack.textContent} to send the new sheet there.`:'',!gelUser.value ? 'Gelbooru is not configured; verified tags use Danbooru.' : '',...next.views.scene.notices].filter(Boolean).join('\n'));
   };
   const translate=button('Translate',runTranslate,true);
   // A character made earlier comes back from Lumi Studio to be tweaked with Refine, then goes back with Fill from LumiCast.
@@ -156,7 +158,10 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   let studioOffered=0;
   const markSeen=(at:number)=>{studioSeen=Math.max(studioSeen,at||0);try{localStorage.setItem('lumicast.studio.seen',String(studioSeen));}catch{/* session only */}};
   const plain=(label:string,action:()=>void)=>{const b=el('button',label);b.type='button';b.addEventListener('click',action);return b;};
+  // The Lumi Studio entry this sheet came from, so the revised sheet can go back to it.
+  let studioRef:{id:string;kind:string;sentAt:number;name:string}|null=null;
   const applyStudio=(got:StudioCharacter)=> {
+    studioRef={id:got.id,kind:got.kind,sentAt:got.sentAt,name:got.name};sendBack.textContent=`Update ${got.name||'this character'} in Lumi Studio`;
     for(const key of Object.keys(sheet) as (keyof typeof sheet)[])sheet[key].box.value=got.sheet[key];
     source.value=got.description;stated.value='';statedAgain.value='';revision++;translatedFrom=source.value;
     result=null;fromStudio=true;rounds=[];roundFeedback='';showRounds();pending=[];proposed.replaceChildren();reply.textContent='';
@@ -166,11 +171,20 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
     const minutes=got.sentAt?Math.round((Date.now()-got.sentAt)/60000):null;
     notify([`${got.name||'The character'} loaded from Lumi Studio${minutes===null?'':minutes<1?' (sent just now)':` (sent ${minutes} min ago)`}.`,
       got.description?`The description comes from the lorebook “${got.book}”.`:'No description was found in this chat’s Cast lorebook, so Refine works from the tags alone. Paste one into the description box to help it.',
-      'Say what the images get wrong in 03 / Refine. When you are done, choose Fill from LumiCast on the same character in Lumi Studio, then save.'].join('\n'));
+      `Say what the images get wrong in 03 / Refine. When you are done, press ${sendBack.textContent}.`].join('\n'));
     markSeen(got.sentAt);
-    studioText.textContent=`${got.name||'The character'} came from Lumi Studio. Its tags are in 04 / Lumi Studio character sheet. Say what the pictures get wrong in 03 / Refine.`;
-    studioButtons.replaceChildren(showTags,hideNews);studioNews.hidden=false;
+    studioText.textContent=`${got.name||'The character'} came from Lumi Studio. Its tags are in 04 / Lumi Studio character sheet. Say what the pictures get wrong in 03 / Refine, then send the new sheet back.`;
+    studioButtons.replaceChildren(sendBack,showTags,hideNews);studioNews.hidden=false;
   };
+  // Replaces the six sheet fields of that saved entry in Lumi Studio, empty ones included. Nothing else in it changes.
+  const sendBack=button('Update in Lumi Studio',async()=> {
+    if(!studioRef)throw new Error('Load a character from Lumi Studio first.');
+    const values=Object.fromEntries((Object.keys(sheet) as (keyof typeof sheet)[]).map(k=>[k,sheet[k].box.value]));
+    const done=await rpc.request<{name:string}>('toStudio',{id:studioRef.id,kind:studioRef.kind,sentAt:studioRef.sentAt,sheet:values});
+    const who=done.name||studioRef.name||'The character';
+    studioText.textContent=`${who} is updated in Lumi Studio. Generate a new picture there to check it. You can keep refining and send it again.`;
+    notify(`${who} updated in Lumi Studio.`);
+  },true);
   const studio=button('Load it',async()=>applyStudio(await rpc.request<StudioCharacter>('fromStudio')),true);
   const notNow=plain('Not now',()=>{markSeen(studioOffered);studioNews.hidden=true;notify('Kept what you have. To load that character later, press Tweak in LumiCast in Lumi Studio again.');});
   const showTags=plain('Show the tags',()=>{sheetCard.open=true;sheetCard.scrollIntoView?.({behavior:'smooth',block:'start'});});
@@ -298,7 +312,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
     sheet.appearance.box.value=editList(sheet.appearance.box.value,changes.filter(p=>p.kind!=='add'||!elsewhere.has(p.tag!.replace(/_/g,' '))),true);
     // The standalone prompt gets every change that names one of its tags, the count included; a change to a
     // sheet-only phrase has nothing to change there.
-    if(fromStudio){pending=[];proposed.replaceChildren();feedback.value='';share();notify('Changes applied to the character sheet. In Lumi Studio, choose Fill from LumiCast on this character, then save.');return;}
+    if(fromStudio){pending=[];proposed.replaceChildren();feedback.value='';share();notify(studioRef?`Changes applied to the character sheet. Press ${sendBack.textContent} to save them there.`:'Changes applied to the character sheet.');return;}
     let list=splitTags(tags.value).map(parseWeighted);const before=tags.value;const captionBefore=prose.value;
     for(const p of chosen) {
       if(p.tag&&COUNT.test(p.tag)&&p.kind==='add'){list=list.filter(t=>!COUNT.test(t.name));list.unshift({name:p.tag});continue;}
@@ -379,8 +393,8 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   });
   searchCard.append(field('Tag name or the start of one',query,'Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched.'),search,found);
 
-  app.append(intro,settings,status,studioNews,castCard,input,gapsCard,output,refine,sheetCard,searchCard,el('p','LumiCast 0.11.2 · Draft stays in this tab until reload.'));
-  const controls=[readOoc,translate,studio,again,save,refreshButton,testGel,saveNotes,saveQuality,startOver,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
+  app.append(intro,settings,status,studioNews,castCard,input,gapsCard,output,refine,sheetCard,searchCard,el('p','LumiCast 0.12.0 · Draft stays in this tab until reload.'));
+  const controls=[readOoc,translate,studio,sendBack,again,save,refreshButton,testGel,saveNotes,saveQuality,startOver,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
 
   // Every change to the sheet is offered to Lumi Studio, a moment after typing stops.
   let shareTimer:ReturnType<typeof setTimeout>|undefined;
