@@ -33,6 +33,8 @@ export interface Sheet { countTag: string; subject: string; always: string; appe
 /** Something that leaves the character under-specified. Advisory only: a gap never changes tags, captions or the sheet. */
 export interface Gap { kind: 'missing' | 'vague'; what: string; note: string }
 /** What LumiCast shares with Lumi Studio through Lumiverse's shared RPC pool, at lumicast.sheet.latest. */
+/** A character Lumi Studio sends back to be tweaked, with its Cast lorebook description when one is found. */
+export interface StudioCharacter { sheet: Sheet; name: string; sentAt: number; description: string; book: string }
 export interface SharedSheet { version: 1; sheet: Sheet; name: string; title: string; updatedAt: number; userId: string }
 /** A likely character name from a description's first line, such as "Jason Slatz — physical description:". */
 export function nameFrom(description: string): string {

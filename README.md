@@ -1,4 +1,6 @@
-# LumiCast 0.10.1
+# LumiCast 0.11.0
+
+**v0.11.0 lets you fix a character after the fact.** If a character doesn't look quite right after a few pictures, open it in Lumi Studio 1.8.5 or newer and choose **Tweak in LumiCast**. In LumiCast, **Get from Lumi Studio** (under Describe) loads its character sheet, and the written description too when this chat's Cast lorebook has that character. Use **03 / Refine** as usual; changes go into the character sheet. Then, back on the same character in Lumi Studio, choose **Fill from LumiCast** and save. Lumi Studio stays the one place each character is kept. If Refine empties a field completely, clear it by hand in Lumi Studio, since Fill never wipes a field.
 
 **v0.10.1 keeps each story's cast with its chat.** The Cast lorebook is now attached to the chat, not the character card, so a character met in one story never turns up when you replay the same card. A new chat starts with an empty cast. A Cast lorebook that 0.10.0 attached to a card moves onto the chat you save from, with its entries, the next time you save. Group chats work too.
 
@@ -63,7 +65,7 @@ Prebuilt `dist/` files are committed for Lumiverse installation. If the tab does
 
 Requires **Lumiverse 1.2.5 or later**. Compatibility was checked against the current 1.2.5 source and SDK 0.6.40; older versions have not been verified.
 
-1. Unzip `lumicast-0.10.1-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
+1. Unzip `lumicast-0.11.0-install.zip`. It contains a folder named `lumicast` with `spindle.json` and `dist/` immediately inside it.
 2. On the machine running your Lumiverse **server**, copy that folder into `<DATA_DIR>/extensions/`. The server's default DATA_DIR is `./data`, relative to where Lumiverse runs. For Docker, copy into the volume mounted as the server's data directory. Do not copy it into another extension's folder.
 3. As the Lumiverse owner/admin, open **Extensions**, open its add menu, and choose **Import Local**. Enable LumiCast and grant `generation` and `cors_proxy`, plus `chats`, `chat_mutation`, `characters` and `world_books` for [ooc] replies and the Cast lorebook. If the tab does not appear, reload Lumiverse.
 4. Open **LumiCast** in the sidebar drawer or find it in the command palette. Expand **Connection & tag services**, choose a saved generative connection, and save.

@@ -11,7 +11,7 @@ function harness(provider='openrouter',model='test/generative') {
   const storage=new Map<string,unknown>();const calls:unknown[]=[];const replies:{payload:unknown;user?:string;session?:string}[]=[];
   let fail=false,block=false;let latestSignal:AbortSignal|undefined;let responses:unknown[]|undefined;
   let gel:{status:number;body:string}|undefined;
-  let noPool=false;
+  let noPool=false;let studio:unknown;
   // A small story: one chat on one character card, its messages, and lorebooks.
   const story={chat:{id:'chat1',character_id:'card1',name:'Harbour story',metadata:{chat_world_book_ids:['mine'],theme:'kept'}} as {id:string;character_id:string;name:string;metadata:Record<string,unknown>}|null,
     card:{id:'card1',name:'Narrator',world_book_ids:['other']},messages:[] as {id:string;role:string;content:string}[],
@@ -43,14 +43,14 @@ function harness(provider='openrouter',model='test/generative') {
       return{content:JSON.stringify(responses ? responses.shift() : input.messages[0].content.includes('one trait per visual fact')?{traits:[{id:'t1',group:'hair',evidence:'Short red hair.',tags:['red_hair'],detail:'Short red hair'}]}:{drop:[],captions:{character:'Short red hair.'},issues:[]}),finish_reason:'stop'};
     }},
     onFrontendMessage:(fn:typeof handler)=>{handler=fn;return()=>{handler=undefined;};},
-    rpcPool:{sync:(endpoint:string,value:unknown,policy:unknown)=>{if(noPool)throw new Error('pool unavailable');calls.push(['sync',endpoint,value,policy]);return `lumicast.${endpoint}`;}},
+    rpcPool:{read:async(endpoint:string)=>{calls.push(['read',endpoint]);if(endpoint!=='lumidraw_studio.lumicast.tweak'||studio===undefined)throw new Error('no value');return studio;},sync:(endpoint:string,value:unknown,policy:unknown)=>{if(noPool)throw new Error('pool unavailable');calls.push(['sync',endpoint,value,policy]);return `lumicast.${endpoint}`;}},
     sendToFrontend:(payload:unknown,user?:string,options?:{frontendSessionId?:string})=>{replies.push({payload,user,session:options?.frontendSessionId});// No session means every open panel of that user, as the host does.
       if(user==='u1'&&(options?.frontendSessionId??'s1')==='s1')listeners.forEach(fn=>fn(payload));},
   } as unknown as SpindleAPI;
   const root=document.createElement('div');document.body.append(root);
   const ctx={sendToBackend:(payload:unknown)=>handler?.(payload,'u1','s1'),onBackendMessage:(fn:(payload:unknown)=>void)=>{listeners.add(fn);return()=>{listeners.delete(fn);};},ui:{registerDrawerTab:()=>({root,destroy:()=>root.remove()})},dom:{addStyle:()=>()=>{}}} as unknown as SpindleFrontendContext;
   const stop=setupBackend(api);
-  return{ctx,root,calls,replies,storage,stop,emit:(payload:unknown,user='u1',session='s1')=>handler?.(payload,user,session),setFail:()=>{fail=true;},setBlock:()=>{block=true;},setResponses:(values:unknown[])=>{responses=values;},setGel:(value:{status:number;body:string})=>{gel=value;},setNoPool:()=>{noPool=true;},story,events,signal:()=>latestSignal};
+  return{ctx,root,calls,replies,storage,stop,emit:(payload:unknown,user='u1',session='s1')=>handler?.(payload,user,session),setFail:()=>{fail=true;},setBlock:()=>{block=true;},setResponses:(values:unknown[])=>{responses=values;},setGel:(value:{status:number;body:string})=>{gel=value;},setNoPool:()=>{noPool=true;},story,events,setStudio:(v:unknown)=>{studio=v;},signal:()=>latestSignal};
 }
 const named=(root:Element,name:string)=>(root.querySelector(`[data-lc="${name}"]`)??root.querySelector(`[data-sheet="${name}"]`)) as HTMLTextAreaElement;
 /** [description, tags, caption, appearance, outfit, prompt] */
@@ -375,4 +375,34 @@ test('a Cast lorebook that 0.10.0 put on the character card moves onto the chat,
   // Attached by hand as well: still one copy on the chat, and nothing more to move.
   const again=await rpc.request<{moved:boolean}>('castSave',{name:'Tobin',aliases:[],description:'Tobin is wiry.'});
   expect(again.moved).toBe(false);expect(h.story.chat!.metadata.chat_world_book_ids).toEqual(['mine','old']);
+});
+test('a Lumi Studio character comes back for Refine with its Cast description, and goes back through the shared sheet',async()=> {
+  dom();const h=harness();cleanups.push(h.stop);const dispose=setup(h.ctx);cleanups.push(dispose);
+  const b=(name:string)=>Array.from(h.root.querySelectorAll('button')).find(x=>x.textContent===name)!;
+  await until(()=>!b('Translate').disabled);h.root.querySelector('select')!.value='c1';
+  const status=()=>h.root.querySelector('.lc-status')!.textContent!;
+  b('Get from Lumi Studio').click();await until(()=>!b('Translate').disabled);
+  expect(status()).toContain('Nothing sent from Lumi Studio yet');
+  h.story.books.set('cast',{id:'cast',name:'Cast · Harbour story',metadata:{lumicast:'cast'}});h.story.chat!.metadata.chat_world_book_ids=['mine','cast'];
+  h.story.entries.push({id:'e1',world_book_id:'cast',key:['Maren','the dockmaster'],content:"[Maren's appearance]\nMaren is tall, with a grey-streaked black braid.",comment:'LumiCast: Maren'});
+  h.setStudio({version:1,name:'Maren',anchor:'Maren',userId:'u1',sentAt:Date.now(),sheet:{countTag:'1girl',subject:'tall woman',always:'',appearance:'black hair, braid, tall female',outfit:'coat',anatomy:''}});
+  b('Get from Lumi Studio').click();await until(()=>!b('Translate').disabled);
+  const sheetValue=(key:string)=>(h.root.querySelector(`[data-sheet="${key}"]`) as HTMLInputElement).value;
+  expect(sheetValue('appearance')).toBe('black hair, braid, tall female');expect(sheetValue('countTag')).toBe('1girl');
+  expect(named(h.root,'source').value).toBe('Maren is tall, with a grey-streaked black braid.');
+  expect(status()).toContain('Maren loaded from Lumi Studio (sent just now).');expect(status()).toContain('lorebook “Cast · Harbour story”');
+  // Refine works from the sheet, and its changes land in the sheet only.
+  h.setResponses([{reply:'Grey streaks are missing.',remove:[],weight:[],add:[{tag:'streaked_hair',why:'grey streaks'}],caption:'ignored'}]);
+  named(h.root,'feedback').value='The grey streaks never show.';b('Suggest changes').click();await until(()=>!b('Translate').disabled);
+  const sent=(h.calls.filter(c=>(c as unknown[])[0]==='generation').at(-1) as unknown[])[1] as {messages:{content:string}[]};
+  expect(JSON.parse(sent.messages[1].content)).toMatchObject({tags:['1girl','black_hair','braid','tall_female','coat'],description:'Maren is tall, with a grey-streaked black braid.'});
+  b('Apply selected').click();await until(()=>!b('Translate').disabled);
+  expect(sheetValue('appearance')).toBe('black hair, braid, tall female, streaked hair');expect(named(h.root,'prompt').value).toBe('');
+  expect(status()).toContain('choose Fill from LumiCast on this character');
+  await Bun.sleep(450);
+  const shared=h.calls.filter(c=>(c as unknown[])[0]==='sync').at(-1) as unknown[];
+  expect((shared[2] as {sheet:{appearance:string}}).sheet.appearance).toBe('black hair, braid, tall female, streaked hair');
+  // Another user's character is refused.
+  h.setStudio({version:1,name:'X',userId:'u2',sheet:{}});b('Get from Lumi Studio').click();await until(()=>!b('Translate').disabled);
+  expect(status()).toContain('belongs to another Lumiverse user');
 });

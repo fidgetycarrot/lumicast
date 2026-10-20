@@ -1,5 +1,5 @@
 import type { SpindleFrontendContext } from 'lumiverse-spindle-types';
-import { assemble, editList, formatWeighted, parseWeighted, splitTags, withQuality, type GelbooruTest, type Proposal, type RefineRound, type Refinement, type Scope, type Snapshot, type Translation, type VerifiedTag } from './contracts';
+import { assemble, editList, formatWeighted, parseWeighted, splitTags, withQuality, type GelbooruTest, type Proposal, type RefineRound, type Refinement, type Scope, type Snapshot, type StudioCharacter, type Translation, type VerifiedTag } from './contracts';
 import { removeConflicts } from './engine';
 import type { CastMember, CastRead, CastSaved } from './cast';
 
@@ -38,7 +38,7 @@ function field(label:string,input:HTMLElement,hint?:string) {
 const STYLES=`.lc-app{box-sizing:border-box;font:14px/1.55 system-ui,sans-serif;color:var(--lumiverse-text,#eee);padding:24px;max-width:860px;margin:auto}.lc-app *{box-sizing:border-box}.lc-app h1{font-size:32px;letter-spacing:-1px;margin:2px 0}.lc-app h2{font-size:18px;margin:0 0 12px}.lc-app p{margin:8px 0}.lc-kicker{color:#d4b7ff;font-size:11px;letter-spacing:2px;text-transform:uppercase}.lc-muted,.lc-app small{color:var(--lumiverse-text-muted,#b4adc1);font-size:12px}.lc-card{border:1px solid #81708e55;background:#83709c0a;border-radius:16px;padding:18px;margin-top:18px}.lc-field{display:flex;flex-direction:column;gap:7px;margin:12px 0}.lc-field>span{font-size:13px;font-weight:600}.lc-app textarea,.lc-app input,.lc-app select{width:100%;border:1px solid #9484a566;border-radius:9px;background:var(--lumiverse-bg,#211c29);color:inherit;padding:11px;font:inherit}.lc-app textarea{resize:vertical;min-height:95px;line-height:1.55}.lc-app button{border:1px solid #a18caf66;border-radius:9px;padding:9px 15px;background:#8b719025;color:inherit;font:inherit;cursor:pointer}.lc-app button.lc-primary{background:#d0adf3;color:#261733;border-color:#d0adf3;font-weight:650}.lc-app button:disabled{opacity:.45;cursor:default}.lc-app :focus-visible{outline:2px solid #d0adf3;outline-offset:3px}.lc-row{display:flex;flex-wrap:wrap;gap:9px;align-items:center}.lc-status{padding:10px 0;white-space:pre-wrap;min-height:45px;position:sticky;top:0;z-index:2;background:var(--lumiverse-bg,#17131d);border-bottom:1px solid #81708e33}.lc-head{display:flex;justify-content:space-between;align-items:center;gap:8px}.lc-head>span{font-size:13px;font-weight:600}.lc-app button.lc-mini{padding:3px 11px;font-size:12px}.lc-status[data-error=true]{color:#ffa7a7}.lc-app summary{cursor:pointer;font-weight:600}.lc-app a{color:#d4b7ff}.lc-gaps,.lc-news{border-left:3px solid #d0adf3;padding:6px 12px;margin:10px 0}.lc-gaps .lc-row{margin-top:8px}.lc-gaps input{flex:1;min-width:180px}.lc-sub{margin-top:14px}.lc-sub>summary{font-weight:600}.lc-gaps ul{margin:6px 0;padding-left:18px}.lc-proposal{display:flex;gap:9px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #81708e33}.lc-proposal input{width:auto;margin-top:4px}.lc-proposal small{display:block}.lc-provenance{overflow-wrap:anywhere;padding:9px 0;border-bottom:1px solid #81708e33}.lc-provenance blockquote{margin:4px 0 0;padding-left:12px;border-left:2px solid #8b7190;font-size:12px}.lc-app [hidden]{display:none!important}@media(max-width:450px){.lc-app{padding:14px}.lc-card{padding:13px}}`;
 
 export function setup(ctx:SpindleFrontendContext) {
-  let closed=false,busy=false,verified=false,edited=false,result:Translation|null=null,revision=0;
+  let closed=false,busy=false,verified=false,edited=false,fromStudio=false,result:Translation|null=null,revision=0;
   let pending:Proposal[]=[];
   // Refine's memory for the current character: kept until the description changes or Start over.
   let rounds:RefineRound[]=[];let roundFeedback='';let translatedFrom='';
@@ -140,18 +140,32 @@ export function setup(ctx:SpindleFrontendContext) {
     const before=result?result.gaps.map(g=>g.what):[];
     // A new description is a new character, so Refine starts with a clean memory.
     if(source.value!==translatedFrom){rounds=[];roundFeedback='';translatedFrom=source.value;showRounds();}
-    result=next;showSheet();showStandalone();
+    result=next;fromStudio=false;showSheet();showStandalone();
     const still=next.gaps.map(g=>g.what);const closed=before.filter(w=>!still.includes(w));
     const outcome=before.length?[closed.length?`Pinned down: ${closed.join(', ')}.`:'',still.length?`Still open: ${still.join(', ')}.`:''].filter(Boolean).join(' '):'';
     const secs=(ms:number)=>`${Math.round(ms/1000)} s`;const took=next.timing?`Took ${secs(next.timing.total)}: model ${secs(next.timing.model)}, tag lookups ${secs(next.timing.lookups)}.`:'';
     notify([before.length?`Translated again. ${outcome}`:'Translation ready.',took,!gelUser.value ? 'Gelbooru is not configured; verified tags use Danbooru.' : '',...next.views.scene.notices].filter(Boolean).join('\n'));
   };
   const translate=button('Translate',runTranslate,true);
+  // A character made earlier comes back from Lumi Studio to be tweaked with Refine, then goes back with Fill from LumiCast.
+  const studio=button('Get from Lumi Studio',async()=> {
+    const got=await rpc.request<StudioCharacter>('fromStudio');
+    for(const key of Object.keys(sheet) as (keyof typeof sheet)[])sheet[key].box.value=got.sheet[key];
+    source.value=got.description;stated.value='';statedAgain.value='';revision++;translatedFrom=source.value;
+    result=null;fromStudio=true;rounds=[];roundFeedback='';showRounds();pending=[];proposed.replaceChildren();reply.textContent='';
+    tags.value='';prose.value='';prompt.value='';verified=true;edited=false;gapsCard.hidden=true;provenance.replaceChildren();issues.replaceChildren();sourceQuotes.replaceChildren();
+    tagState.textContent='This character came from Lumi Studio. Its tags are in the character sheet below.';
+    sheetCard.open=true;share();update();
+    const minutes=got.sentAt?Math.round((Date.now()-got.sentAt)/60000):null;
+    notify([`${got.name||'The character'} loaded from Lumi Studio${minutes===null?'':minutes<1?' (sent just now)':` (sent ${minutes} min ago)`}.`,
+      got.description?`The description comes from the lorebook “${got.book}”.`:'No description was found in this chat’s Cast lorebook, so Refine works from the tags alone. Paste one into the description box to help it.',
+      'Say what the images get wrong in 03 / Refine. When you are done, choose Fill from LumiCast on the same character in Lumi Studio, then save.'].join('\n'));
+  });
   const cancel=el('button','Cancel');cancel.type='button';cancel.hidden=true;cancel.addEventListener('click',()=>{void rpc.request('cancel').then(()=>notify('Cancellation requested.')).catch(e=>notify(e.message,true));});
   input.append(
     field('Character description',source,'Only this description is sent to your selected provider.'),
     field('Known facts (optional)',stated,'Anything you know that the description leaves out or leaves vague: what the character is, an eye colour. Treated as true and translated into the matching tags.'),
-    row(translate,cancel));
+    row(translate,studio,cancel));
 
   // ── 02 Lumi Studio character sheet: the main output ──
   const copyText=async(value:string,what:string)=> {
@@ -243,6 +257,7 @@ export function setup(ctx:SpindleFrontendContext) {
     sheet.appearance.box.value=editList(sheet.appearance.box.value,changes.filter(p=>p.kind!=='add'||!elsewhere.has(p.tag!.replace(/_/g,' '))),true);
     // The standalone prompt gets every change that names one of its tags, the count included; a change to a
     // sheet-only phrase has nothing to change there.
+    if(fromStudio){pending=[];proposed.replaceChildren();feedback.value='';share();notify('Changes applied to the character sheet. In Lumi Studio, choose Fill from LumiCast on this character, then save.');return;}
     let list=splitTags(tags.value).map(parseWeighted);const before=tags.value;const captionBefore=prose.value;
     for(const p of chosen) {
       if(p.tag&&COUNT.test(p.tag)&&p.kind==='add'){list=list.filter(t=>!COUNT.test(t.name));list.unshift({name:p.tag});continue;}
@@ -323,8 +338,8 @@ export function setup(ctx:SpindleFrontendContext) {
   });
   searchCard.append(field('Tag name or the start of one',query,'Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched.'),search,found);
 
-  app.append(intro,settings,status,castCard,input,gapsCard,output,refine,sheetCard,searchCard,el('p','LumiCast 0.10.1 · Draft stays in this tab until reload.'));
-  const controls=[readOoc,translate,again,save,refreshButton,testGel,saveNotes,saveQuality,startOver,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
+  app.append(intro,settings,status,castCard,input,gapsCard,output,refine,sheetCard,searchCard,el('p','LumiCast 0.11.0 · Draft stays in this tab until reload.'));
+  const controls=[readOoc,translate,studio,again,save,refreshButton,testGel,saveNotes,saveQuality,startOver,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
 
   // Every change to the sheet is offered to Lumi Studio, a moment after typing stops.
   let shareTimer:ReturnType<typeof setTimeout>|undefined;

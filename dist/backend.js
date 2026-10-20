@@ -1208,7 +1208,7 @@ function setupBackend(api) {
         return { book: book.name, createdBook, moved, chat: active.name, updated: !!existing };
       };
       const dictionary = () => s.dictionary ??= new BooruDictionary(async (url) => {
-        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.10.1 (tag metadata client)" } }));
+        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.11.0 (tag metadata client)" } }));
         if (typeof response.status !== "number" || typeof response.body !== "string")
           throw new Error("Invalid proxy response.");
         return { status: response.status, body: response.body };
@@ -1272,12 +1272,62 @@ function setupBackend(api) {
         const aliases = (Array.isArray(v.aliases) ? v.aliases : []).slice(0, 8).map((a) => text(a, "other name", 60).replace(/\s+/g, " ")).filter((a) => a && a.toLowerCase() !== name.toLowerCase());
         return await saveToCast(name, aliases, description);
       }
+      if (r.action === "fromStudio") {
+        const pool = api.rpcPool;
+        if (typeof pool?.read !== "function")
+          throw new Error("This Lumiverse version cannot share data between extensions.");
+        let shared;
+        try {
+          shared = record(await pool.read("lumidraw_studio.lumicast.tweak"));
+        } catch {
+          throw new Error("Nothing sent from Lumi Studio yet. In Lumi Studio, open the character and choose Tweak in LumiCast first.");
+        }
+        const sheet = record(shared.sheet);
+        if (shared.version !== 1)
+          throw new Error("Lumi Studio sent a format this LumiCast does not understand. Update both extensions.");
+        if (typeof shared.userId === "string" && shared.userId && userId && shared.userId !== userId)
+          throw new Error("The character sent from Lumi Studio belongs to another Lumiverse user.");
+        const field = (key, max = 4000) => typeof sheet[key] === "string" ? sheet[key].slice(0, max) : "";
+        const names = [shared.name, shared.anchor].filter((v) => typeof v === "string" && !!v.trim()).map((v) => v.trim().slice(0, 80));
+        const out = {
+          sheet: { countTag: field("countTag", 40), subject: field("subject", 200), always: field("always"), appearance: field("appearance"), outfit: field("outfit"), anatomy: field("anatomy") },
+          name: names[0] ?? "",
+          sentAt: Number(shared.sentAt) || 0,
+          description: "",
+          book: ""
+        };
+        try {
+          if (names.length && api.permissions.has("chats") && api.permissions.has("world_books")) {
+            const chat = await api.chats.getActive(userId);
+            const ids = record(chat?.metadata).chat_world_book_ids;
+            for (const id of Array.isArray(ids) ? ids : []) {
+              const book = typeof id === "string" ? await api.world_books.get(id, userId) : null;
+              if (!book || record(book.metadata).lumicast !== "cast")
+                continue;
+              const wanted = names.map((n) => n.toLowerCase());
+              for (let offset = 0;offset < 2000 && !out.description; offset += 200) {
+                const page = await api.world_books.entries.list(book.id, { limit: 200, offset, userId });
+                const hit = page.data.find((e) => wanted.some((n) => e.comment === entryComment(n) || e.comment.toLowerCase() === entryComment(n).toLowerCase())) ?? page.data.find((e) => e.key.some((k) => wanted.includes(k.toLowerCase())));
+                if (hit) {
+                  out.description = hit.content.replace(/^\[[^\]\n]*appearance\]\n/i, "").trim().slice(0, 12000);
+                  out.book = book.name;
+                }
+                if (page.data.length < 200)
+                  break;
+              }
+              if (out.description)
+                break;
+            }
+          }
+        } catch {}
+        return out;
+      }
       if (r.action === "testGelbooru") {
         const v = record(r.input);
         const entered = gelCredentials(text(v.gelUser ?? "", "Gelbooru user", 300), v.gelKey ? text(v.gelKey, "Gelbooru key", 300) : "");
         const credentials = { user: entered.user || settings.gelUser, key: entered.key || settings.gelKey };
         const outcome = await testGelbooru(async (url) => {
-          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.10.1 (tag metadata client)" } }));
+          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.11.0 (tag metadata client)" } }));
           return { status: Number(response.status), body: typeof response.body === "string" ? response.body : "" };
         }, credentials);
         const unsaved = credentials.user !== settings.gelUser || credentials.key !== settings.gelKey;
@@ -1371,7 +1421,7 @@ function setupBackend(api) {
       }
     })().then((result) => reply(result)).catch((error) => {
       const message = error instanceof Error ? error.message : "";
-      const trusted = /^(Grant LumiCast|Open your story|Your latest|No \[ooc\]|No character descriptions|The connection for|Give the character|Wait for|This connection|Gelbooru user|Unknown LumiCast|An operation|Use at most|Use a tag|This Lumiverse|Select a saved|The model |Invalid |Use a plain|Paste a |No explicit|Too many|Conflicting|Tag service|Tag lookup|Cyclic tag|Tag alias|Oversized|Unexpected)/.test(message);
+      const trusted = /^(Grant LumiCast|Nothing sent from|Lumi Studio sent|The character sent|Open your story|Your latest|No \[ooc\]|No character descriptions|The connection for|Give the character|Wait for|This connection|Gelbooru user|Unknown LumiCast|An operation|Use at most|Use a tag|This Lumiverse|Select a saved|The model |Invalid |Use a plain|Paste a |No explicit|Too many|Conflicting|Tag service|Tag lookup|Cyclic tag|Tag alias|Oversized|Unexpected)/.test(message);
       reply(undefined, error instanceof Error && error.name === "AbortError" ? "Operation cancelled or timed out. Your edits are preserved." : error instanceof ModelRequestError || trusted ? message : "The operation failed. Check your connection, provider status and tag-service access. Your edits are preserved.");
     });
   });
