@@ -376,33 +376,51 @@ test('a Cast lorebook that 0.10.0 put on the character card moves onto the chat,
   const again=await rpc.request<{moved:boolean}>('castSave',{name:'Tobin',aliases:[],description:'Tobin is wiry.'});
   expect(again.moved).toBe(false);expect(h.story.chat!.metadata.chat_world_book_ids).toEqual(['mine','old']);
 });
-test('a Lumi Studio character comes back for Refine with its Cast description, and goes back through the shared sheet',async()=> {
-  dom();const h=harness();cleanups.push(h.stop);const dispose=setup(h.ctx);cleanups.push(dispose);
+test('a Lumi Studio character loads on its own for Refine, with its Cast description, and goes back through the shared sheet',async()=> {
+  dom();const h=harness();cleanups.push(h.stop);const dispose=setup(h.ctx,{studioPollMs:20});cleanups.push(dispose);
   const b=(name:string)=>Array.from(h.root.querySelectorAll('button')).find(x=>x.textContent===name)!;
   await until(()=>!b('Translate').disabled);h.root.querySelector('select')!.value='c1';
   const status=()=>h.root.querySelector('.lc-status')!.textContent!;
-  b('Get from Lumi Studio').click();await until(()=>!b('Translate').disabled);
-  expect(status()).toContain('Nothing sent from Lumi Studio yet');
+  const news=()=>h.root.querySelector('.lc-studio') as HTMLElement;
+  const sheetValue=(key:string)=>(h.root.querySelector(`[data-sheet="${key}"]`) as HTMLInputElement).value;
+  // Nothing sent: no banner, no button to find.
+  await Bun.sleep(120);expect(news().hidden).toBe(true);expect(b('Get from Lumi Studio')).toBeUndefined();
   h.story.books.set('cast',{id:'cast',name:'Cast · Harbour story',metadata:{lumicast:'cast'}});h.story.chat!.metadata.chat_world_book_ids=['mine','cast'];
   h.story.entries.push({id:'e1',world_book_id:'cast',key:['Maren','the dockmaster'],content:"[Maren's appearance]\nMaren is tall, with a grey-streaked black braid.",comment:'LumiCast: Maren'});
+  // An empty panel loads the sent character by itself.
   h.setStudio({version:1,name:'Maren',anchor:'Maren',userId:'u1',sentAt:Date.now(),sheet:{countTag:'1girl',subject:'tall woman',always:'',appearance:'black hair, braid, tall female',outfit:'coat',anatomy:''}});
-  b('Get from Lumi Studio').click();await until(()=>!b('Translate').disabled);
-  const sheetValue=(key:string)=>(h.root.querySelector(`[data-sheet="${key}"]`) as HTMLInputElement).value;
-  expect(sheetValue('appearance')).toBe('black hair, braid, tall female');expect(sheetValue('countTag')).toBe('1girl');
+  await until(()=>sheetValue('appearance')==='black hair, braid, tall female');await until(()=>!b('Translate').disabled);
+  expect(sheetValue('countTag')).toBe('1girl');
   expect(named(h.root,'source').value).toBe('Maren is tall, with a grey-streaked black braid.');
   expect(status()).toContain('Maren loaded from Lumi Studio (sent just now).');expect(status()).toContain('lorebook “Cast · Harbour story”');
+  expect(news().hidden).toBe(false);expect(news().textContent).toContain('Maren came from Lumi Studio');expect(b('Show the tags')).toBeDefined();
+  // The same send is not loaded twice.
+  const reads=()=>h.calls.filter(c=>(c as unknown[])[0]==='read').length;
+  named(h.root,'source').value='Maren, edited by hand.';await Bun.sleep(120);expect(named(h.root,'source').value).toBe('Maren, edited by hand.');expect(reads()).toBeGreaterThan(3);
+  named(h.root,'source').value='Maren is tall, with a grey-streaked black braid.';
   // Refine works from the sheet, and its changes land in the sheet only.
   h.setResponses([{reply:'Grey streaks are missing.',remove:[],weight:[],add:[{tag:'streaked_hair',why:'grey streaks'}],caption:'ignored'}]);
   named(h.root,'feedback').value='The grey streaks never show.';b('Suggest changes').click();await until(()=>!b('Translate').disabled);
   const sent=(h.calls.filter(c=>(c as unknown[])[0]==='generation').at(-1) as unknown[])[1] as {messages:{content:string}[]};
   expect(JSON.parse(sent.messages[1].content)).toMatchObject({tags:['1girl','black_hair','braid','tall_female','coat'],description:'Maren is tall, with a grey-streaked black braid.'});
+  // A second send while a Refine answer waits: asked first, nothing replaced.
+  h.setStudio({version:1,name:'Tobin',anchor:'Tobin',userId:'u1',sentAt:Date.now()+1,sheet:{countTag:'1boy',subject:'wiry man',always:'',appearance:'short hair',outfit:'',anatomy:''}});
+  await until(()=>news().textContent!.includes('Tobin was sent from Lumi Studio'));
+  expect(sheetValue('appearance')).toBe('black hair, braid, tall female');
+  b('Not now').click();expect(news().hidden).toBe(true);await Bun.sleep(120);expect(news().hidden).toBe(true);
   b('Apply selected').click();await until(()=>!b('Translate').disabled);
   expect(sheetValue('appearance')).toBe('black hair, braid, tall female, streaked hair');expect(named(h.root,'prompt').value).toBe('');
   expect(status()).toContain('choose Fill from LumiCast on this character');
   await Bun.sleep(450);
   const shared=h.calls.filter(c=>(c as unknown[])[0]==='sync').at(-1) as unknown[];
   expect((shared[2] as {sheet:{appearance:string}}).sheet.appearance).toBe('black hair, braid, tall female, streaked hair');
-  // Another user's character is refused.
-  h.setStudio({version:1,name:'X',userId:'u2',sheet:{}});b('Get from Lumi Studio').click();await until(()=>!b('Translate').disabled);
-  expect(status()).toContain('belongs to another Lumiverse user');
+  // A third send while Refine feedback is typed: Load it replaces on request.
+  named(h.root,'feedback').value='Taller, please.';
+  h.setStudio({version:1,name:'Tobin',anchor:'Tobin',userId:'u1',sentAt:Date.now()+2,sheet:{countTag:'1boy',subject:'wiry man',always:'',appearance:'short hair',outfit:'',anatomy:''}});
+  await until(()=>news().textContent!.includes('Tobin was sent'));b('Load it').click();await until(()=>sheetValue('appearance')==='short hair');
+  await until(()=>!b('Translate').disabled);expect(status()).toContain('Tobin loaded from Lumi Studio');
+  // Another user's character is never loaded or offered.
+  named(h.root,'feedback').value='';
+  h.setStudio({version:1,name:'X',userId:'u2',sentAt:Date.now()+3,sheet:{appearance:'other'}});await Bun.sleep(150);
+  expect(sheetValue('appearance')).toBe('short hair');expect(news().textContent).not.toContain('X was sent');
 });

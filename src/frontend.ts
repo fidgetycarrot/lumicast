@@ -35,9 +35,9 @@ function field(label:string,input:HTMLElement,hint?:string) {
   const wrapper=el('label');wrapper.className='lc-field';wrapper.append(el('span',label),input);
   if(hint)wrapper.append(el('small',hint));return wrapper;
 }
-const STYLES=`.lc-app{box-sizing:border-box;font:14px/1.55 system-ui,sans-serif;color:var(--lumiverse-text,#eee);padding:24px;max-width:860px;margin:auto}.lc-app *{box-sizing:border-box}.lc-app h1{font-size:32px;letter-spacing:-1px;margin:2px 0}.lc-app h2{font-size:18px;margin:0 0 12px}.lc-app p{margin:8px 0}.lc-kicker{color:#d4b7ff;font-size:11px;letter-spacing:2px;text-transform:uppercase}.lc-muted,.lc-app small{color:var(--lumiverse-text-muted,#b4adc1);font-size:12px}.lc-card{border:1px solid #81708e55;background:#83709c0a;border-radius:16px;padding:18px;margin-top:18px}.lc-field{display:flex;flex-direction:column;gap:7px;margin:12px 0}.lc-field>span{font-size:13px;font-weight:600}.lc-app textarea,.lc-app input,.lc-app select{width:100%;border:1px solid #9484a566;border-radius:9px;background:var(--lumiverse-bg,#211c29);color:inherit;padding:11px;font:inherit}.lc-app textarea{resize:vertical;min-height:95px;line-height:1.55}.lc-app button{border:1px solid #a18caf66;border-radius:9px;padding:9px 15px;background:#8b719025;color:inherit;font:inherit;cursor:pointer}.lc-app button.lc-primary{background:#d0adf3;color:#261733;border-color:#d0adf3;font-weight:650}.lc-app button:disabled{opacity:.45;cursor:default}.lc-app :focus-visible{outline:2px solid #d0adf3;outline-offset:3px}.lc-row{display:flex;flex-wrap:wrap;gap:9px;align-items:center}.lc-status{padding:10px 0;white-space:pre-wrap;min-height:45px;position:sticky;top:0;z-index:2;background:var(--lumiverse-bg,#17131d);border-bottom:1px solid #81708e33}.lc-head{display:flex;justify-content:space-between;align-items:center;gap:8px}.lc-head>span{font-size:13px;font-weight:600}.lc-app button.lc-mini{padding:3px 11px;font-size:12px}.lc-status[data-error=true]{color:#ffa7a7}.lc-app summary{cursor:pointer;font-weight:600}.lc-app a{color:#d4b7ff}.lc-gaps,.lc-news{border-left:3px solid #d0adf3;padding:6px 12px;margin:10px 0}.lc-gaps .lc-row{margin-top:8px}.lc-gaps input{flex:1;min-width:180px}.lc-sub{margin-top:14px}.lc-sub>summary{font-weight:600}.lc-gaps ul{margin:6px 0;padding-left:18px}.lc-proposal{display:flex;gap:9px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #81708e33}.lc-proposal input{width:auto;margin-top:4px}.lc-proposal small{display:block}.lc-provenance{overflow-wrap:anywhere;padding:9px 0;border-bottom:1px solid #81708e33}.lc-provenance blockquote{margin:4px 0 0;padding-left:12px;border-left:2px solid #8b7190;font-size:12px}.lc-app [hidden]{display:none!important}@media(max-width:450px){.lc-app{padding:14px}.lc-card{padding:13px}}`;
+const STYLES=`.lc-app{box-sizing:border-box;font:14px/1.55 system-ui,sans-serif;color:var(--lumiverse-text,#eee);padding:24px;max-width:860px;margin:auto}.lc-app *{box-sizing:border-box}.lc-app h1{font-size:32px;letter-spacing:-1px;margin:2px 0}.lc-app h2{font-size:18px;margin:0 0 12px}.lc-app p{margin:8px 0}.lc-kicker{color:#d4b7ff;font-size:11px;letter-spacing:2px;text-transform:uppercase}.lc-muted,.lc-app small{color:var(--lumiverse-text-muted,#b4adc1);font-size:12px}.lc-card{border:1px solid #81708e55;background:#83709c0a;border-radius:16px;padding:18px;margin-top:18px}.lc-field{display:flex;flex-direction:column;gap:7px;margin:12px 0}.lc-field>span{font-size:13px;font-weight:600}.lc-app textarea,.lc-app input,.lc-app select{width:100%;border:1px solid #9484a566;border-radius:9px;background:var(--lumiverse-bg,#211c29);color:inherit;padding:11px;font:inherit}.lc-app textarea{resize:vertical;min-height:95px;line-height:1.55}.lc-app button{border:1px solid #a18caf66;border-radius:9px;padding:9px 15px;background:#8b719025;color:inherit;font:inherit;cursor:pointer}.lc-app button.lc-primary{background:#d0adf3;color:#261733;border-color:#d0adf3;font-weight:650}.lc-app button:disabled{opacity:.45;cursor:default}.lc-app :focus-visible{outline:2px solid #d0adf3;outline-offset:3px}.lc-row{display:flex;flex-wrap:wrap;gap:9px;align-items:center}.lc-status{padding:10px 0;white-space:pre-wrap;min-height:45px;position:sticky;top:0;z-index:2;background:var(--lumiverse-bg,#17131d);border-bottom:1px solid #81708e33}.lc-head{display:flex;justify-content:space-between;align-items:center;gap:8px}.lc-head>span{font-size:13px;font-weight:600}.lc-app button.lc-mini{padding:3px 11px;font-size:12px}.lc-status[data-error=true]{color:#ffa7a7}.lc-app summary{cursor:pointer;font-weight:600}.lc-app a{color:#d4b7ff}.lc-studio{background:#d0adf31a;border-radius:0 10px 10px 0}.lc-studio p{margin:0 0 8px}.lc-gaps,.lc-news,.lc-studio{border-left:3px solid #d0adf3;padding:6px 12px;margin:10px 0}.lc-gaps .lc-row{margin-top:8px}.lc-gaps input{flex:1;min-width:180px}.lc-sub{margin-top:14px}.lc-sub>summary{font-weight:600}.lc-gaps ul{margin:6px 0;padding-left:18px}.lc-proposal{display:flex;gap:9px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #81708e33}.lc-proposal input{width:auto;margin-top:4px}.lc-proposal small{display:block}.lc-provenance{overflow-wrap:anywhere;padding:9px 0;border-bottom:1px solid #81708e33}.lc-provenance blockquote{margin:4px 0 0;padding-left:12px;border-left:2px solid #8b7190;font-size:12px}.lc-app [hidden]{display:none!important}@media(max-width:450px){.lc-app{padding:14px}.lc-card{padding:13px}}`;
 
-export function setup(ctx:SpindleFrontendContext) {
+export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}={}) {
   let closed=false,busy=false,verified=false,edited=false,fromStudio=false,result:Translation|null=null,revision=0;
   let pending:Proposal[]=[];
   // Refine's memory for the current character: kept until the description changes or Start over.
@@ -148,8 +148,15 @@ export function setup(ctx:SpindleFrontendContext) {
   };
   const translate=button('Translate',runTranslate,true);
   // A character made earlier comes back from Lumi Studio to be tweaked with Refine, then goes back with Fill from LumiCast.
-  const studio=button('Get from Lumi Studio',async()=> {
-    const got=await rpc.request<StudioCharacter>('fromStudio');
+  // Lumi Studio's Tweak in LumiCast sends it; this panel notices and loads it on its own, or asks first when
+  // loading would replace work that has not gone anywhere yet.
+  const studioNews=el('div');studioNews.className='lc-studio';studioNews.hidden=true;
+  const studioText=el('p');const studioButtons=el('div');studioButtons.className='lc-row';studioNews.append(studioText,studioButtons);
+  let studioSeen=0;try{studioSeen=Number(localStorage.getItem('lumicast.studio.seen'))||0;}catch{/* remembered for this session only */}
+  let studioOffered=0;
+  const markSeen=(at:number)=>{studioSeen=Math.max(studioSeen,at||0);try{localStorage.setItem('lumicast.studio.seen',String(studioSeen));}catch{/* session only */}};
+  const plain=(label:string,action:()=>void)=>{const b=el('button',label);b.type='button';b.addEventListener('click',action);return b;};
+  const applyStudio=(got:StudioCharacter)=> {
     for(const key of Object.keys(sheet) as (keyof typeof sheet)[])sheet[key].box.value=got.sheet[key];
     source.value=got.description;stated.value='';statedAgain.value='';revision++;translatedFrom=source.value;
     result=null;fromStudio=true;rounds=[];roundFeedback='';showRounds();pending=[];proposed.replaceChildren();reply.textContent='';
@@ -160,12 +167,46 @@ export function setup(ctx:SpindleFrontendContext) {
     notify([`${got.name||'The character'} loaded from Lumi Studio${minutes===null?'':minutes<1?' (sent just now)':` (sent ${minutes} min ago)`}.`,
       got.description?`The description comes from the lorebook “${got.book}”.`:'No description was found in this chat’s Cast lorebook, so Refine works from the tags alone. Paste one into the description box to help it.',
       'Say what the images get wrong in 03 / Refine. When you are done, choose Fill from LumiCast on the same character in Lumi Studio, then save.'].join('\n'));
-  });
+    markSeen(got.sentAt);
+    studioText.textContent=`${got.name||'The character'} came from Lumi Studio. Its tags are in 04 / Lumi Studio character sheet. Say what the pictures get wrong in 03 / Refine.`;
+    studioButtons.replaceChildren(showTags,hideNews);studioNews.hidden=false;
+  };
+  const studio=button('Load it',async()=>applyStudio(await rpc.request<StudioCharacter>('fromStudio')),true);
+  const notNow=plain('Not now',()=>{markSeen(studioOffered);studioNews.hidden=true;notify('Kept what you have. To load that character later, press Tweak in LumiCast in Lumi Studio again.');});
+  const showTags=plain('Show the tags',()=>{sheetCard.open=true;sheetCard.scrollIntoView?.({behavior:'smooth',block:'start'});});
+  const hideNews=plain('Hide',()=>{studioNews.hidden=true;});
+  /** Work that would be lost: a Refine answer not applied, Refine feedback, an untranslated description, or a translation made here. */
+  const hasWork=()=>pending.length>0||!!feedback.value.trim()||(!!source.value.trim()&&source.value!==translatedFrom)||(!!result&&!fromStudio);
+  let checkingStudio=false;
+  async function checkStudio(){
+    if(closed||busy||checkingStudio)return;
+    // Only while LumiCast is on screen.
+    if(document.visibilityState==='hidden')return;
+    if(typeof (app as {checkVisibility?:()=>boolean}).checkVisibility==='function'&&!(app as {checkVisibility:()=>boolean}).checkVisibility())return;
+    checkingStudio=true;
+    try{
+      const waiting=await rpc.request<{sentAt:number;name:string}>('studioWaiting');
+      if(closed||busy||!waiting.sentAt||waiting.sentAt<=studioSeen)return;
+      if(hasWork()){
+        if(studioOffered!==waiting.sentAt){
+          studioOffered=waiting.sentAt;
+          studioText.textContent=`${waiting.name||'A character'} was sent from Lumi Studio. Loading it replaces what is in LumiCast now.`;
+          studioButtons.replaceChildren(studio,notNow);studioNews.hidden=false;
+        }
+        return;
+      }
+      busy=true;update();notify('Loading the character from Lumi Studio…');
+      try{applyStudio(await rpc.request<StudioCharacter>('fromStudio'));}
+      catch(e){markSeen(waiting.sentAt);notify(e instanceof Error?e.message:'Could not load the character from Lumi Studio.',true);}
+      finally{busy=false;if(!closed)update();}
+    }catch{/* looked again on the next tick */}
+    finally{checkingStudio=false;}
+  }
   const cancel=el('button','Cancel');cancel.type='button';cancel.hidden=true;cancel.addEventListener('click',()=>{void rpc.request('cancel').then(()=>notify('Cancellation requested.')).catch(e=>notify(e.message,true));});
   input.append(
     field('Character description',source,'Only this description is sent to your selected provider.'),
     field('Known facts (optional)',stated,'Anything you know that the description leaves out or leaves vague: what the character is, an eye colour. Treated as true and translated into the matching tags.'),
-    row(translate,studio,cancel));
+    row(translate,cancel));
 
   // ── 02 Lumi Studio character sheet: the main output ──
   const copyText=async(value:string,what:string)=> {
@@ -338,7 +379,7 @@ export function setup(ctx:SpindleFrontendContext) {
   });
   searchCard.append(field('Tag name or the start of one',query,'Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched.'),search,found);
 
-  app.append(intro,settings,status,castCard,input,gapsCard,output,refine,sheetCard,searchCard,el('p','LumiCast 0.11.0 · Draft stays in this tab until reload.'));
+  app.append(intro,settings,status,studioNews,castCard,input,gapsCard,output,refine,sheetCard,searchCard,el('p','LumiCast 0.11.1 · Draft stays in this tab until reload.'));
   const controls=[readOoc,translate,studio,again,save,refreshButton,testGel,saveNotes,saveQuality,startOver,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
 
   // Every change to the sheet is offered to Lumi Studio, a moment after typing stops.
@@ -422,6 +463,12 @@ export function setup(ctx:SpindleFrontendContext) {
   tags.addEventListener('input',()=>{verified=false;edited=true;tagState.textContent='Tags edited — verify existence before rebuilding. Clear all tags to use the caption only.';update();});
   prose.addEventListener('input',()=>{edited=true;notify('Caption changed. Rebuild to apply it to the prompt.');});
   prompt.addEventListener('input',()=>{edited=true;update();});
-  busy=true;update();void refresh().then(()=>notify('Paste an appearance and choose Translate.')).catch(e=>notify(e.message,true)).finally(()=>{busy=false;if(!closed)update();});
-  return () => {closed=true;ctx.sendToBackend({type:'lumicast:request',id:crypto.randomUUID(),action:'cancel'});offOoc();rpc.destroy();removeStyle();tab.destroy();};
+  busy=true;update();void refresh().then(()=>notify('Paste an appearance and choose Translate.')).catch(e=>notify(e.message,true)).finally(()=>{busy=false;if(!closed){update();void checkStudio();}});
+  // A cheap in-memory read, only while the panel is showing.
+  const studioTimer=setInterval(()=>void checkStudio(),options.studioPollMs??3000);
+  const lookNow=()=>void checkStudio();
+  document.addEventListener('visibilitychange',lookNow);
+  const target=globalThis as {addEventListener?:(t:string,f:()=>void)=>void;removeEventListener?:(t:string,f:()=>void)=>void};
+  target.addEventListener?.('focus',lookNow);
+  return () => {closed=true;clearInterval(studioTimer);document.removeEventListener('visibilitychange',lookNow);target.removeEventListener?.('focus',lookNow);ctx.sendToBackend({type:'lumicast:request',id:crypto.randomUUID(),action:'cancel'});offOoc();rpc.destroy();removeStyle();tab.destroy();};
 }

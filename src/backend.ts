@@ -79,7 +79,7 @@ export function setupBackend(api: SpindleAPI) {
         return {book:book.name,createdBook,moved,chat:active.name,updated:!!existing};
       };
       const dictionary=() => s.dictionary ??= new BooruDictionary(async url=> {
-        const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.11.0 (tag metadata client)'}}));
+        const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.11.1 (tag metadata client)'}}));
         if(typeof response.status!=='number'||typeof response.body!=='string')throw new Error('Invalid proxy response.');
         return {status:response.status,body:response.body};
       },{user:settings.gelUser,key:settings.gelKey});
@@ -164,13 +164,26 @@ export function setupBackend(api: SpindleAPI) {
         } catch {/* tags alone still work */}
         return out;
       }
+      if (r.action === 'studioWaiting') {
+        // What Lumi Studio last sent, without the lorebook lookup, so the panel can check often and load it on its own.
+        const nothing={sentAt:0,name:''};
+        const pool=(api as unknown as {rpcPool?:{read?:(endpoint:string)=>Promise<unknown>}}).rpcPool;
+        if (typeof pool?.read!=='function') return nothing;
+        try {
+          const shared=record(await pool.read('lumidraw_studio.lumicast.tweak'));
+          if (shared.version!==1) return nothing;
+          if (typeof shared.userId==='string'&&shared.userId&&userId&&shared.userId!==userId) return nothing;
+          const name=[shared.name,shared.anchor].find((v):v is string=>typeof v==='string'&&!!v.trim());
+          return {sentAt:Number(shared.sentAt)||0,name:name?name.trim().slice(0,80):''};
+        } catch {return nothing;}
+      }
       if (r.action === 'testGelbooru') {
         // Tests what is typed in the boxes, falling back to the saved key, without saving or caching anything.
         const v=record(r.input);
         const entered=gelCredentials(text(v.gelUser ?? '','Gelbooru user',300),v.gelKey ? text(v.gelKey,'Gelbooru key',300) : '');
         const credentials={user:entered.user||settings.gelUser,key:entered.key||settings.gelKey};
         const outcome=await testGelbooru(async url=> {
-          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.11.0 (tag metadata client)'}}));
+          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.11.1 (tag metadata client)'}}));
           return {status:Number(response.status),body:typeof response.body==='string'?response.body:''};
         },credentials);
         const unsaved=credentials.user!==settings.gelUser||credentials.key!==settings.gelKey;
