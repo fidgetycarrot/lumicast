@@ -561,7 +561,7 @@ var REVIEW = `You finish an Anima image prompt for one character. The input JSON
 
 Return only JSON: {"drop":[],"captions":{"character":"","outfit":"","scene":""},"sheet":{"subject":"","character":[],"outfit":[],"anatomy":[]},"vague":[],"issues":[]}
 
-drop lists the candidate tag names that must not be used. A tag stays when a tagger looking at a faithful picture of this character would apply it. Drop one only when its wiki meaning differs from what the text describes even though the words look alike (wide-eyed is a startled expression, not wide-set eyes), when it comes from a metaphor, joke, negation or comparison instead of something visible, when it names clothing the text says is no longer worn, when it exaggerates the text (large_breasts for modest curves), when it contradicts another trait or a better candidate (abs or toned beside a soft belly), or when it would hand one character's trait to another. A plain tag whose nuance is carried in a caption stays: black_hair is right for near-black hair. A type tag such as android or trap stays when the traits together state what its definition requires, even though no single quote uses the word. When unsure, keep the tag.
+drop lists the candidate tag names that must not be used. A tag stays when a tagger looking at a faithful picture of this character would apply it. Drop one only when its wiki meaning differs from what the text describes even though the words look alike (wide-eyed is a startled expression, not wide-set eyes), when it comes from a metaphor, joke, negation or comparison instead of something visible, when it names clothing the text says is no longer worn, when it exaggerates the text (large_breasts for modest curves), when it contradicts another trait or a better candidate (abs or toned beside a soft belly), or when it would hand one character's trait to another. A plain tag whose nuance is carried in a caption stays: black_hair is right for near-black hair. A type tag such as android or trap stays when the traits together state what its definition requires, even though no single quote uses the word. Also drop near-duplicates: when several candidates name the same item (glasses, round_eyewear and black-framed_eyewear), keep the one or two that say the most and drop the rest. The result is reused in scenes with several characters, so every tag has to earn its place. Apart from that, when unsure, keep the tag.
 
 captions holds three short pieces of plain caption text. The app shows the first alone, the first two together, or all three, so each must read correctly on its own and must stay inside its own traits:
 - "character": one or two short sentences, under 35 words, from the traits whose group is subject, body, hair or face, in that order: what they are (every subject trait, including the kind of character), their build, then hair, then face. This piece is reused in every scene, so it must not mention clothing, accessories, pose, expression, setting or anything from an outfit or moment trait.
@@ -576,7 +576,7 @@ Use "" for a piece that has no traits. Write from the trait details alone; a quo
 
 sheet is the same character laid out for an image tool that saves characters as comma-separated fields and reuses them in every scene. That tool splits on commas and writes its own sentences, so nothing here may be a sentence.
 - "subject": the plainest noun phrase for who this is, two to five lowercase words, with an age word first when the text gives an age: "adult woman", "young adult man", "adult male android". No name, no build, no hair.
-- "character": up to 6 short phrases for the lasting look (body, hair, face) that the kept tags do not already say. This sheet is pasted into prompts that may hold several characters, so every phrase has to earn its place by changing what gets drawn. Each is two to seven lowercase words with no comma, no pronoun and no full stop, and stands alone: "choppy silver-white hair", "violet-pink gradient eyes", "pale porcelain skin". Skip a fact a kept tag fully covers (no "short hair" beside short_hair), and skip a phrase that only restates a tag more strongly ("pale porcelain skin" beside pale_skin, "disproportionately long legs" beside long_legs, "thick weighted lashes" beside thick_eyelashes). Keep a phrase that adds a colour, texture or placement the tag lacks. Nothing about clothing, pose or setting.
+- "character": up to 6 short phrases for the lasting look (body, hair, face) that the kept tags do not already say. This sheet is pasted into prompts that may hold several characters, so every phrase has to earn its place by changing what gets drawn. Each is two to seven lowercase words with no comma, no pronoun and no full stop, and stands alone: "choppy silver-white hair", "violet-pink gradient eyes", "pale porcelain skin". Skip a fact a kept tag fully covers (no "short hair" beside short_hair), and skip a phrase that only restates a tag more strongly ("pale porcelain skin" beside pale_skin, "disproportionately long legs" beside long_legs, "thick weighted lashes" beside thick_eyelashes). Keep a phrase that adds a colour, texture or placement the tag lacks, but at most one phrase for an item the tags already name (eyewear, piercings, hair tips). Nothing about clothing, pose or setting.
 - "outfit": the same, for the outfit traits only: "torn sheer black thighhighs", "chrome led collar".
 - "anatomy": the same, for the anatomy traits only, kept plain and short.
 Use [] where there is nothing to add.
@@ -680,6 +680,33 @@ function removeConflicts(rows) {
       members.forEach((n) => excluded.add(n));
   }
   return rows.filter((r) => !excluded.has(r.name));
+}
+var LAYOUT = /^(?:multiple_views|reference_sheet|character_sheet|turnaround|split_screen|comparison|variations|before_and_after|character_profile|multiple_girls|multiple_boys|multiple_others|[2-9](?:girls|boys|others)|6\+(?:girls|boys)|twins|clone|dual_persona|multiple_persona)$/;
+var IMPLIED = [
+  ["glasses", /^[a-z0-9-]+(?:_[a-z0-9-]+)*_eyewear$/],
+  ["eyewear", /^[a-z0-9-]+(?:_[a-z0-9-]+)*_eyewear$/],
+  ["piercing", /_piercing$/],
+  ["earrings", /_earrings$/],
+  ["tattoo", /_tattoo$/],
+  ["horns", /_horns$/]
+];
+function tidy(rows) {
+  const names = rows.map((r) => r.name);
+  return rows.filter((r) => !LAYOUT.test(r.name) && !IMPLIED.some(([plain, child]) => r.name === plain && names.some((n) => n !== plain && child.test(n))));
+}
+function itemOf(value) {
+  const v = value.toLowerCase().replace(/_/g, " ");
+  const items = [
+    [/\b(?:glasses|eyewear|spectacles|sunglasses|monocle)\b/, "eyewear"],
+    [/\bpiercings?\b|\bstuds?\b/, "piercing"],
+    [/\b(?:tips|ends)\b/, "tips"],
+    [/\bearrings?\b/, "earrings"],
+    [/\btattoos?\b/, "tattoo"],
+    [/\bscars?\b/, "scar"],
+    [/\bfreckles\b/, "freckles"],
+    [/\bhorns?\b/, "horns"]
+  ];
+  return items.find(([re]) => re.test(v))?.[1] ?? null;
 }
 function sentences(clauses) {
   return [...new Set(clauses.map((c) => c.trim()).filter(Boolean))].map((c) => c[0].toUpperCase() + c.slice(1)).map((c) => /[.!?]$/.test(c) ? c : `${c}.`).join(" ");
@@ -832,7 +859,7 @@ class Translator {
       else if (left)
         own.add(`${left} ${scope === "character" ? "clothing, pose or scene" : "pose or scene"} detail${left === 1 ? " is" : "s are"} hidden. Change \u201CInclude\u201D to show ${left === 1 ? "it" : "them"}; no new run is needed.`);
       const kept = candidates.filter((r) => ids.has(r.traitId) && !drop.has(r.name) && !uncertain(r) && (r.name !== "solo" || scope === "scene"));
-      const tags = removeConflicts(kept).sort((a, b) => order(a) - order(b));
+      const tags = tidy(removeConflicts(kept)).sort((a, b) => order(a) - order(b));
       if (tags.length < kept.length)
         own.add("Conflicting tags (two hair colours, lengths, eye colours or sizes) were removed together; the caption keeps the wording.");
       const prose = SCOPES.filter((segment) => shown.some((t) => segmentOf(t.group) === segment)).map((segment) => {
@@ -868,7 +895,22 @@ class Translator {
           out.push(v);
       const wordsIn = (v) => v.split(/[^a-z0-9]+/).filter(Boolean);
       const taken = [...said(tagList)];
-      return out.filter((v) => !fallback.includes(v) || ![...taken, ...out.filter((o) => o !== v && !fallback.includes(o))].some((o) => wordsIn(v).every((w) => wordsIn(o).includes(w)))).slice(0, 8);
+      const count = new Map;
+      for (const t of taken) {
+        const k = itemOf(t);
+        if (k)
+          count.set(k, (count.get(k) ?? 0) + 1);
+      }
+      return out.filter((v) => !fallback.includes(v) || ![...taken, ...out.filter((o) => o !== v && !fallback.includes(o))].some((o) => wordsIn(v).every((w) => wordsIn(o).includes(w)))).filter((v) => {
+        const k = itemOf(v);
+        if (!k)
+          return true;
+        const n = count.get(k) ?? 0;
+        if (n >= 2)
+          return false;
+        count.set(k, n + 1);
+        return true;
+      }).slice(0, 8);
     };
     const groupOf = (row) => traits.find((t) => t.id === row.traitId)?.group;
     const COUNT = /^(?:1girl|1boy|1other)$/;
@@ -970,11 +1012,17 @@ class Translator {
       const tag = optional(() => parseWeighted(r.tag).name, "");
       if (!tag || names.has(tag) || isCupSizeTag(tag))
         continue;
+      if (LAYOUT.test(tag)) {
+        notices.add(`\u201C${tag}\u201D was not offered: it makes Anima draw several views or copies instead of one character.`);
+        continue;
+      }
       signal.throwIfAborted();
       try {
         const resolved = await this.dictionary.resolve(tag, signal);
         if (!resolved)
           notices.add(`\u201C${tag}\u201D is not a live booru tag and was left out.`);
+        else if (LAYOUT.test(resolved.name))
+          notices.add(`\u201C${resolved.name}\u201D was not offered: it makes Anima draw several views or copies instead of one character.`);
         else if (!names.has(resolved.name) && !proposals.some((p) => p.tag === resolved.name)) {
           const weight = weightOf(r);
           proposals.push({ kind: "add", tag: resolved.name, ...weight && weight !== 1 ? { weight } : {}, why: why(r), definition: resolved.wiki.replace(/\s+/g, " ").slice(0, 220), url: resolved.url });
@@ -1208,7 +1256,7 @@ function setupBackend(api) {
         return { book: book.name, createdBook, moved, chat: active.name, updated: !!existing };
       };
       const dictionary = () => s.dictionary ??= new BooruDictionary(async (url) => {
-        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.11.1 (tag metadata client)" } }));
+        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.11.2 (tag metadata client)" } }));
         if (typeof response.status !== "number" || typeof response.body !== "string")
           throw new Error("Invalid proxy response.");
         return { status: response.status, body: response.body };
@@ -1344,7 +1392,7 @@ function setupBackend(api) {
         const entered = gelCredentials(text(v.gelUser ?? "", "Gelbooru user", 300), v.gelKey ? text(v.gelKey, "Gelbooru key", 300) : "");
         const credentials = { user: entered.user || settings.gelUser, key: entered.key || settings.gelKey };
         const outcome = await testGelbooru(async (url) => {
-          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.11.1 (tag metadata client)" } }));
+          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.11.2 (tag metadata client)" } }));
           return { status: Number(response.status), body: typeof response.body === "string" ? response.body : "" };
         }, credentials);
         const unsaved = credentials.user !== settings.gelUser || credentials.key !== settings.gelKey;

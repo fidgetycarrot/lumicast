@@ -779,7 +779,7 @@ ${text}`;
     notify("Search complete. Popularity is not an Anima quality score.");
   });
   searchCard.append(field("Tag name or the start of one", query, "Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched."), search, found);
-  app.append(intro, settings, status, studioNews, castCard, input, gapsCard, output, refine, sheetCard, searchCard, el("p", "LumiCast 0.11.1 · Draft stays in this tab until reload."));
+  app.append(intro, settings, status, studioNews, castCard, input, gapsCard, output, refine, sheetCard, searchCard, el("p", "LumiCast 0.11.2 · Draft stays in this tab until reload."));
   const controls = [readOoc, translate, studio, again, save, refreshButton, testGel, saveNotes, saveQuality, startOver, verify, rebuild, copy, copyTags, copyProse, suggest, apply, search, ...Object.values(sheet).map((f) => f.copyField)];
   let shareTimer;
   function share() {

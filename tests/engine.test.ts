@@ -331,3 +331,24 @@ test('a translation reports where its time went',async()=> {
   const {result}=await run('red hair',hair,{});
   expect(result.timing.total).toBeGreaterThanOrEqual(result.timing.model);expect(result.timing.lookups).toBeGreaterThanOrEqual(0);
 });
+test('a sheet keeps near-duplicates down and never carries layout tags',async()=> {
+  const source='Riley wears round black-framed glasses, has a few ear piercings and pink tips on her dark hair.';
+  const t=(id:string,group:string,evidence:string,tags:string[])=>({id,group,evidence,tags,detail:evidence});
+  const {result}=await run(source,{traits:[
+    t('1','subject','Riley',['1girl','multiple_views']),
+    t('2','face','round black-framed glasses',['glasses','round_eyewear','black-framed_eyewear']),
+    t('3','face','a few ear piercings',['piercing','ear_piercing']),
+    t('4','hair','pink tips on her dark hair',['black_hair','colored_tips']),
+  ]},{drop:[],captions:{character:'A woman with dark hair and pink tips.'},issues:[],
+    sheet:{subject:'adult woman',character:['thin round black glasses','pink hair tips','multiple small ear piercings','dark roots']}});
+  const tags=result.views.outfit.tags.map(r=>r.name);
+  expect(tags).not.toContain('glasses');expect(tags).not.toContain('piercing');expect(tags).not.toContain('multiple_views');
+  expect(tags).toEqual(expect.arrayContaining(['round_eyewear','black-framed_eyewear','ear_piercing','colored_tips']));
+  // Two entries per item at most: the glasses phrase goes, one phrase each for the tips and piercings stays.
+  expect(result.sheet.appearance).toBe('black hair, colored tips, round eyewear, black-framed eyewear, ear piercing, pink hair tips, multiple small ear piercings, dark roots');
+});
+test('Refine never offers a layout tag',async()=> {
+  const engine=new Translator(async()=>JSON.stringify({reply:'Try a sheet.',add:[{tag:'multiple_views',why:'x'},{tag:'freckles',why:'missing'}],remove:[],weight:[],caption:null}),dictionary);
+  const out=await engine.refine({tags:['1girl','black_hair'],caption:'',feedback:'two of her appear'},signal(),'model');
+  expect(out.proposals.map(p=>p.tag)).toEqual(['freckles']);expect(out.notices.join(' ')).toContain('“multiple_views” was not offered');
+});

@@ -1,4 +1,6 @@
-# LumiCast 0.11.0
+# LumiCast 0.11.2
+
+**v0.11.2 keeps sheets shorter.** Near-duplicates are trimmed: a plain tag is dropped when a more specific one says the same thing (`glasses` beside `round_eyewear`, `piercing` beside `ear_piercing`), the reviewer is told to keep only the one or two tags that say the most about one item, and a field holds at most two entries about one item such as eyewear, piercings or hair tips. Tags that make Anima draw several views or copies of a character (`multiple_views`, `reference_sheet`, `turnaround`, `split_screen`, `2girls`, `twins` and the like) are never used in a translation and never offered by Refine.
 
 **v0.11.1 lets you fix a character after the fact.** If a character doesn't look quite right after a few pictures, open it in Lumi Studio 1.8.5 or newer and choose **Tweak in LumiCast**. Then open LumiCast: the character loads by itself, with a note at the top, and its written description loads too when this chat's Cast lorebook has that character. If LumiCast is holding work that loading would replace, it asks first (**Load it** / **Not now**). Use **03 / Refine** as usual; changes go into the character sheet. Then, back on the same character in Lumi Studio, choose **Fill from LumiCast** and save. Lumi Studio stays the one place each character is kept. If Refine empties a field completely, clear it by hand in Lumi Studio, since Fill never wipes a field.
 
