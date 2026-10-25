@@ -515,7 +515,7 @@ var EXTRACT = `You turn a prose character description into material for an Anima
 
 The input may also carry "stated": facts the user knows about the character that the description leaves out or leaves vague ("femboy", "android, trans woman", "green eyes", "rose-pink gradient lips"). Treat it as true and as part of the text, even when the description never says it, and where it disagrees with the description, "stated" wins. Give each stated fact its own trait in the group it belongs to (what the character is goes in subject, an eye colour in face), quoting the words from "stated" as evidence. Use the Danbooru tag for it when one exists (femboy is trap; werewolf, android, elf and many others are tags as written), and always say it in plain words in the detail, which is the only place it can go when Danbooru has no tag for it.
 
-The input may also carry "notes": the user's own standing guidance on prompting, learned from images they have generated (which tags to prefer or add for a kind of character, a weight that works). Follow a note when it applies to this character and ignore it when it does not. A tag added because of a note quotes the note as its evidence. Write a tag as "(tag:1.4)" only when a note gives that weight for that tag; never choose a weight yourself.
+The input may also carry "notes": the user's own standing guidance on prompting, learned from images they have generated (which tags to prefer or add for a kind of character, a weight that works). Follow a note when it applies to this character and ignore it when it does not. When a note applies, give it its own trait whose evidence quotes the note, listing every tag the note asks for exactly as the note spells it, even when two of them mean the same thing; the user has tested them together. A tag added because of a note quotes the note as its evidence. Write a tag as "(tag:1.4)" only when a note gives that weight for that tag; never choose a weight yourself.
 
 Return only JSON:
 {"traits":[{"id":"t1","group":"hair","evidence":"exact quote","tags":["black_hair","medium_hair"],"detail":"Near-black hair, about shoulder length"}]}
@@ -604,6 +604,8 @@ Return only JSON: {"reply":"","remove":[{"tag":"","why":""}],"add":[{"tag":"","w
 Make the smallest set of changes that answers the feedback. Do not restyle the character, and do not add traits that neither the feedback nor the description mentions.
 - Use "history". Each round holds what the user saw, the changes they applied and the ones they turned down. Do not offer a declined change again unless the new feedback asks for it. When a problem comes back after a change meant to fix it, that change was not enough: go further (a higher weight, a stronger or more specific tag, the trait restated in the caption) or try a different approach, and say in reply what you are doing differently. Do not undo an applied change unless the feedback says it made things worse.
 - Never remove a "locked" tag or a tag that carries a "stated" fact. They are who the character is. When one trait drowns out another, strengthen the weak one by weighting it or adding a supporting tag; do not take away the strong one.
+- A tag that "notes" asks for stays, in the note's spelling, unless the feedback names it. Do not suggest removing it or swapping it for a tag that means the same.
+- When the feedback says the picture is cropped, too close, or shows only part of the body (only a face, only the hips or rear), the usual cause is body-part tags crowding the prompt with nothing that reaches the rest of the figure. First turn down the body-part tag that dominates with a weight below 1 (0.6 to 0.8), or remove one that exaggerates the description; then add clothing or footwear from the description, which gives the picture somewhere to reach. A framing tag such as full_body comes after those, never alone. Mention in reply that a tall image size helps full-body pictures.
 - The caption keeps the scope it has. If the current caption says nothing about clothing, pose, expression or the state of the body, the new one must not either, even when the description does.`;
 
 class OutputError extends Error {
@@ -748,6 +750,9 @@ class Translator {
     const notes = text(options.notes ?? "", "notes (maximum 2,000 characters)", 2000);
     const grounded = [stated, notes, source].filter(Boolean).join(`
 `);
+    const userText = fold([stated, source].filter(Boolean).join(`
+`));
+    const fromNotes = (trait) => !!notes && fold(notes).includes(fold(trait.evidence)) && !userText.includes(fold(trait.evidence));
     options.progress?.("Step 1 of 3: the model is reading the description\u2026");
     const extraction = parseExtraction(await timed(EXTRACT, JSON.stringify({ ...stated ? { stated } : {}, ...notes ? { notes } : {}, description: source })), grounded);
     if (!extraction.traits.length)
@@ -799,6 +804,13 @@ class Translator {
       }
     }
     const order = (row) => traits.findIndex((t) => t.id === row.traitId);
+    const required = new Set(traits.filter(fromNotes).flatMap((t) => t.tags).flatMap((t) => {
+      try {
+        return [tagName(t)];
+      } catch {
+        return [];
+      }
+    }).filter((t) => !isCupSizeTag(t)));
     const candidates = [];
     const unverified = new Map;
     const lookupStarted = Date.now();
@@ -815,6 +827,13 @@ class Translator {
     const lookupMs = Date.now() - lookupStarted;
     ordered.forEach(([name, trait], i) => {
       const { ok, resolved } = looked[i];
+      const weight = extraction.weights.get(name);
+      const weighted = weight && notes.includes(String(weight)) ? { weight } : {};
+      if (required.has(name)) {
+        if (!candidates.some((r) => r.name === name))
+          candidates.push({ name, source: "Notes", count: resolved?.count ?? 0, wiki: resolved?.wiki ?? "", url: resolved?.url ?? `https://danbooru.donmai.us/wiki_pages/${encodeURIComponent(name)}`, evidence: trait.evidence, traitId: trait.id, ...weighted });
+        return;
+      }
       if (!ok) {
         notices.add("A tag service was unavailable, so some tags could not be verified and were left out.");
         return;
@@ -823,8 +842,7 @@ class Translator {
         unverified.set(name, trait);
         notices.add(segmentOf(trait.group) === "scene" && trait.group !== "anatomy" ? `\u201C${name}\u201D is not a live booru tag and was left out.` : `\u201C${name}\u201D is not a live booru tag, so the sheet keeps it as the plain words \u201C${name.replace(/_/g, " ")}\u201D.`);
       } else if (!candidates.some((r) => r.name === resolved.name)) {
-        const weight = extraction.weights.get(name);
-        candidates.push({ ...resolved, evidence: trait.evidence, traitId: trait.id, ...weight && notes.includes(String(weight)) ? { weight } : {} });
+        candidates.push({ ...resolved, evidence: trait.evidence, traitId: trait.id, ...weighted });
       }
     });
     const fixed = size?.tag ?? "";
@@ -858,8 +876,10 @@ class Translator {
         own.add(`Nothing in this description is ${scope === "character" ? "about the character\u2019s body, hair or face" : "in this selection"}. Widen \u201CInclude\u201D to see the rest.`);
       else if (left)
         own.add(`${left} ${scope === "character" ? "clothing, pose or scene" : "pose or scene"} detail${left === 1 ? " is" : "s are"} hidden. Change \u201CInclude\u201D to show ${left === 1 ? "it" : "them"}; no new run is needed.`);
-      const kept = candidates.filter((r) => ids.has(r.traitId) && !drop.has(r.name) && !uncertain(r) && (r.name !== "solo" || scope === "scene"));
-      const tags = tidy(removeConflicts(kept)).sort((a, b) => order(a) - order(b));
+      const mine = (r) => r.source === "Notes";
+      const kept = candidates.filter((r) => ids.has(r.traitId) && (mine(r) || !drop.has(r.name) && !uncertain(r)) && (r.name !== "solo" || scope === "scene"));
+      const free = kept.filter((r) => !mine(r));
+      const tags = [...tidy(removeConflicts(free)), ...kept.filter(mine)].sort((a, b) => order(a) - order(b));
       if (tags.length < kept.length)
         own.add("Conflicting tags (two hair colours, lengths, eye colours or sizes) were removed together; the caption keeps the wording.");
       const prose = SCOPES.filter((segment) => shown.some((t) => segmentOf(t.group) === segment)).map((segment) => {
@@ -989,14 +1009,17 @@ class Translator {
     const data = json(await this.generate(REFINE, JSON.stringify({ tags: current.map((t) => formatWeighted(t)), caption, feedback, ...Object.fromEntries(Object.entries(context).filter(([, v]) => v)), ...locked.length ? { locked } : {}, ...history.length ? { history } : {} }), signal));
     const notices = new Set;
     const proposals = [];
+    const noted = fold(context.notes.replace(/_/g, " "));
+    const escape = (v) => v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const inNotes = (tag) => !!noted && new RegExp(`(^|[^a-z0-9])${escape(tag.replace(/_/g, " "))}($|[^a-z0-9])`).test(noted);
     const rows = (value) => (Array.isArray(value) ? value : []).slice(0, 12).map(record);
     const why = (r) => optional(() => text(r.why, "reason", 300), "");
     const weightOf = (r) => typeof r.weight === "number" && r.weight >= 0.1 && r.weight <= 3 ? Math.round(r.weight * 100) / 100 : undefined;
     for (const r of rows(data.remove)) {
       const tag = optional(() => parseWeighted(r.tag).name, "");
       const named = feedback.toLowerCase().includes(tag.replace(/_/g, " "));
-      if (locked.includes(tag) && !named) {
-        notices.add(`A suggestion to remove \u201C${tag.replace(/_/g, " ")}\u201D was set aside: it defines the character. Say so in your feedback if it should go.`);
+      if ((locked.includes(tag) || inNotes(tag)) && !named) {
+        notices.add(`A suggestion to remove \u201C${tag.replace(/_/g, " ")}\u201D was set aside: ${inNotes(tag) ? "your notes ask for it" : "it defines the character"}. Say so in your feedback if it should go.`);
         continue;
       }
       if (names.has(tag) && !proposals.some((p) => p.tag === tag))
@@ -1019,7 +1042,12 @@ class Translator {
       signal.throwIfAborted();
       try {
         const resolved = await this.dictionary.resolve(tag, signal);
-        if (!resolved)
+        if (inNotes(tag)) {
+          if (!proposals.some((p) => p.tag === tag)) {
+            const weight = weightOf(r);
+            proposals.push({ kind: "add", tag, ...weight && weight !== 1 ? { weight } : {}, why: why(r) || "from your notes", definition: (resolved?.wiki ?? "").replace(/\s+/g, " ").slice(0, 220), ...resolved ? { url: resolved.url } : {} });
+          }
+        } else if (!resolved)
           notices.add(`\u201C${tag}\u201D is not a live booru tag and was left out.`);
         else if (LAYOUT.test(resolved.name))
           notices.add(`\u201C${resolved.name}\u201D was not offered: it makes Anima draw several views or copies instead of one character.`);
@@ -1256,7 +1284,7 @@ function setupBackend(api) {
         return { book: book.name, createdBook, moved, chat: active.name, updated: !!existing };
       };
       const dictionary = () => s.dictionary ??= new BooruDictionary(async (url) => {
-        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.12.0 (tag metadata client)" } }));
+        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.13.0 (tag metadata client)" } }));
         if (typeof response.status !== "number" || typeof response.body !== "string")
           throw new Error("Invalid proxy response.");
         return { status: response.status, body: response.body };
@@ -1425,7 +1453,7 @@ function setupBackend(api) {
         const entered = gelCredentials(text(v.gelUser ?? "", "Gelbooru user", 300), v.gelKey ? text(v.gelKey, "Gelbooru key", 300) : "");
         const credentials = { user: entered.user || settings.gelUser, key: entered.key || settings.gelKey };
         const outcome = await testGelbooru(async (url) => {
-          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.12.0 (tag metadata client)" } }));
+          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.13.0 (tag metadata client)" } }));
           return { status: Number(response.status), body: typeof response.body === "string" ? response.body : "" };
         }, credentials);
         const unsaved = credentials.user !== settings.gelUser || credentials.key !== settings.gelKey;

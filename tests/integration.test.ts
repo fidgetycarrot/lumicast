@@ -67,7 +67,7 @@ test('full panel → RPC → backend → editor smoke, copy and disposal',async(
   const select=h.root.querySelector('select')!;expect(select.options[2].disabled).toBe(true);select.value='c1';
   const areas=areasOf(h.root);areas[0].value='Short red hair.';b('Translate').click();
   await until(()=>!b('Translate').disabled);
-  expect(areas[1].value).toBe('red_hair');expect(areas[2].value).toContain('Short red hair.');expect(areas[5].value).toBe('red hair\n\nShort red hair.');
+  expect(areas[1].value).toBe('red_hair, standing');expect(areas[2].value).toContain('Short red hair.');expect(areas[5].value).toBe('red hair, standing\n\nShort red hair.');
   expect(h.calls.filter(v=>(v as unknown[])[0]==='generation').length).toBe(2);
   expect(h.replies.every(r=>r.user==='u1'&&r.session==='s1')).toBe(true);
   areas[1].value='blue_eyes';areas[1].dispatchEvent(new Event('input'));expect(b('Rebuild from tags + detail').disabled).toBe(true);
@@ -116,10 +116,14 @@ test('panel prompt omits narration and scene while the source passages stay visi
   const translate=Array.from(h.root.querySelectorAll('button')).find(b=>b.textContent==='Translate')!;
   await until(()=>!translate.disabled);h.root.querySelector('select')!.value='c1';
   const areas=areasOf(h.root);areas[0].value='Red hair, obviously! And a red hair ribbon.';translate.click();await until(()=>!translate.disabled);
-  expect(areas[1].value).toBe('red_hair');expect(areas[2].value).toBe('Red hair.');expect(areas[5].value).toBe('red hair\n\nRed hair.');
+  // The outfit is included by default, with one plain pose so the figure is not cropped.
+  expect(areas[1].value).toBe('red_hair, standing');expect(areas[2].value).toBe('Red hair. She wears a ribbon.');expect(areas[5].value).toBe('red hair, standing\n\nRed hair. She wears a ribbon.');
+  expect(h.root.textContent).toContain('“standing” is added so the figure has a pose');
+  const scope=Array.from(h.root.querySelectorAll('select')).find(s=>Array.from(s.options).some(o=>o.value==='character'))!;expect(scope.value).toBe('outfit');
+  scope.value='character';scope.dispatchEvent(new Event('change'));expect(areas[2].value).toBe('Red hair.');expect(areas[5].value).toBe('red hair, standing\n\nRed hair.');
   // The sources list covers what the sheet holds: the character and the outfit, whatever Include says.
   expect(h.root.querySelector('[data-lc="sources"]')?.textContent).toContain('Red hair, obviously!');expect(h.root.querySelector('[data-lc="sources"]')?.textContent).toContain('ribbon');expect(areas[5].value).not.toContain('ribbon');
-  const scope=Array.from(h.root.querySelectorAll('select')).find(s=>Array.from(s.options).some(o=>o.value==='character'))!;expect(scope.value).toBe('character');areas[2].value='my edit';areas[2].dispatchEvent(new Event('input'));scope.value='outfit';scope.dispatchEvent(new Event('change'));
+  areas[2].value='my edit';areas[2].dispatchEvent(new Event('input'));scope.value='outfit';scope.dispatchEvent(new Event('change'));
   expect(areas[2].value).toBe('Red hair. She wears a ribbon.');expect(h.calls.filter(v=>(v as unknown[])[0]==='generation').length).toBe(2);expect(h.root.textContent).toContain('manual edits there were replaced');expect(h.root.querySelector('[data-lc="sources"]')?.textContent).toContain('ribbon');
 });
 test('direct DeepSeek adapter tolerates string evidence without discarding the panel result',async()=> {
@@ -128,7 +132,7 @@ test('direct DeepSeek adapter tolerates string evidence without discarding the p
   const translate=Array.from(h.root.querySelectorAll('button')).find(b=>b.textContent==='Translate')!;
   await until(()=>!translate.disabled);h.root.querySelector('select')!.value='c1';
   const areas=areasOf(h.root);areas[0].value='Short red hair.';translate.click();await until(()=>!translate.disabled);
-  expect(areas[1].value).toBe('red_hair');expect(areas[5].value).toBe('red hair\n\nShort red hair.');expect(h.root.textContent).not.toContain('Invalid uncertainty evidence');expect(h.root.textContent).toContain('missing-attribute note was ignored');
+  expect(areas[1].value).toBe('red_hair, standing');expect(areas[5].value).toBe('red hair, standing\n\nShort red hair.');expect(h.root.textContent).not.toContain('Invalid uncertainty evidence');expect(h.root.textContent).toContain('missing-attribute note was ignored');
 });
 test('refine: typed feedback becomes verified, selectable changes; weights and notes carry through; copy buttons work',async()=> {
   dom();const h=harness();cleanups.push(h.stop);const dispose=setup(h.ctx);cleanups.push(dispose);
@@ -141,7 +145,7 @@ test('refine: typed feedback becomes verified, selectable changes; weights and n
   h.setResponses([{traits:[{id:'1',group:'hair',evidence:'Short red hair.',tags:['(red_hair:1.4)'],detail:'Short red hair'}]},{drop:[],captions:{character:'Short red hair.'},issues:[]},
     {reply:'The hair read as orange.',remove:[{tag:'made_up',why:'x'}],weight:[{tag:'red_hair',weight:1.8,why:'still too weak'}],add:[{tag:'red_hair',why:'dup'},{tag:'short_hair',weight:null,why:'length was lost'}],caption:'Short, vivid red hair.'}]);
   source.value='Short red hair.';b('Translate').click();await until(()=>!b('Translate').disabled);
-  expect(tags.value).toBe('(red_hair:1.4)');expect(prompt.value).toBe('(red hair:1.4)\n\nShort red hair.');
+  expect(tags.value).toBe('(red_hair:1.4), standing');expect(prompt.value).toBe('(red hair:1.4), standing\n\nShort red hair.');
   const sheetValue=(key:string)=>(h.root.querySelector(`[data-sheet="${key}"]`) as HTMLInputElement).value;
   expect(appearance.value).toBe('(red hair:1.4)');expect(outfit.value).toBe('');expect(sheetValue('countTag')).toBe('');
   expect(h.root.querySelector('.lc-gaps')!.textContent).toContain('Not stated: eye colour.');expect(h.root.querySelector('.lc-gaps')!.textContent).not.toContain('hair colour');
@@ -149,17 +153,17 @@ test('refine: typed feedback becomes verified, selectable changes; weights and n
   const sent=h.calls.filter(v=>(v as unknown[])[0]==='generation').map(v=>((v as unknown[])[1] as {messages:{content:string}[]}).messages[1].content);
   expect(JSON.parse(sent[0]).notes).toBe('Redheads: weight red_hair at 1.4.');
   let copied='';Object.defineProperty(navigator,'clipboard',{value:{writeText:async(value:string)=>{copied=value;}},configurable:true});
-  b('Copy tags').click();await until(()=>!b('Translate').disabled);expect(copied).toBe('(red hair:1.4)');
+  b('Copy tags').click();await until(()=>!b('Translate').disabled);expect(copied).toBe('(red hair:1.4), standing');
   b('Copy detail').click();await until(()=>!b('Translate').disabled);expect(copied).toBe('Short red hair.');
   expect(b('Apply selected').disabled).toBe(true);
   feedback.value='Hair came out orange and long.';b('Suggest changes').click();await until(()=>!b('Translate').disabled);
   const refineInput=JSON.parse(((h.calls.filter(v=>(v as unknown[])[0]==='generation').pop() as unknown[])[1] as {messages:{content:string}[]}).messages[1].content);
-  expect(refineInput.tags).toEqual(['(red_hair:1.4)']);expect(refineInput.feedback).toBe('Hair came out orange and long.');expect(refineInput.notes).toContain('Redheads');expect(refineInput.description).toBe('Short red hair.');
+  expect(refineInput.tags).toEqual(['(red_hair:1.4)','standing']);expect(refineInput.feedback).toBe('Hair came out orange and long.');expect(refineInput.notes).toContain('Redheads');expect(refineInput.description).toBe('Short red hair.');
   const boxes=Array.from(h.root.querySelectorAll('.lc-proposal input')) as HTMLInputElement[];
   expect(Array.from(h.root.querySelectorAll('.lc-proposal strong')).map(n=>n.textContent)).toEqual(['Weight (red hair:1.8)','Add short hair','Replace the standalone detail']);
-  expect(h.root.textContent).toContain('The hair read as orange.');expect(tags.value).toBe('(red_hair:1.4)');
+  expect(h.root.textContent).toContain('The hair read as orange.');expect(tags.value).toBe('(red_hair:1.4), standing');
   boxes[2].checked=false;b('Apply selected').click();await until(()=>!b('Translate').disabled);
-  expect(tags.value).toBe('(red_hair:1.8), short_hair');expect(prose.value).toBe('Short red hair.');expect(prompt.value).toBe('(red hair:1.8), short hair\n\nShort red hair.');
+  expect(tags.value).toBe('(red_hair:1.8), standing, short_hair');expect(prose.value).toBe('Short red hair.');expect(prompt.value).toBe('(red hair:1.8), standing, short hair\n\nShort red hair.');
   expect(feedback.value).toBe('');expect(h.root.querySelectorAll('.lc-proposal').length).toBe(0);
   expect(appearance.value).toBe('(red hair:1.8), short hair');
 });
@@ -203,11 +207,11 @@ test('a gap is answered where it is shown: the inline box mirrors Known facts an
   // Refine works from the sheet, and a count change goes to the Count tag box only.
   named(h.root,'feedback').value='Came out as a woman.';b('Suggest changes').click();await until(()=>!b('Translate').disabled);
   const lastInput=JSON.parse(((h.calls.filter(v=>(v as unknown[])[0]==='generation').pop() as unknown[])[1] as {messages:{content:string}[]}).messages[1].content);
-  expect(lastInput.tags).toEqual(['1girl','red_hair','short_hair','green_eyes']);expect(lastInput.locked).toBeUndefined();
+  expect(lastInput.tags).toEqual(['1girl','red_hair','short_hair','green_eyes','standing']);expect(lastInput.locked).toBeUndefined();
   b('Apply selected').click();await until(()=>!b('Translate').disabled);
   expect(named(h.root,'countTag').value).toBe('1boy');expect(named(h.root,'appearance').value).toBe('red hair, short hair, green eyes, freckles');
   // The standalone prompt follows the same changes, the count included.
-  expect(named(h.root,'tags').value).toBe('1boy, red_hair, short_hair, green_eyes, freckles');expect(named(h.root,'prompt').value).toBe('1boy, red hair, short hair, green eyes, freckles\n\nA woman. Short red hair. Green eyes.');
+  expect(named(h.root,'tags').value).toBe('1boy, red_hair, short_hair, green_eyes, standing, freckles');expect(named(h.root,'prompt').value).toBe('1boy, red hair, short hair, green eyes, standing, freckles\n\nA woman. Short red hair. Green eyes.');
   expect(h.root.textContent).toContain('Changes applied to the Anima prompt and the character sheet.');
 });
 test('saved quality tags lead every Anima prompt and save without touching other settings',async()=> {
@@ -218,7 +222,7 @@ test('saved quality tags lead every Anima prompt and save without touching other
   const quality=named(h.root,'quality');quality.value='masterpiece, best quality, score_9,';b('Save').click();await until(()=>!b('Translate').disabled);
   expect(h.storage.get('u1:settings.json')).toMatchObject({connectionId:'c1',quality:'masterpiece, best quality, score_9,'});
   named(h.root,'source').value='Short red hair.';b('Translate').click();await until(()=>!b('Translate').disabled);
-  expect(named(h.root,'prompt').value).toBe('masterpiece, best quality, score_9, red hair\n\nShort red hair.');
+  expect(named(h.root,'prompt').value).toBe('masterpiece, best quality, score_9, red hair, standing\n\nShort red hair.');
   named(h.root,'tags').value='';named(h.root,'tags').dispatchEvent(new Event('input'));b('Rebuild from tags + detail').click();await until(()=>!b('Translate').disabled);
   expect(named(h.root,'prompt').value).toBe('masterpiece, best quality, score_9\n\nShort red hair.');
 });
@@ -250,12 +254,12 @@ test('after Refine, the prompt rebuilds itself unless the tags carry unverified 
   named(h.root,'source').value='Short red hair.';b('Translate').click();await until(()=>!b('Translate').disabled);
   named(h.root,'feedback').value='Hair too faint.';b('Suggest changes').click();await until(()=>!b('Translate').disabled);
   b('Apply selected').click();await until(()=>!b('Translate').disabled);
-  expect(named(h.root,'prompt').value).toBe('(red hair:1.5)\n\nShort red hair.');expect(h.root.querySelector('.lc-status')!.textContent).toContain('Copy the prompt and generate again.');
+  expect(named(h.root,'prompt').value).toBe('(red hair:1.5), standing\n\nShort red hair.');expect(h.root.querySelector('.lc-status')!.textContent).toContain('Copy the prompt and generate again.');
   const tags=named(h.root,'tags');tags.value='(red_hair:1.5), freckles';tags.dispatchEvent(new Event('input'));
   named(h.root,'feedback').value='Still faint.';b('Suggest changes').click();await until(()=>!b('Translate').disabled);
   b('Apply selected').click();await until(()=>!b('Translate').disabled);
   expect(named(h.root,'tags').value).toBe('(red_hair:1.8), freckles');
-  expect(named(h.root,'prompt').value).toBe('(red hair:1.5)\n\nShort red hair.');expect(h.root.querySelector('.lc-status')!.textContent).toContain('Press Verify edited tags, then Rebuild.');
+  expect(named(h.root,'prompt').value).toBe('(red hair:1.5), standing\n\nShort red hair.');expect(h.root.querySelector('.lc-status')!.textContent).toContain('Press Verify edited tags, then Rebuild.');
 });
 test('Refine remembers earlier rounds for this character, sends them with the lock, and forgets on a new description',async()=> {
   dom();const h=harness();cleanups.push(h.stop);const dispose=setup(h.ctx);cleanups.push(dispose);
@@ -289,12 +293,12 @@ test('the caption can be turned off, leaving quality tags and booru tags only',a
   await until(()=>!b('Translate').disabled);h.root.querySelector('select')!.value='c1';
   named(h.root,'quality').value='masterpiece';
   named(h.root,'source').value='Short red hair.';b('Translate').click();await until(()=>!b('Translate').disabled);
-  expect(named(h.root,'prompt').value).toBe('masterpiece, red hair\n\nShort red hair.');
+  expect(named(h.root,'prompt').value).toBe('masterpiece, red hair, standing\n\nShort red hair.');
   const caption=Array.from(h.root.querySelectorAll('select')).find(s=>Array.from(s.options).some(o=>o.value==='none'))!;
   caption.value='none';caption.dispatchEvent(new Event('change'));
-  expect(named(h.root,'prompt').value).toBe('masterpiece, red hair');expect(h.root.textContent).toContain('Caption turned off.');
-  b('Rebuild from tags + detail').click();await until(()=>!b('Translate').disabled);expect(named(h.root,'prompt').value).toBe('masterpiece, red hair');
-  caption.value='short';caption.dispatchEvent(new Event('change'));expect(named(h.root,'prompt').value).toBe('masterpiece, red hair\n\nShort red hair.');
+  expect(named(h.root,'prompt').value).toBe('masterpiece, red hair, standing');expect(h.root.textContent).toContain('Caption turned off.');
+  b('Rebuild from tags + detail').click();await until(()=>!b('Translate').disabled);expect(named(h.root,'prompt').value).toBe('masterpiece, red hair, standing');
+  caption.value='short';caption.dispatchEvent(new Event('change'));expect(named(h.root,'prompt').value).toBe('masterpiece, red hair, standing\n\nShort red hair.');
 });
 test('odd model replies: cut off at the length limit, empty, or the answer left in reasoning',async()=> {
   dom();const h=harness();cleanups.push(h.stop);const rpc=createRpc(h.ctx);cleanups.push(()=>rpc.destroy());

@@ -1,4 +1,9 @@
-# LumiCast 0.12.0
+# LumiCast 0.13.0
+
+**v0.13.0: your notes win, and full-body pictures stop getting cropped.**
+- **Notes are rules.** When a note applies to a character, every tag it asks for is kept exactly as you wrote it. That holds even when two mean the same on Danbooru (`trap` and `otoko no ko`), and even when no booru lists one. They're never merged, trimmed or dropped by the review, and "Where each tag came from" marks them "from your notes". Refine won't suggest removing them unless your feedback names them, and offers them in your spelling.
+- **Refine knows what a cropped picture means.** If you say only a face or only the hips came out, it first turns down the body-part tag crowding the prompt, or adds clothes and footwear from the description, before any framing tag.
+- **The Anima prompt includes the outfit by default**, plus `standing` when nothing else gives a pose, so a SwarmUI picture has the whole figure to draw. Change Include to "Character only" for the old behaviour. The Lumi Studio sheet is unchanged. For full-body pictures, also use a tall image size in SwarmUI, such as 832×1216.
 
 **v0.12.0 sends a tweaked character straight back.** When a character came from Lumi Studio 1.8.7 or newer, the note at the top has **Update <name> in Lumi Studio**. It saves the six sheet fields into that same character there, empty fields included, and leaves everything else about the character alone. Refine or translate again, then press it; you can send as often as you like. A character that was never saved in Lumi Studio can't be updated this way; save it there and press Tweak in LumiCast again. If you translate a description that no longer names that character, the button goes away so nobody else is sent over them. Fill from LumiCast still works as before.
 

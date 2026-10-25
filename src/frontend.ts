@@ -27,6 +27,8 @@ export function createRpc(ctx: Pick<SpindleFrontendContext,'sendToBackend'|'onBa
     destroy(){closed=true;off();for(const p of pending.values()){clearTimeout(p.timer);p.reject(new Error('LumiCast closed.'));}pending.clear();},
   };
 }
+/** Tags that already give the figure a pose. */
+const POSE=/^(?:standing|sitting|seiza|kneeling|lying|squatting|crouching|on_back|on_stomach|on_side|walking|running|jumping|all_fours|leaning_\w+|bent_over|reclining|straddling|arms_up)$/;
 function el<K extends keyof HTMLElementTagNameMap>(tag:K,content?:string) {
   const n=document.createElement(tag);if(content!==undefined)n.textContent=content;return n;
 }
@@ -341,6 +343,8 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   const captionMode=el('select');captionMode.append(option('Tags and a short caption','short'),option('Tags only, no caption','none'));
   try{if(localStorage.getItem('lumicast.caption')==='none')captionMode.value='none';}catch{/* default */}
   const scope=el('select');scope.append(option('Character only — body, hair and face','character'),option('Character and outfit','outfit'),option('Everything — outfit, pose, expression and scene','scene'));
+  // A picture of the character alone, with no clothes or pose, tends to come out cropped; the outfit is the default.
+  scope.value='outfit';
   const tags=named(el('textarea'),'tags');tags.rows=3;tags.maxLength=4000;tags.placeholder='Verified booru tags appear here';
   const prose=named(el('textarea'),'prose');prose.rows=6;prose.maxLength=16_000;prose.placeholder='A short caption for what the tags cannot say';
   const tagState=el('p','Translate to verify tags.');tagState.className='lc-muted';
@@ -377,7 +381,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   output.append(
     el('p','Your quality tags, then booru tags, then a short caption: ready to paste into SwarmUI or any Anima setup.'),
     qualityField,
-    field('Include',scope,'What this prompt covers. Switching needs no new translation.'),
+    field('Include',scope,'What this prompt covers. Switching needs no new translation. For a full-body picture, also pick a tall image size in SwarmUI, such as 832×1216.'),
     field('Caption',captionMode,'Turn the caption off if its wording fights your tags. The tags stay the same.'),
     field('Prompt',prompt,'Rebuild applies edits from below and replaces this field. Copy copies exactly what is shown.'),row(copy,rebuild),
     editBox);
@@ -393,7 +397,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   });
   searchCard.append(field('Tag name or the start of one',query,'Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched.'),search,found);
 
-  app.append(intro,settings,status,studioNews,castCard,input,gapsCard,output,refine,sheetCard,searchCard,el('p','LumiCast 0.12.0 · Draft stays in this tab until reload.'));
+  app.append(intro,settings,status,studioNews,castCard,input,gapsCard,output,refine,sheetCard,searchCard,el('p','LumiCast 0.13.0 · Draft stays in this tab until reload.'));
   const controls=[readOoc,translate,studio,sendBack,again,save,refreshButton,testGel,saveNotes,saveQuality,startOver,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
 
   // Every change to the sheet is offered to Lumi Studio, a moment after typing stops.
@@ -422,7 +426,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
     const view=result.views.outfit;
     provenance.replaceChildren();
     view.tags.forEach(t=> {
-      const item=el('div');item.className='lc-provenance';const link=el('a',`${t.name} · ${t.source}${t.aliasFrom ? ` · alias: ${t.aliasFrom}` : ''}`);link.href=t.url;link.target='_blank';link.rel='noopener noreferrer';
+      const item=el('div');item.className='lc-provenance';const link=el('a',`${t.name} · ${t.source==='Notes'?'from your notes':t.source}${t.aliasFrom ? ` · alias: ${t.aliasFrom}` : ''}`);link.href=t.url;link.target='_blank';link.rel='noopener noreferrer';
       item.append(link,el('blockquote',t.evidence));provenance.append(item);
     });
     issues.replaceChildren();result.issues.forEach(i=>issues.append(el('p',`${i.kind}: ${i.message}`),el('blockquote',i.evidence.join(' / '))));
@@ -437,8 +441,13 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   function showStandalone(){
     if(!result)return;
     const view=result.views[scope.value as Scope];
-    tags.value=view.tags.map(t=>formatWeighted(t)).join(', ');prose.value=view.prose;prompt.value=built(view.tags.map(t=>({name:t.name,weight:t.weight})),view.prose);verified=true;edited=false;
-    tagState.textContent=view.tags.length ? `${view.tags.length} tags, each a live booru tag. ${result.model}.` : `No verified tags to show here. ${result.model}.`;
+    // Without a pose the figure has nothing to stand on and gets cropped; one plain pose fixes that. The sheet never gets it.
+    const list=view.tags.map(t=>({name:t.name,weight:t.weight}));
+    const posed=scope.value!=='scene'&&list.length>0&&!list.some(t=>POSE.test(t.name));
+    if(posed)list.push({name:'standing',weight:undefined});
+    tags.value=list.map(t=>formatWeighted(t)).join(', ');prose.value=view.prose;prompt.value=built(list,view.prose);verified=true;edited=false;
+    const mine=view.tags.filter(t=>t.source==='Notes').length;
+    tagState.textContent=view.tags.length ? `${view.tags.length} tags: ${mine?`${mine} from your notes as you wrote them, the rest`:'each'} a live booru tag.${posed?' “standing” is added so the figure has a pose; change it freely.':''} ${result.model}.` : `No verified tags to show here. ${result.model}.`;
     update();
   }
   function update(){

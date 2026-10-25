@@ -352,3 +352,28 @@ test('Refine never offers a layout tag',async()=> {
   const out=await engine.refine({tags:['1girl','black_hair'],caption:'',feedback:'two of her appear'},signal(),'model');
   expect(out.proposals.map(p=>p.tag)).toEqual(['freckles']);expect(out.notices.join(' ')).toContain('“multiple_views” was not offered');
 });
+test('tags the notes ask for are kept as written: an alias is not merged, the review cannot drop them, and they are labelled',async()=> {
+  // otoko_no_ko is a Danbooru alias of trap; one-word "plain" is not a live tag at all.
+  const aliased:TagDictionary={resolve:async name=>name==='otoko_no_ko'||name==='trap'?{name:'trap',source:'Danbooru',count:10,wiki:'Definition of trap',url:'https://danbooru.donmai.us/wiki_pages/trap',...(name!=='trap'?{aliasFrom:name}:{})}:name==='femboy_pose'?null:{name,source:'Danbooru',count:10,wiki:`Definition of ${name}`,url:'https://danbooru.donmai.us/wiki_pages/'+name},search:async()=>[]};
+  const notes='Femboys: weight trap at 1.4 and add otoko no ko and femboy pose.';
+  const source='Rory, a pretty boy with brown curls.';
+  const {result}=await run(source,{traits:[
+    {id:'t1',group:'subject',evidence:'a pretty boy',tags:['1boy','trap'],detail:'A pretty boy'},
+    {id:'t2',group:'subject',evidence:'Femboys: weight trap at 1.4 and add otoko no ko',tags:['(trap:1.4)','otoko_no_ko','femboy_pose'],detail:'A femboy'},
+    {id:'t3',group:'hair',evidence:'brown curls',tags:['brown_hair','curly_hair'],detail:'Brown curls'},
+  ]},{drop:['otoko_no_ko','trap'],captions:{character:'A pretty boy with brown curls.'},issues:[]},{notes},aliased);
+  const rows=result.views.character.tags;
+  expect(rows.map(r=>formatWeighted(r))).toEqual(['1boy','(trap:1.4)','otoko_no_ko','femboy_pose','brown_hair','curly_hair']);
+  expect(rows.filter(r=>r.source==='Notes').map(r=>r.name)).toEqual(['trap','otoko_no_ko','femboy_pose']);
+  expect(result.sheet.always).toBe('(trap:1.4), otoko no ko, femboy pose');
+});
+test('Refine keeps the tags the notes ask for, in the notes’ spelling',async()=> {
+  const engine=new Translator(async()=>JSON.stringify({reply:'x',remove:[{tag:'otoko_no_ko',why:'same as trap'},{tag:'blush',why:'x'}],add:[{tag:'otoko_no_ko',why:''}],weight:[],caption:null}),
+    {resolve:async name=>({name:name==='otoko_no_ko'?'trap':name,source:'Danbooru',count:5,wiki:'w',url:'u'}),search:async()=>[]});
+  const out=await engine.refine({tags:['trap','otoko_no_ko','blush'],caption:'',feedback:'looks too girly',notes:'Femboys: add otoko no ko.'},signal(),'model');
+  expect(out.proposals.map(p=>`${p.kind} ${p.tag}`)).toEqual(['remove blush']);
+  expect(out.notices.join(' ')).toContain('“otoko no ko” was set aside: your notes ask for it.');
+  const fresh=await new Translator(async()=>JSON.stringify({reply:'x',remove:[],add:[{tag:'otoko_no_ko',why:''}],weight:[],caption:null}),
+    {resolve:async name=>({name:'trap',source:'Danbooru',count:5,wiki:'w',url:'u',aliasFrom:name}),search:async()=>[]}).refine({tags:['trap'],caption:'',feedback:'x',notes:'Femboys: add otoko_no_ko.'},signal(),'model');
+  expect(fresh.proposals.map(p=>`${p.kind} ${p.tag} ${p.why}`)).toEqual(['add otoko_no_ko from your notes']);
+});

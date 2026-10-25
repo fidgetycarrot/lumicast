@@ -134,6 +134,7 @@ function createRpc(ctx, timeout = 250000) {
     }
   };
 }
+var POSE = /^(?:standing|sitting|seiza|kneeling|lying|squatting|crouching|on_back|on_stomach|on_side|walking|running|jumping|all_fours|leaning_\w+|bent_over|reclining|straddling|arms_up)$/;
 function el(tag, content) {
   const n = document.createElement(tag);
   if (content !== undefined)
@@ -714,6 +715,7 @@ ${text}`;
   } catch {}
   const scope = el("select");
   scope.append(option("Character only — body, hair and face", "character"), option("Character and outfit", "outfit"), option("Everything — outfit, pose, expression and scene", "scene"));
+  scope.value = "outfit";
   const tags = named(el("textarea"), "tags");
   tags.rows = 3;
   tags.maxLength = 4000;
@@ -771,7 +773,7 @@ ${text}`;
   const editBox = remembered(el("details"), "edit");
   editBox.className = "lc-sub";
   editBox.append(el("summary", "Edit tags and caption"), field("Booru tags — comma separated", tags, "Underscores here; the prompt uses spaces. Add emphasis as (tag:1.4)."), tagState, row(verify, copyTags), field("Caption", prose, "Edit freely; nothing the text leaves out is filled in."), copyProse);
-  output.append(el("p", "Your quality tags, then booru tags, then a short caption: ready to paste into SwarmUI or any Anima setup."), qualityField, field("Include", scope, "What this prompt covers. Switching needs no new translation."), field("Caption", captionMode, "Turn the caption off if its wording fights your tags. The tags stay the same."), field("Prompt", prompt, "Rebuild applies edits from below and replaces this field. Copy copies exactly what is shown."), row(copy, rebuild), editBox);
+  output.append(el("p", "Your quality tags, then booru tags, then a short caption: ready to paste into SwarmUI or any Anima setup."), qualityField, field("Include", scope, "What this prompt covers. Switching needs no new translation. For a full-body picture, also pick a tall image size in SwarmUI, such as 832×1216."), field("Caption", captionMode, "Turn the caption off if its wording fights your tags. The tags stay the same."), field("Prompt", prompt, "Rebuild applies edits from below and replaces this field. Copy copies exactly what is shown."), row(copy, rebuild), editBox);
   const searchCard = el("details");
   searchCard.className = "lc-card";
   searchCard.append(el("summary", "Find a real tag"));
@@ -795,7 +797,7 @@ ${text}`;
     notify("Search complete. Popularity is not an Anima quality score.");
   });
   searchCard.append(field("Tag name or the start of one", query, "Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched."), search, found);
-  app.append(intro, settings, status, studioNews, castCard, input, gapsCard, output, refine, sheetCard, searchCard, el("p", "LumiCast 0.12.0 · Draft stays in this tab until reload."));
+  app.append(intro, settings, status, studioNews, castCard, input, gapsCard, output, refine, sheetCard, searchCard, el("p", "LumiCast 0.13.0 · Draft stays in this tab until reload."));
   const controls = [readOoc, translate, studio, sendBack, again, save, refreshButton, testGel, saveNotes, saveQuality, startOver, verify, rebuild, copy, copyTags, copyProse, suggest, apply, search, ...Object.values(sheet).map((f) => f.copyField)];
   let shareTimer;
   function share() {
@@ -832,7 +834,7 @@ ${text}`;
     view.tags.forEach((t) => {
       const item = el("div");
       item.className = "lc-provenance";
-      const link = el("a", `${t.name} · ${t.source}${t.aliasFrom ? ` · alias: ${t.aliasFrom}` : ""}`);
+      const link = el("a", `${t.name} · ${t.source === "Notes" ? "from your notes" : t.source}${t.aliasFrom ? ` · alias: ${t.aliasFrom}` : ""}`);
       link.href = t.url;
       link.target = "_blank";
       link.rel = "noopener noreferrer";
@@ -855,12 +857,17 @@ ${text}`;
     if (!result)
       return;
     const view = result.views[scope.value];
-    tags.value = view.tags.map((t) => formatWeighted(t)).join(", ");
+    const list = view.tags.map((t) => ({ name: t.name, weight: t.weight }));
+    const posed = scope.value !== "scene" && list.length > 0 && !list.some((t) => POSE.test(t.name));
+    if (posed)
+      list.push({ name: "standing", weight: undefined });
+    tags.value = list.map((t) => formatWeighted(t)).join(", ");
     prose.value = view.prose;
-    prompt.value = built(view.tags.map((t) => ({ name: t.name, weight: t.weight })), view.prose);
+    prompt.value = built(list, view.prose);
     verified = true;
     edited = false;
-    tagState.textContent = view.tags.length ? `${view.tags.length} tags, each a live booru tag. ${result.model}.` : `No verified tags to show here. ${result.model}.`;
+    const mine = view.tags.filter((t) => t.source === "Notes").length;
+    tagState.textContent = view.tags.length ? `${view.tags.length} tags: ${mine ? `${mine} from your notes as you wrote them, the rest` : "each"} a live booru tag.${posed ? " “standing” is added so the figure has a pose; change it freely." : ""} ${result.model}.` : `No verified tags to show here. ${result.model}.`;
     update();
   }
   function update() {

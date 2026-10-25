@@ -19,7 +19,8 @@ export interface RefineRound { feedback: string; applied: string[]; declined: st
 export interface Proposal { kind: 'add' | 'remove' | 'weight' | 'caption'; tag?: string; weight?: number; caption?: string; why: string; definition?: string; url?: string }
 export interface Refinement { reply: string; proposals: Proposal[]; notices: string[]; model: string }
 export interface VerifiedTag {
-  name: string; source: 'Danbooru' | 'Gelbooru'; wiki: string; url: string;
+  /** Notes: a tag the user's own notes ask for, kept exactly as written whether or not a booru lists it under that name. */
+  name: string; source: 'Danbooru' | 'Gelbooru' | 'Notes'; wiki: string; url: string;
   aliasFrom?: string; count: number;
 }
 export interface TagRow extends VerifiedTag { evidence: string; traitId: string; weight?: number }
