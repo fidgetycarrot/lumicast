@@ -10,15 +10,51 @@ const thinking=(v:unknown):Thinking=>THINKING.includes(v as Thinking)?v as Think
 // A light think is enough to pick tags; long reasoning was most of the wait. Off and inherit are the user's choice.
 const REASONING={light:{source:'custom',apiReasoning:true,effort:'low'},off:{source:'off'},inherit:undefined} as const;
 export function setupBackend(api: SpindleAPI) {
-  const users = new Map<string, { settings?:Settings; dictionary?:BooruDictionary; load?:Promise<void>; jobs:Map<string,AbortController> }>();
+  type UserState={ settings?:Settings; dictionary?:BooruDictionary; load?:Promise<void>; jobs:Map<string,AbortController> };
+  const users = new Map<string, UserState>();
   let closed = false;
+  const stateFor=(key:string):UserState=>{let state=users.get(key);if(!state){state={jobs:new Map()};users.set(key,state);}return state;};
+  const loadSettings=async(s:UserState,userId?:string)=>{
+    s.load ??= api.userStorage.getJson<Settings>('settings.json',{fallback:{...DEFAULTS},userId}).then(saved => {
+      const v=record(saved);
+      s.settings={connectionId:text(v.connectionId ?? '', 'connection',100),castConnectionId:text(v.castConnectionId ?? '', 'connection',100),gelUser:text(v.gelUser ?? '', 'Gelbooru user',50),gelKey:text(v.gelKey ?? '', 'Gelbooru key',200),notes:text(v.notes ?? '', 'notes',2000),quality:text(v.quality ?? '', 'quality tags',600),thinking:thinking(v.thinking)};
+    }).catch(() => {s.settings={...DEFAULTS};});
+    await s.load;
+  };
+  const dictionaryFor=(s:UserState)=>s.dictionary ??= new BooruDictionary(async url=> {
+    const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.14.0 (tag metadata client)'}}));
+    if(typeof response.status!=='number'||typeof response.body!=='string')throw new Error('Invalid proxy response.');
+    return {status:response.status,body:response.body};
+  },{user:s.settings!.gelUser,key:s.settings!.gelKey});
+  const pickConnectionFor=async(id:string,userId?:string)=>{
+    const connection=await api.connections.get(id,userId);
+    if (!connection || !isGenerative(connection.model)) throw new Error('Select a saved generative text connection. Jev and Decisions models cannot write the translator output.');
+    return connection;
+  };
+  /** One model call through a saved connection, with the chosen thinking level and plain errors that name the step. */
+  const callerFor=(connection:{id:string;provider:string;model:string},stageOf:()=>string,settings:Settings,userId?:string)=>async (system:string,content:string,signal:AbortSignal)=> {
+    let value:unknown;
+    const stage=stageOf();
+    // The host resolves credentials from connection_id, but raw generation
+    // still uses input.model. SDK 0.6.40 omits these documented raw fields.
+    const request:GenerationRequestDTO & {provider:string;model:string}={type:'raw',connection_id:connection.id,provider:connection.provider,model:connection.model,userId,messages:[{role:'system',content:system},{role:'user',content}],parameters:{max_tokens:16000},...(REASONING[settings.thinking]?{reasoning:{...REASONING[settings.thinking]}}:{}),signal};
+    try {value=await api.generate.raw(request);}
+    catch(error) {signal.throwIfAborted();throw generationError(error,connection.provider,connection.model,stage);}
+    const response=record(value);
+    // Say which call failed and how, so "it hangs then errors" can be told apart from a model problem.
+    const answer=typeof response.content==='string'?response.content:'';
+    const reasoning=typeof response.reasoning==='string'?response.reasoning:'';
+    const finish=String(response.finish_reason ?? '');
+    if (/length|max_tokens/.test(finish)) throw new Error(`The model ran out of room during ${stage} (it stopped at the length limit${reasoning ? ` after ${reasoning.length.toLocaleString()} characters of reasoning` : ''}). Set Model thinking to Off or Light under Connection & tag services, or use a shorter description.`);
+    // Some reasoning models leave the answer in their reasoning text and send no content.
+    if (!answer.trim() && reasoning.includes('{')) return reasoning;
+    if (!answer.trim()) throw new Error(`The model sent back an empty reply during ${stage} (finish reason: ${finish || 'none given'}). Try again, or try another connection.`);
+    return answer;
+  };
   const off = api.onFrontendMessage((payload, userId, frontendSessionId) => {
     const r=record(payload);
     if (closed || r.type !== 'lumicast:request' || typeof r.id !== 'string' || !/^[a-zA-Z0-9-]{1,100}$/.test(r.id)) return;
-    const key=userId ?? 'owner';
-    let state=users.get(key);
-    if (!state) {state={jobs:new Map()};users.set(key,state);}
-    const s=state;
+    const s=stateFor(userId ?? 'owner');
     // Stage news for the status line while a long job runs. Best effort; the final reply is what counts.
     const progress=(stage:string)=>{try{if(!closed)api.sendToFrontend({type:'lumicast:progress',id:r.id,stage},userId,{frontendSessionId});}catch{/* ignore */}};
     const reply=(result?:unknown,error?:string) => {if (!closed) api.sendToFrontend({type:'lumicast:response',id:r.id,result,error},userId,{frontendSessionId});};
@@ -26,11 +62,7 @@ export function setupBackend(api: SpindleAPI) {
     if (r.action === 'cancel') {s.jobs.get(session)?.abort();reply(true);return;}
     void (async () => {
       if (!api.permissions.has('generation') || !api.permissions.has('cors_proxy')) throw new Error('Grant LumiCast generation and CORS proxy permissions in Extensions.');
-      s.load ??= api.userStorage.getJson<Settings>('settings.json',{fallback:{...DEFAULTS},userId}).then(saved => {
-        const v=record(saved);
-        s.settings={connectionId:text(v.connectionId ?? '', 'connection',100),castConnectionId:text(v.castConnectionId ?? '', 'connection',100),gelUser:text(v.gelUser ?? '', 'Gelbooru user',50),gelKey:text(v.gelKey ?? '', 'Gelbooru key',200),notes:text(v.notes ?? '', 'notes',2000),quality:text(v.quality ?? '', 'quality tags',600),thinking:thinking(v.thinking)};
-      }).catch(() => {s.settings={...DEFAULTS};});
-      await s.load;
+      await loadSettings(s,userId);
       const settings=s.settings!;
       /** Fails with the missing permissions named, in the words of the Extensions page. */
       const need=(list:string[])=>{const missing=list.filter(p=>!api.permissions.has(p as never));if(missing.length)throw new Error(`Grant LumiCast these permissions in Extensions to use [ooc] replies: ${missing.join(', ')}.`);};
@@ -78,11 +110,7 @@ export function setupBackend(api: SpindleAPI) {
         else await api.world_books.entries.create(book.id,entry,userId);
         return {book:book.name,createdBook,moved,chat:active.name,updated:!!existing};
       };
-      const dictionary=() => s.dictionary ??= new BooruDictionary(async url=> {
-        const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.13.0 (tag metadata client)'}}));
-        if(typeof response.status!=='number'||typeof response.body!=='string')throw new Error('Invalid proxy response.');
-        return {status:response.status,body:response.body};
-      },{user:settings.gelUser,key:settings.gelKey});
+      const dictionary=()=>dictionaryFor(s);
       if (r.action === 'snapshot') {
         const connections=(await api.connections.list(userId)).map(c=>({id:c.id,name:c.name,provider:c.provider,model:c.model,supported:isGenerative(c.model)}));
         return {connections,settings:{connectionId:settings.connectionId,castConnectionId:settings.castConnectionId,gelUser:settings.gelUser,hasGelKey:!!settings.gelKey,notes:settings.notes,quality:settings.quality,thinking:settings.thinking},permissions:true} satisfies Snapshot;
@@ -204,7 +232,7 @@ export function setupBackend(api: SpindleAPI) {
         const entered=gelCredentials(text(v.gelUser ?? '','Gelbooru user',300),v.gelKey ? text(v.gelKey,'Gelbooru key',300) : '');
         const credentials={user:entered.user||settings.gelUser,key:entered.key||settings.gelKey};
         const outcome=await testGelbooru(async url=> {
-          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.13.0 (tag metadata client)'}}));
+          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.14.0 (tag metadata client)'}}));
           return {status:Number(response.status),body:typeof response.body==='string'?response.body:''};
         },credentials);
         const unsaved=credentials.user!==settings.gelUser||credentials.key!==settings.gelKey;
@@ -225,31 +253,8 @@ export function setupBackend(api: SpindleAPI) {
           for (const name of input.names) result.push({requested:text(name,'tag',100),tag:await dictionary().resolve(text(name,'tag',100),controller.signal)});
           return result;
         }
-        const pickConnection=async(id:string)=>{
-          const connection=await api.connections.get(id,userId);
-          if (!connection || !isGenerative(connection.model)) throw new Error('Select a saved generative text connection. Jev and Decisions models cannot write the translator output.');
-          return connection;
-        };
-        /** One model call through a saved connection, with the chosen thinking level and plain errors that name the step. */
-        const caller=(connection:{id:string;provider:string;model:string},stageOf:()=>string)=>async (system:string,content:string,signal:AbortSignal)=> {
-          let value:unknown;
-          const stage=stageOf();
-          // The host resolves credentials from connection_id, but raw generation
-          // still uses input.model. SDK 0.6.40 omits these documented raw fields.
-          const request:GenerationRequestDTO & {provider:string;model:string}={type:'raw',connection_id:connection.id,provider:connection.provider,model:connection.model,userId,messages:[{role:'system',content:system},{role:'user',content}],parameters:{max_tokens:16000},...(REASONING[settings.thinking]?{reasoning:{...REASONING[settings.thinking]}}:{}),signal};
-          try {value=await api.generate.raw(request);}
-          catch(error) {signal.throwIfAborted();throw generationError(error,connection.provider,connection.model,stage);}
-          const response=record(value);
-          // Say which call failed and how, so "it hangs then errors" can be told apart from a model problem.
-          const answer=typeof response.content==='string'?response.content:'';
-          const reasoning=typeof response.reasoning==='string'?response.reasoning:'';
-          const finish=String(response.finish_reason ?? '');
-          if (/length|max_tokens/.test(finish)) throw new Error(`The model ran out of room during ${stage} (it stopped at the length limit${reasoning ? ` after ${reasoning.length.toLocaleString()} characters of reasoning` : ''}). Set Model thinking to Off or Light under Connection & tag services, or use a shorter description.`);
-          // Some reasoning models leave the answer in their reasoning text and send no content.
-          if (!answer.trim() && reasoning.includes('{')) return reasoning;
-          if (!answer.trim()) throw new Error(`The model sent back an empty reply during ${stage} (finish reason: ${finish || 'none given'}). Try again, or try another connection.`);
-          return answer;
-        };
+        const pickConnection=(id:string)=>pickConnectionFor(id,userId);
+        const caller=(connection:{id:string;provider:string;model:string},stageOf:()=>string)=>callerFor(connection,stageOf,settings,userId);
         if (r.action === 'castRead') {
           need(['chats','chat_mutation']);
           const chat=await api.chats.getActive(userId);
@@ -287,6 +292,70 @@ export function setupBackend(api: SpindleAPI) {
       reply(undefined,error instanceof Error && error.name==='AbortError' ? 'Operation cancelled or timed out. Your edits are preserved.' : error instanceof ModelRequestError || trusted ? message : 'The operation failed. Check your connection, provider status and tag-service access. Your edits are preserved.');
     });
   });
+  /**
+   * Paige's Make my card: she shares everyone's looks at paige.cast, then reads paige.start here. The answer comes
+   * back at once; the translations run in the background, one at a time, and each finished sheet goes straight
+   * into Lumi Studio (lumidraw_studio.lumicast.add), new or updated by name. Progress is shared at paige.status.
+   */
+  type PaigeLook={name:string;aliases:string[];kind:'character'|'persona';description:string};
+  type PaigeStatus={sessionId:string;done:number;total:number;running:boolean;current?:string;finished:{name:string;ok:boolean;message:string}[]};
+  const pool=(api as unknown as {rpcPool?:{sync?:(e:string,v:unknown,p?:{requires?:string[]})=>string;read?:(e:string)=>Promise<unknown>;handle?:(e:string,h:(ctx:{requesterExtensionId:string})=>unknown,p?:{requires?:string[]})=>string}}).rpcPool;
+  const paigeStatus=(status:PaigeStatus)=>{try{pool?.sync?.('paige.status',status,{requires:[]});}catch{/* best effort */}};
+  async function startFromPaige(requester:string):Promise<{ok:boolean;message?:string;count?:number}> {
+    if (requester!=='paige') return {ok:false,message:'Only Paige can send characters this way.'};
+    if (typeof pool?.read!=='function'||typeof pool.sync!=='function') return {ok:false,message:'This Lumiverse version cannot share data between extensions.'};
+    let shared:Record<string,unknown>;
+    try {shared=record(await pool.read('paige.cast'));} catch {return {ok:false,message:'Paige has not shared any looks yet.'};}
+    if (shared.version!==1||!Array.isArray(shared.characters)) return {ok:false,message:'Paige sent a format this LumiCast does not understand. Update both extensions.'};
+    const userId=typeof shared.userId==='string'&&shared.userId?shared.userId:undefined;
+    const sessionId=typeof shared.sessionId==='string'?shared.sessionId.slice(0,100):'';
+    const looks:PaigeLook[]=shared.characters.slice(0,24).map(c=>record(c)).filter(c=>typeof c.name==='string'&&c.name.trim()&&typeof c.description==='string'&&c.description.trim()).map(c=>({
+      name:String(c.name).trim().slice(0,80),aliases:(Array.isArray(c.aliases)?c.aliases:[]).filter((a):a is string=>typeof a==='string').map(a=>a.trim().slice(0,60)).filter(Boolean).slice(0,8),
+      kind:c.kind==='persona'?'persona':'character',description:String(c.description).slice(0,12_000)}));
+    if (!looks.length) return {ok:false,message:'None of the looks Paige sent had a name and a description.'};
+    if (!api.permissions.has('generation')||!api.permissions.has('cors_proxy')) return {ok:false,message:'Grant LumiCast generation and CORS proxy permissions in Extensions.'};
+    const s=stateFor(userId ?? 'owner');
+    if (s.jobs.size) return {ok:false,message:'LumiCast is busy with another translation. Wait for it, then press Send looks again in Paige.'};
+    await loadSettings(s,userId);
+    const settings=s.settings!;
+    if (!settings.connectionId) return {ok:false,message:'Pick a connection in LumiCast first (Connection & tag services), then press Send looks again in Paige.'};
+    let connection:{id:string;provider:string;model:string};
+    try {connection=await pickConnectionFor(settings.connectionId,userId);} catch (error) {return {ok:false,message:error instanceof Error?error.message:'LumiCast\'s connection is unavailable.'};}
+    const controller=new AbortController();s.jobs.set('paige',controller);
+    const status:PaigeStatus={sessionId,done:0,total:looks.length,running:true,finished:[]};
+    paigeStatus(status);
+    void (async()=>{
+      try {
+        for (const look of looks) {
+          if (closed||controller.signal.aborted) break;
+          status.current=look.name;paigeStatus(status);
+          let ok=false,message='';
+          const one=new AbortController();const stop=()=>one.abort();controller.signal.addEventListener('abort',stop);
+          const timer=setTimeout(()=>one.abort(),240_000);
+          try {
+            let calls=0;
+            const translator=new Translator(callerFor(connection,()=>++calls===1?'trait extraction':'tag review and caption',settings,userId),dictionaryFor(s));
+            const result=await translator.translate(look.description,one.signal,`${connection.provider} / ${connection.model}`,{scope:'outfit',notes:settings.notes});
+            pool!.sync!('paige.sheet',{version:1,sessionId,name:look.name,aliases:look.aliases,kind:look.kind,userId:userId ?? '',sentAt:Date.now(),sheet:result.sheet},{requires:[]});
+            const answer=record(await pool!.read!('lumidraw_studio.lumicast.add'));
+            ok=answer.ok===true;message=ok?(answer.updated?'updated':'added'):'Lumi Studio gave no answer';
+          } catch (error) {
+            const text=error instanceof Error?error.message:'';
+            message=/not registered|not found/i.test(text)?'Lumi Studio is missing or too old; update it':error instanceof ModelRequestError||/^The model /.test(text)?text.slice(0,200):error instanceof Error&&error.name==='AbortError'?'took too long':text.replace(/^.*?:\s*(?=[A-Z])/,'').slice(0,200)||'failed';
+          } finally {clearTimeout(timer);controller.signal.removeEventListener('abort',stop);}
+          status.done++;status.finished.push({name:look.name,ok,message});
+          paigeStatus(status);
+        }
+      } finally {
+        status.running=false;delete status.current;paigeStatus(status);s.jobs.delete('paige');
+      }
+    })();
+    return {ok:true,count:looks.length};
+  }
+  if (typeof pool?.handle==='function') {
+    try {pool.handle('paige.start',({requesterExtensionId})=>startFromPaige(requesterExtensionId),{requires:[]});}
+    catch {/* older hosts */}
+  }
   // When a story reply answers an [ooc] message, tell the panel so it can offer to read it. Nothing runs by itself.
   let offEnded=()=>{};
   try {

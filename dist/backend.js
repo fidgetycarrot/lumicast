@@ -1183,17 +1183,62 @@ var REASONING = { light: { source: "custom", apiReasoning: true, effort: "low" }
 function setupBackend(api) {
   const users = new Map;
   let closed = false;
-  const off = api.onFrontendMessage((payload, userId, frontendSessionId) => {
-    const r = record(payload);
-    if (closed || r.type !== "lumicast:request" || typeof r.id !== "string" || !/^[a-zA-Z0-9-]{1,100}$/.test(r.id))
-      return;
-    const key = userId ?? "owner";
+  const stateFor = (key) => {
     let state = users.get(key);
     if (!state) {
       state = { jobs: new Map };
       users.set(key, state);
     }
-    const s = state;
+    return state;
+  };
+  const loadSettings = async (s, userId) => {
+    s.load ??= api.userStorage.getJson("settings.json", { fallback: { ...DEFAULTS }, userId }).then((saved) => {
+      const v = record(saved);
+      s.settings = { connectionId: text(v.connectionId ?? "", "connection", 100), castConnectionId: text(v.castConnectionId ?? "", "connection", 100), gelUser: text(v.gelUser ?? "", "Gelbooru user", 50), gelKey: text(v.gelKey ?? "", "Gelbooru key", 200), notes: text(v.notes ?? "", "notes", 2000), quality: text(v.quality ?? "", "quality tags", 600), thinking: thinking(v.thinking) };
+    }).catch(() => {
+      s.settings = { ...DEFAULTS };
+    });
+    await s.load;
+  };
+  const dictionaryFor = (s) => s.dictionary ??= new BooruDictionary(async (url) => {
+    const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.14.0 (tag metadata client)" } }));
+    if (typeof response.status !== "number" || typeof response.body !== "string")
+      throw new Error("Invalid proxy response.");
+    return { status: response.status, body: response.body };
+  }, { user: s.settings.gelUser, key: s.settings.gelKey });
+  const pickConnectionFor = async (id, userId) => {
+    const connection = await api.connections.get(id, userId);
+    if (!connection || !isGenerative(connection.model))
+      throw new Error("Select a saved generative text connection. Jev and Decisions models cannot write the translator output.");
+    return connection;
+  };
+  const callerFor = (connection, stageOf, settings, userId) => async (system, content, signal) => {
+    let value;
+    const stage = stageOf();
+    const request = { type: "raw", connection_id: connection.id, provider: connection.provider, model: connection.model, userId, messages: [{ role: "system", content: system }, { role: "user", content }], parameters: { max_tokens: 16000 }, ...REASONING[settings.thinking] ? { reasoning: { ...REASONING[settings.thinking] } } : {}, signal };
+    try {
+      value = await api.generate.raw(request);
+    } catch (error) {
+      signal.throwIfAborted();
+      throw generationError(error, connection.provider, connection.model, stage);
+    }
+    const response = record(value);
+    const answer = typeof response.content === "string" ? response.content : "";
+    const reasoning = typeof response.reasoning === "string" ? response.reasoning : "";
+    const finish = String(response.finish_reason ?? "");
+    if (/length|max_tokens/.test(finish))
+      throw new Error(`The model ran out of room during ${stage} (it stopped at the length limit${reasoning ? ` after ${reasoning.length.toLocaleString()} characters of reasoning` : ""}). Set Model thinking to Off or Light under Connection & tag services, or use a shorter description.`);
+    if (!answer.trim() && reasoning.includes("{"))
+      return reasoning;
+    if (!answer.trim())
+      throw new Error(`The model sent back an empty reply during ${stage} (finish reason: ${finish || "none given"}). Try again, or try another connection.`);
+    return answer;
+  };
+  const off = api.onFrontendMessage((payload, userId, frontendSessionId) => {
+    const r = record(payload);
+    if (closed || r.type !== "lumicast:request" || typeof r.id !== "string" || !/^[a-zA-Z0-9-]{1,100}$/.test(r.id))
+      return;
+    const s = stateFor(userId ?? "owner");
     const progress = (stage) => {
       try {
         if (!closed)
@@ -1213,13 +1258,7 @@ function setupBackend(api) {
     (async () => {
       if (!api.permissions.has("generation") || !api.permissions.has("cors_proxy"))
         throw new Error("Grant LumiCast generation and CORS proxy permissions in Extensions.");
-      s.load ??= api.userStorage.getJson("settings.json", { fallback: { ...DEFAULTS }, userId }).then((saved) => {
-        const v = record(saved);
-        s.settings = { connectionId: text(v.connectionId ?? "", "connection", 100), castConnectionId: text(v.castConnectionId ?? "", "connection", 100), gelUser: text(v.gelUser ?? "", "Gelbooru user", 50), gelKey: text(v.gelKey ?? "", "Gelbooru key", 200), notes: text(v.notes ?? "", "notes", 2000), quality: text(v.quality ?? "", "quality tags", 600), thinking: thinking(v.thinking) };
-      }).catch(() => {
-        s.settings = { ...DEFAULTS };
-      });
-      await s.load;
+      await loadSettings(s, userId);
       const settings = s.settings;
       const need = (list) => {
         const missing = list.filter((p) => !api.permissions.has(p));
@@ -1283,12 +1322,7 @@ function setupBackend(api) {
           await api.world_books.entries.create(book.id, entry, userId);
         return { book: book.name, createdBook, moved, chat: active.name, updated: !!existing };
       };
-      const dictionary = () => s.dictionary ??= new BooruDictionary(async (url) => {
-        const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.13.0 (tag metadata client)" } }));
-        if (typeof response.status !== "number" || typeof response.body !== "string")
-          throw new Error("Invalid proxy response.");
-        return { status: response.status, body: response.body };
-      }, { user: settings.gelUser, key: settings.gelKey });
+      const dictionary = () => dictionaryFor(s);
       if (r.action === "snapshot") {
         const connections = (await api.connections.list(userId)).map((c) => ({ id: c.id, name: c.name, provider: c.provider, model: c.model, supported: isGenerative(c.model) }));
         return { connections, settings: { connectionId: settings.connectionId, castConnectionId: settings.castConnectionId, gelUser: settings.gelUser, hasGelKey: !!settings.gelKey, notes: settings.notes, quality: settings.quality, thinking: settings.thinking }, permissions: true };
@@ -1453,7 +1487,7 @@ function setupBackend(api) {
         const entered = gelCredentials(text(v.gelUser ?? "", "Gelbooru user", 300), v.gelKey ? text(v.gelKey, "Gelbooru key", 300) : "");
         const credentials = { user: entered.user || settings.gelUser, key: entered.key || settings.gelKey };
         const outcome = await testGelbooru(async (url) => {
-          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.13.0 (tag metadata client)" } }));
+          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.14.0 (tag metadata client)" } }));
           return { status: Number(response.status), body: typeof response.body === "string" ? response.body : "" };
         }, credentials);
         const unsaved = credentials.user !== settings.gelUser || credentials.key !== settings.gelKey;
@@ -1480,34 +1514,8 @@ function setupBackend(api) {
             result.push({ requested: text(name, "tag", 100), tag: await dictionary().resolve(text(name, "tag", 100), controller.signal) });
           return result;
         }
-        const pickConnection = async (id) => {
-          const connection = await api.connections.get(id, userId);
-          if (!connection || !isGenerative(connection.model))
-            throw new Error("Select a saved generative text connection. Jev and Decisions models cannot write the translator output.");
-          return connection;
-        };
-        const caller = (connection, stageOf) => async (system, content, signal) => {
-          let value;
-          const stage = stageOf();
-          const request = { type: "raw", connection_id: connection.id, provider: connection.provider, model: connection.model, userId, messages: [{ role: "system", content: system }, { role: "user", content }], parameters: { max_tokens: 16000 }, ...REASONING[settings.thinking] ? { reasoning: { ...REASONING[settings.thinking] } } : {}, signal };
-          try {
-            value = await api.generate.raw(request);
-          } catch (error) {
-            signal.throwIfAborted();
-            throw generationError(error, connection.provider, connection.model, stage);
-          }
-          const response = record(value);
-          const answer = typeof response.content === "string" ? response.content : "";
-          const reasoning = typeof response.reasoning === "string" ? response.reasoning : "";
-          const finish = String(response.finish_reason ?? "");
-          if (/length|max_tokens/.test(finish))
-            throw new Error(`The model ran out of room during ${stage} (it stopped at the length limit${reasoning ? ` after ${reasoning.length.toLocaleString()} characters of reasoning` : ""}). Set Model thinking to Off or Light under Connection & tag services, or use a shorter description.`);
-          if (!answer.trim() && reasoning.includes("{"))
-            return reasoning;
-          if (!answer.trim())
-            throw new Error(`The model sent back an empty reply during ${stage} (finish reason: ${finish || "none given"}). Try again, or try another connection.`);
-          return answer;
-        };
+        const pickConnection = (id) => pickConnectionFor(id, userId);
+        const caller = (connection, stageOf) => callerFor(connection, stageOf, settings, userId);
         if (r.action === "castRead") {
           need(["chats", "chat_mutation"]);
           const chat = await api.chats.getActive(userId);
@@ -1551,6 +1559,99 @@ function setupBackend(api) {
       reply(undefined, error instanceof Error && error.name === "AbortError" ? "Operation cancelled or timed out. Your edits are preserved." : error instanceof ModelRequestError || trusted ? message : "The operation failed. Check your connection, provider status and tag-service access. Your edits are preserved.");
     });
   });
+  const pool = api.rpcPool;
+  const paigeStatus = (status) => {
+    try {
+      pool?.sync?.("paige.status", status, { requires: [] });
+    } catch {}
+  };
+  async function startFromPaige(requester) {
+    if (requester !== "paige")
+      return { ok: false, message: "Only Paige can send characters this way." };
+    if (typeof pool?.read !== "function" || typeof pool.sync !== "function")
+      return { ok: false, message: "This Lumiverse version cannot share data between extensions." };
+    let shared;
+    try {
+      shared = record(await pool.read("paige.cast"));
+    } catch {
+      return { ok: false, message: "Paige has not shared any looks yet." };
+    }
+    if (shared.version !== 1 || !Array.isArray(shared.characters))
+      return { ok: false, message: "Paige sent a format this LumiCast does not understand. Update both extensions." };
+    const userId = typeof shared.userId === "string" && shared.userId ? shared.userId : undefined;
+    const sessionId = typeof shared.sessionId === "string" ? shared.sessionId.slice(0, 100) : "";
+    const looks = shared.characters.slice(0, 24).map((c) => record(c)).filter((c) => typeof c.name === "string" && c.name.trim() && typeof c.description === "string" && c.description.trim()).map((c) => ({
+      name: String(c.name).trim().slice(0, 80),
+      aliases: (Array.isArray(c.aliases) ? c.aliases : []).filter((a) => typeof a === "string").map((a) => a.trim().slice(0, 60)).filter(Boolean).slice(0, 8),
+      kind: c.kind === "persona" ? "persona" : "character",
+      description: String(c.description).slice(0, 12000)
+    }));
+    if (!looks.length)
+      return { ok: false, message: "None of the looks Paige sent had a name and a description." };
+    if (!api.permissions.has("generation") || !api.permissions.has("cors_proxy"))
+      return { ok: false, message: "Grant LumiCast generation and CORS proxy permissions in Extensions." };
+    const s = stateFor(userId ?? "owner");
+    if (s.jobs.size)
+      return { ok: false, message: "LumiCast is busy with another translation. Wait for it, then press Send looks again in Paige." };
+    await loadSettings(s, userId);
+    const settings = s.settings;
+    if (!settings.connectionId)
+      return { ok: false, message: "Pick a connection in LumiCast first (Connection & tag services), then press Send looks again in Paige." };
+    let connection;
+    try {
+      connection = await pickConnectionFor(settings.connectionId, userId);
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : "LumiCast's connection is unavailable." };
+    }
+    const controller = new AbortController;
+    s.jobs.set("paige", controller);
+    const status = { sessionId, done: 0, total: looks.length, running: true, finished: [] };
+    paigeStatus(status);
+    (async () => {
+      try {
+        for (const look of looks) {
+          if (closed || controller.signal.aborted)
+            break;
+          status.current = look.name;
+          paigeStatus(status);
+          let ok = false, message = "";
+          const one = new AbortController;
+          const stop = () => one.abort();
+          controller.signal.addEventListener("abort", stop);
+          const timer = setTimeout(() => one.abort(), 240000);
+          try {
+            let calls = 0;
+            const translator = new Translator(callerFor(connection, () => ++calls === 1 ? "trait extraction" : "tag review and caption", settings, userId), dictionaryFor(s));
+            const result = await translator.translate(look.description, one.signal, `${connection.provider} / ${connection.model}`, { scope: "outfit", notes: settings.notes });
+            pool.sync("paige.sheet", { version: 1, sessionId, name: look.name, aliases: look.aliases, kind: look.kind, userId: userId ?? "", sentAt: Date.now(), sheet: result.sheet }, { requires: [] });
+            const answer = record(await pool.read("lumidraw_studio.lumicast.add"));
+            ok = answer.ok === true;
+            message = ok ? answer.updated ? "updated" : "added" : "Lumi Studio gave no answer";
+          } catch (error) {
+            const text = error instanceof Error ? error.message : "";
+            message = /not registered|not found/i.test(text) ? "Lumi Studio is missing or too old; update it" : error instanceof ModelRequestError || /^The model /.test(text) ? text.slice(0, 200) : error instanceof Error && error.name === "AbortError" ? "took too long" : text.replace(/^.*?:\s*(?=[A-Z])/, "").slice(0, 200) || "failed";
+          } finally {
+            clearTimeout(timer);
+            controller.signal.removeEventListener("abort", stop);
+          }
+          status.done++;
+          status.finished.push({ name: look.name, ok, message });
+          paigeStatus(status);
+        }
+      } finally {
+        status.running = false;
+        delete status.current;
+        paigeStatus(status);
+        s.jobs.delete("paige");
+      }
+    })();
+    return { ok: true, count: looks.length };
+  }
+  if (typeof pool?.handle === "function") {
+    try {
+      pool.handle("paige.start", ({ requesterExtensionId }) => startFromPaige(requesterExtensionId), { requires: [] });
+    } catch {}
+  }
   let offEnded = () => {};
   try {
     offEnded = api.on("GENERATION_ENDED", (payload, userId) => {

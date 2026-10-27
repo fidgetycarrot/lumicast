@@ -1,4 +1,6 @@
-# LumiCast 0.13.0
+# LumiCast 0.14.0
+
+**v0.14.0 takes characters from Paige.** When you press Make my card in Paige with "send everyone's looks to LumiCast" ticked, LumiCast translates each character's look (and your persona's) in the background, one at a time, with your saved connection, thinking level, notes and Gelbooru key. Each finished sheet goes straight into Lumi Studio 1.13.0 or newer as a reusable character or persona, matched by name: a new one is added, one with the same name gets its six sheet fields updated. Paige shows the progress. LumiCast's own panel isn't used and keeps whatever you had in it; while the job runs, its buttons say an operation is already running.
 
 **v0.13.0: your notes win, and full-body pictures stop getting cropped.**
 - **Notes are rules.** When a note applies to a character, every tag it asks for is kept exactly as you wrote it. That holds even when two mean the same on Danbooru (`trap` and `otoko no ko`), and even when no booru lists one. They're never merged, trimmed or dropped by the review, and "Where each tag came from" marks them "from your notes". Refine won't suggest removing them unless your feedback names them, and offers them in your spelling.

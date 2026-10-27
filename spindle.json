@@ -1,11 +1,11 @@
 {
   "name": "LumiCast",
   "identifier": "lumicast",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "author": "fidgetycarrot",
   "github": "https://github.com/fidgetycarrot/lumicast",
   "homepage": "https://github.com/fidgetycarrot/lumicast#readme",
-  "description": "Turn character descriptions, typed or from [ooc] replies, into Anima prompts with verified booru tags, and save them to a Cast lorebook.",
+  "description": "Turn character descriptions, typed or from [ooc] replies, into Anima prompts with verified booru tags, save them to a Cast lorebook, and take characters from Paige.",
   "permissions": [
     "generation",
     "cors_proxy",
