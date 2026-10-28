@@ -10,7 +10,8 @@ const DEFAULTS: Settings = {connectionId:'',castConnectionId:'',gelUser:'',gelKe
 const thinking=(v:unknown):Thinking=>THINKING.includes(v as Thinking)?v as Thinking:'light';
 // A light think is enough to pick tags; long reasoning was most of the wait. Off and inherit are the user's choice.
 const REASONING={light:{source:'custom',apiReasoning:true,effort:'low'},off:{source:'off'},inherit:undefined} as const;
-export function setupBackend(api: SpindleAPI) {
+/** waitScale: tests shrink the rate-limit waits. */
+export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = {}) {
   type UserState={ settings?:Settings; dictionary?:BooruDictionary; load?:Promise<void>; jobs:Map<string,AbortController> };
   const users = new Map<string, UserState>();
   let closed = false;
@@ -23,7 +24,7 @@ export function setupBackend(api: SpindleAPI) {
     await s.load;
   };
   const dictionaryFor=(s:UserState)=>s.dictionary ??= new BooruDictionary(async url=> {
-    const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.14.2 (tag metadata client)'}}));
+    const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.14.3 (tag metadata client)'}}));
     if(typeof response.status!=='number'||typeof response.body!=='string')throw new Error('Invalid proxy response.');
     return {status:response.status,body:response.body};
   },{user:s.settings!.gelUser,key:s.settings!.gelKey});
@@ -233,7 +234,7 @@ export function setupBackend(api: SpindleAPI) {
         const entered=gelCredentials(text(v.gelUser ?? '','Gelbooru user',300),v.gelKey ? text(v.gelKey,'Gelbooru key',300) : '');
         const credentials={user:entered.user||settings.gelUser,key:entered.key||settings.gelKey};
         const outcome=await testGelbooru(async url=> {
-          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.14.2 (tag metadata client)'}}));
+          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.14.3 (tag metadata client)'}}));
           return {status:Number(response.status),body:typeof response.body==='string'?response.body:''};
         },credentials);
         const unsaved=credentials.user!==settings.gelUser||credentials.key!==settings.gelKey;
@@ -299,9 +300,10 @@ export function setupBackend(api: SpindleAPI) {
    * into Lumi Studio (lumidraw_studio.lumicast.add), new or updated by name. Progress is shared at paige.status.
    */
   type PaigeLook={name:string;aliases:string[];kind:'character'|'persona';description:string};
-  type PaigeStatus={sessionId:string;done:number;total:number;running:boolean;current?:string;error?:string;finished:{name:string;ok:boolean;message:string}[]};
+/** names: everyone in the batch, in order. stage: what LumiCast is doing for current right now. updatedAt: last sign of life, so Paige can tell working from stuck. */
+  type PaigeStatus={sessionId:string;done:number;total:number;running:boolean;current?:string;stage?:string;names?:string[];startedAt?:number;updatedAt?:number;error?:string;finished:{name:string;ok:boolean;message:string}[]};
   const pool=(api as unknown as {rpcPool?:{sync?:(e:string,v:unknown,p?:{requires?:string[]})=>string;read?:(e:string)=>Promise<unknown>;handle?:(e:string,h:(ctx:{requesterExtensionId:string})=>unknown,p?:{requires?:string[]})=>string}}).rpcPool;
-  const paigeStatus=(status:PaigeStatus)=>{try{pool?.sync?.('paige.status',status,{requires:[]});}catch{/* best effort */}};
+  const paigeStatus=(status:PaigeStatus)=>{try{pool?.sync?.('paige.status',{...status,updatedAt:Date.now()},{requires:[]});}catch{/* best effort */}};
   /**
    * Lumiverse answers another extension's read with only the permissions that read was granted, and that
    * holds for everything started from inside the answer. So paige.start only checks and queues the work; a
@@ -326,12 +328,12 @@ export function setupBackend(api: SpindleAPI) {
     if (!looks.length) return {ok:false,message:'None of the looks Paige sent had a name and a description.'};
     if (paigeBusy||paigeQueue.length) return {ok:false,message:'LumiCast is still working on the last batch from Paige. Wait for it, then press Send looks again.'};
     paigeQueue.push({looks,userId,sessionId});
-    paigeStatus({sessionId,done:0,total:looks.length,running:true,finished:[]});
+    paigeStatus({sessionId,done:0,total:looks.length,running:true,names:looks.map(l=>l.name),stage:'Waiting to start…',startedAt:Date.now(),finished:[]});
     wakePaige?.();
     return {ok:true,count:looks.length};
   }
   async function runPaigeJob({looks,userId,sessionId}:PaigeJob) {
-    const status:PaigeStatus={sessionId,done:0,total:looks.length,running:true,finished:[]};
+    const status:PaigeStatus={sessionId,done:0,total:looks.length,running:true,names:looks.map(l=>l.name),startedAt:Date.now(),finished:[]};
     const fail=(error:string)=>{status.running=false;status.error=error;paigeStatus(status);};
     if (!api.permissions.has('generation')||!api.permissions.has('cors_proxy')) return fail('Grant LumiCast generation and CORS proxy permissions in Extensions.');
     const s=stateFor(userId ?? 'owner');
@@ -346,14 +348,29 @@ export function setupBackend(api: SpindleAPI) {
     try {
       for (const look of looks) {
         if (closed||controller.signal.aborted) break;
-        status.current=look.name;paigeStatus(status);
+        status.current=look.name;status.stage='Starting…';paigeStatus(status);
         let ok=false,message='';
         const one=new AbortController();const stop=()=>one.abort();controller.signal.addEventListener('abort',stop);
-        const timer=setTimeout(()=>one.abort(),240_000);
+        let timer=setTimeout(()=>one.abort(),240_000);
         try {
-          let calls=0;
-          const translator=new Translator(callerFor(connection,()=>++calls===1?'trait extraction':'tag review and caption',settings,userId),dictionaryFor(s));
-          const result=await translator.translate(look.description,one.signal,`${connection.provider} / ${connection.model}`,{scope:'outfit',notes:settings.notes});
+          // A rate limit from the provider usually clears in a minute, so wait and try twice more before giving up.
+          let result:Awaited<ReturnType<Translator['translate']>>|undefined;
+          for (let attempt=0;!result;attempt++) {
+            try {
+              let calls=0;
+              const translator=new Translator(callerFor(connection,()=>++calls===1?'trait extraction':'tag review and caption',settings,userId),dictionaryFor(s));
+              result=await translator.translate(look.description,one.signal,`${connection.provider} / ${connection.model}`,{scope:'outfit',notes:settings.notes,progress:stage=>{status.stage=stage;paigeStatus(status);}});
+            } catch (error) {
+              const wait=[20,60][attempt];
+              if (!(error instanceof ModelRequestError&&/RATE_LIMIT/.test(error.message))||wait===undefined||one.signal.aborted) throw error;
+              for (let left=wait;left>0&&!one.signal.aborted;left-=5) {
+                status.stage=`The provider says to slow down. Trying again in ${left} seconds…`;paigeStatus(status);
+                await new Promise(resolve=>setTimeout(resolve,5000*(options.waitScale ?? 1)));
+              }
+              clearTimeout(timer);timer=setTimeout(()=>one.abort(),240_000);
+            }
+          }
+          status.stage='Saving to Lumi Studio…';paigeStatus(status);
           pool!.sync!('paige.sheet',{version:1,sessionId,name:look.name,aliases:look.aliases,kind:look.kind,userId:userId ?? '',sentAt:Date.now(),sheet:result.sheet},{requires:[]});
           const answer=record(await pool!.read!('lumidraw_studio.lumicast.add'));
           ok=answer.ok===true;
@@ -368,7 +385,7 @@ export function setupBackend(api: SpindleAPI) {
         paigeStatus(status);
       }
     } finally {
-      status.running=false;delete status.current;paigeStatus(status);s.jobs.delete('paige');
+      status.running=false;delete status.current;delete status.stage;paigeStatus(status);s.jobs.delete('paige');
     }
   }
   // The loop waits here, in LumiCast's own context, until paige.start queues something.

@@ -1,4 +1,4 @@
-# LumiCast 0.14.2
+# LumiCast 0.14.3
 
 **v0.14.0 takes characters from Paige.** When you press Make my card in Paige with "send everyone's looks to LumiCast" ticked, LumiCast translates each character's look (and your persona's) in the background, one at a time, with your saved connection, thinking level, notes and Gelbooru key. Each finished sheet goes straight into Lumi Studio 1.13.1 or newer as a new reusable character or persona. Nobody already there is ever replaced: if the name is taken, it's saved as "Vesper 2" and marked **needs a new name** until you rename it. Paige shows the progress. LumiCast's own panel isn't used and keeps whatever you had in it; while the job runs, its buttons say an operation is already running.
 
