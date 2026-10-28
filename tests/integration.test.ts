@@ -447,7 +447,7 @@ test('the revised sheet goes back to the Lumi Studio entry it came from, and onl
   let asked=0;h.setApply(()=>{asked++;return {ok:true,name:'Riley'};});
   b('Update Riley in Lumi Studio').click();await until(()=>status().includes('updated in Lumi Studio'));
   const result=h.calls.filter(c=>(c as unknown[])[0]==='sync'&&(c as unknown[])[1]==='tweak.result').at(-1) as unknown[];
-  expect(result[2]).toEqual({version:1,id:'character_7',kind:'character',sentAt,userId:'u1',sheet:{countTag:'1girl',subject:'',always:'',appearance:'round eyewear',outfit:'',anatomy:''}});
+  expect(result[2]).toEqual({version:1,id:'character_7',kind:'character',sentAt,userId:'u1',sheet:{countTag:'1girl',subject:'',always:'',appearance:'round eyewear',outfit:'',anatomy:'',moss:''}});
   expect(result[3]).toEqual({requires:[]});expect(asked).toBe(1);
   expect(h.root.querySelector('.lc-studio')!.textContent).toContain('Riley is updated in Lumi Studio.');
   // Lumi Studio's refusal is passed on; an older Lumi Studio says so plainly.

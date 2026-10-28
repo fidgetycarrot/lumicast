@@ -24,7 +24,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
     await s.load;
   };
   const dictionaryFor=(s:UserState)=>s.dictionary ??= new BooruDictionary(async url=> {
-    const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.14.3 (tag metadata client)'}}));
+    const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.15.0 (tag metadata client)'}}));
     if(typeof response.status!=='number'||typeof response.body!=='string')throw new Error('Invalid proxy response.');
     return {status:response.status,body:response.body};
   },{user:s.settings!.gelUser,key:s.settings!.gelKey});
@@ -143,7 +143,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
         const v=record(r.input);const sheet=record(v.sheet);
         const field=(key:string)=>text(sheet[key] ?? '',key,4000);
         const description=text(v.description ?? '','description',12_000);
-        const shared:SharedSheet={version:1,sheet:{countTag:field('countTag'),subject:field('subject'),always:field('always'),appearance:field('appearance'),outfit:field('outfit'),anatomy:field('anatomy')},
+        const shared:SharedSheet={version:1,sheet:{countTag:field('countTag'),subject:field('subject'),always:field('always'),appearance:field('appearance'),outfit:field('outfit'),anatomy:field('anatomy'),moss:field('moss')},
           name:nameFrom(description),title:(description.split('\n').find(l=>l.trim()) ?? '').trim().slice(0,120),updatedAt:Date.now(),userId:userId ?? ''};
         const pool=(api as unknown as {rpcPool?:{sync?:(endpoint:string,value:unknown,policy?:{requires?:string[]})=>string}}).rpcPool;
         if (typeof pool?.sync!=='function') throw new Error('This Lumiverse version cannot share data between extensions.');
@@ -170,7 +170,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
         if (typeof shared.userId==='string'&&shared.userId&&userId&&shared.userId!==userId) throw new Error('The character sent from Lumi Studio belongs to another Lumiverse user.');
         const field=(key:string,max=4000)=>typeof sheet[key]==='string'?(sheet[key] as string).slice(0,max):'';
         const names=[shared.name,shared.anchor].filter((v):v is string=>typeof v==='string'&&!!v.trim()).map(v=>v.trim().slice(0,80));
-        const out:StudioCharacter={sheet:{countTag:field('countTag',40),subject:field('subject',200),always:field('always'),appearance:field('appearance'),outfit:field('outfit'),anatomy:field('anatomy')},
+        const out:StudioCharacter={sheet:{countTag:field('countTag',40),subject:field('subject',200),always:field('always'),appearance:field('appearance'),outfit:field('outfit'),anatomy:field('anatomy'),moss:field('moss',1500)},
           name:names[0]??'',sentAt:Number(shared.sentAt)||0,description:'',book:'',id:typeof shared.id==='string'?shared.id.slice(0,120):'',kind:shared.kind==='persona'?'persona':'character'};
         // The written description, if this chat's Cast lorebook has one under that name. Best effort.
         try {
@@ -204,7 +204,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
         const pool=(api as unknown as {rpcPool?:{sync?:(e:string,v:unknown,p?:{requires?:string[]})=>string;read?:(e:string)=>Promise<unknown>}}).rpcPool;
         if (typeof pool?.sync!=='function'||typeof pool.read!=='function') throw new Error('This Lumiverse version cannot share data between extensions.');
         pool.sync('tweak.result',{version:1,id,kind:v.kind==='persona'?'persona':'character',sentAt:Number(v.sentAt)||0,userId:userId ?? '',
-          sheet:{countTag:field('countTag',40),subject:field('subject',200),always:field('always'),appearance:field('appearance'),outfit:field('outfit'),anatomy:field('anatomy')}},{requires:[]});
+          sheet:{countTag:field('countTag',40),subject:field('subject',200),always:field('always'),appearance:field('appearance'),outfit:field('outfit'),anatomy:field('anatomy'),moss:field('moss',1500)}},{requires:[]});
         let answer:Record<string,unknown>;
         try {answer=record(await pool.read('lumidraw_studio.lumicast.apply'));}
         catch (error) {
@@ -234,7 +234,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
         const entered=gelCredentials(text(v.gelUser ?? '','Gelbooru user',300),v.gelKey ? text(v.gelKey,'Gelbooru key',300) : '');
         const credentials={user:entered.user||settings.gelUser,key:entered.key||settings.gelKey};
         const outcome=await testGelbooru(async url=> {
-          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.14.3 (tag metadata client)'}}));
+          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.15.0 (tag metadata client)'}}));
           return {status:Number(response.status),body:typeof response.body==='string'?response.body:''};
         },credentials);
         const unsaved=credentials.user!==settings.gelUser||credentials.key!==settings.gelKey;

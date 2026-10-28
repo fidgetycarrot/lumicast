@@ -30,7 +30,8 @@ export const SCOPES = ['character','outfit','scene'] as const;
 export interface View { tags: TagRow[]; prose: string; prompt: string; notices: string[]; evidence: Trait[] }
 /** The requested scope's view at the top level, plus every scope so the panel can switch without another run. */
 /** The result laid out as Lumi Studio's character sheet fields: comma-separated, spaces for underscores, no sentences. */
-export interface Sheet { countTag: string; subject: string; always: string; appearance: string; outfit: string; anatomy: string }
+/** moss: a plain-English face-and-body description for MOSS Image, safe for NanoGPT; Lumi Studio uses it word for word. */
+export interface Sheet { countTag: string; subject: string; always: string; appearance: string; outfit: string; anatomy: string; moss: string }
 /** Something that leaves the character under-specified. Advisory only: a gap never changes tags, captions or the sheet. */
 export interface Gap { kind: 'missing' | 'vague'; what: string; note: string }
 /** What LumiCast shares with Lumi Studio through Lumiverse's shared RPC pool, at lumicast.sheet.latest. */

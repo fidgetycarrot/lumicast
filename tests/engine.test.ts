@@ -221,10 +221,10 @@ test('Lumi Studio sheet: fields the character editor takes, with phrases only fo
   expect(result.sheet).toEqual({
     countTag:'1boy',subject:'adult male android',always:'android, trap',
     appearance:'narrow waist, wide hips, silver hair, short hair, engineered hourglass silhouette, narrow shoulders, pale polymer skin, choppy silver-white hair, a, b',
-    outfit:'thighhighs, black thighhighs, no shoes, sheer black thigh-high stockings',anatomy:'',
+    outfit:'thighhighs, black thighhighs, no shoes, sheer black thigh-high stockings',anatomy:'',moss:'',
   });
   // The sheet does not depend on the Include choice, and never carries solo or scene detail.
-  expect((await run(fixture.source,{traits:fixture.traits},{},{scope:'scene'})).result.sheet).toEqual({countTag:'1boy',subject:'',always:'android, trap',appearance:'narrow waist, wide hips, silver hair, short hair',outfit:'thighhighs, black thighhighs, no shoes',anatomy:''});
+  expect((await run(fixture.source,{traits:fixture.traits},{},{scope:'scene'})).result.sheet).toEqual({countTag:'1boy',subject:'',always:'android, trap',appearance:'narrow waist, wide hips, silver hair, short hair',outfit:'thighhighs, black thighhighs, no shoes',anatomy:'',moss:''});
   const weighted=await run('He is a femboy with silver hair.',{traits:[{id:'1',group:'subject',evidence:'femboy',tags:['1boy','(trap:1.4)'],detail:'A feminine young man'}]},{},{notes:'Weight trap at 1.4.'});
   expect(weighted.result.sheet.always).toBe('(trap:1.4)');expect(weighted.result.sheet.countTag).toBe('1boy');
 });
@@ -376,4 +376,17 @@ test('Refine keeps the tags the notes ask for, in the notes’ spelling',async()
   const fresh=await new Translator(async()=>JSON.stringify({reply:'x',remove:[],add:[{tag:'otoko_no_ko',why:''}],weight:[],caption:null}),
     {resolve:async name=>({name:'trap',source:'Danbooru',count:5,wiki:'w',url:'u',aliasFrom:name}),search:async()=>[]}).refine({tags:['trap'],caption:'',feedback:'x',notes:'Femboys: add otoko_no_ko.'},signal(),'model');
   expect(fresh.proposals.map(p=>`${p.kind} ${p.tag} ${p.why}`)).toEqual(['add otoko_no_ko from your notes']);
+});
+test('the MOSS description is plain, starts in lower case for “Name, …”, and never carries explicit words',async()=> {
+  const source='Rory, 19, a pretty boy with honey-brown curls, hazel eyes and a soft chest with rosy nipples.';
+  const traits={traits:[{id:'t1',group:'subject',evidence:'Rory, 19, a pretty boy',tags:['1boy','trap'],detail:'A 19-year-old pretty boy'},{id:'t2',group:'hair',evidence:'honey-brown curls',tags:['brown_hair','curly_hair'],detail:'Honey-brown curls'}]};
+  const ask=(moss:string)=>run(source,traits,{drop:[],captions:{character:'A pretty boy.'},issues:[],moss}).then(r=>r.result);
+  const clean=await ask('A 19-year-old feminine-looking young man with a soft, pretty face, messy honey-brown curls and big hazel eyes.');
+  expect(clean.sheet.moss).toBe('a 19-year-old feminine-looking young man with a soft, pretty face, messy honey-brown curls and big hazel eyes.');
+  const explicit=await ask('A 19-year-old feminine-looking young man with honey-brown curls, hazel eyes, rosy nipples. His smooth body is naked.');
+  expect(explicit.sheet.moss).toBe('a 19-year-old feminine-looking young man with honey-brown curls, hazel eyes.');
+  expect(explicit.notices.join(' ')).toContain('Explicit words were left out of the MOSS description');
+  // A number the description never gave means the model invented something; nothing is better than that.
+  expect((await ask('A 25-year-old young man with brown curls.')).sheet.moss).toBe('');
+  expect((await ask('')).sheet.moss).toBe('');
 });

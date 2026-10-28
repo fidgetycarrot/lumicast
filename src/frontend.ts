@@ -164,7 +164,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   let studioRef:{id:string;kind:string;sentAt:number;name:string}|null=null;
   const applyStudio=(got:StudioCharacter)=> {
     studioRef={id:got.id,kind:got.kind,sentAt:got.sentAt,name:got.name};sendBack.textContent=`Update ${got.name||'this character'} in Lumi Studio`;
-    for(const key of Object.keys(sheet) as (keyof typeof sheet)[])sheet[key].box.value=got.sheet[key];
+    for(const key of Object.keys(sheet) as (keyof typeof sheet)[])sheet[key].box.value=got.sheet[key]??'';
     source.value=got.description;stated.value='';statedAgain.value='';revision++;translatedFrom=source.value;
     result=null;fromStudio=true;rounds=[];roundFeedback='';showRounds();pending=[];proposed.replaceChildren();reply.textContent='';
     tags.value='';prose.value='';prompt.value='';verified=true;edited=false;gapsCard.hidden=true;provenance.replaceChildren();issues.replaceChildren();sourceQuotes.replaceChildren();
@@ -238,7 +238,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   const gapsCard=el('section');gapsCard.className='lc-card';gapsCard.hidden=true;gapsCard.append(gapsBox);
   const statedAgain=el('input');statedAgain.maxLength=300;statedAgain.autocomplete='off';statedAgain.placeholder='e.g. short hair, rose-pink gradient lips';statedAgain.setAttribute('aria-label','Known facts');
   const again=button('Translate again',runTranslate);
-  const sheetField=(label:string,key:'countTag'|'subject'|'always'|'appearance'|'outfit'|'anatomy',hint:string,long=false)=> {
+  const sheetField=(label:string,key:'countTag'|'subject'|'always'|'appearance'|'outfit'|'anatomy'|'moss',hint:string,long=false)=> {
     const box=long?el('textarea'):el('input');if(long)(box as HTMLTextAreaElement).rows=3;box.dataset.sheet=key;
     // The copy button sits on the label's line, so five fields do not become ten rows.
     box.addEventListener('input',()=>share());
@@ -255,6 +255,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
     appearance:sheetField('Permanent appearance tags','appearance','Verified tags first, then short phrases for what no tag says.',true),
     outfit:sheetField('Default outfit tags','outfit','Clothing from the description. Leave it out for a character whose clothes change with the story.',true),
     anatomy:sheetField('Conditional visible anatomy','anatomy','Explicit anatomy, kept out of the permanent tags so it never appears in scenes that do not show it. Set its rule in Lumi Studio.',true),
+    moss:sheetField('Description for MOSS (plain English)','moss','Face and body only, in plain words, with nothing explicit, since NanoGPT refuses NSFW. MOSS presets in Lumi Studio use it word for word; Anima ignores it.',true),
   };
   const provenance=el('div');const issues=el('div');const sourceQuotes=el('div');
   const evidence=named(el('details'),'sources');evidence.className='lc-sub';evidence.append(el('summary','Where each tag came from'),provenance,issues,sourceQuotes);
@@ -397,7 +398,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   });
   searchCard.append(field('Tag name or the start of one',query,'Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched.'),search,found);
 
-  app.append(intro,settings,status,studioNews,castCard,input,gapsCard,output,refine,sheetCard,searchCard,el('p','LumiCast 0.14.3 · Draft stays in this tab until reload.'));
+  app.append(intro,settings,status,studioNews,castCard,input,gapsCard,output,refine,sheetCard,searchCard,el('p','LumiCast 0.15.0 · Draft stays in this tab until reload.'));
   const controls=[readOoc,translate,studio,sendBack,again,save,refreshButton,testGel,saveNotes,saveQuality,startOver,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
 
   // Every change to the sheet is offered to Lumi Studio, a moment after typing stops.

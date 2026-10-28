@@ -1,4 +1,6 @@
-# LumiCast 0.14.3
+# LumiCast 0.15.0
+
+**v0.15.0 writes a MOSS description too.** Every translation now also gives the character sheet a **Description for MOSS (plain English)**: face and body only, every lasting fact once, in plain words with no tags or weights. Booru terms such as `trap` become plain description, and it never has anything explicit, since NanoGPT refuses NSFW (explicit words are cut if the model slips one in). It's written in the same model call as the rest, so translation isn't slower. Lumi Studio 1.15.1 or newer takes it through Fill from LumiCast, Tweak and Update in Lumi Studio, and Paige; its MOSS presets use it word for word. Refine still works on the Anima tags only.
 
 **v0.14.0 takes characters from Paige.** When you press Make my card in Paige with "send everyone's looks to LumiCast" ticked, LumiCast translates each character's look (and your persona's) in the background, one at a time, with your saved connection, thinking level, notes and Gelbooru key. Each finished sheet goes straight into Lumi Studio 1.13.1 or newer as a new reusable character or persona. Nobody already there is ever replaced: if the name is taken, it's saved as "Vesper 2" and marked **needs a new name** until you rename it. Paige shows the progress. LumiCast's own panel isn't used and keeps whatever you had in it; while the job runs, its buttons say an operation is already running.
 

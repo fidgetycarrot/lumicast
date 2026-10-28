@@ -367,7 +367,7 @@ ${text}`;
     studioRef = { id: got.id, kind: got.kind, sentAt: got.sentAt, name: got.name };
     sendBack.textContent = `Update ${got.name || "this character"} in Lumi Studio`;
     for (const key of Object.keys(sheet))
-      sheet[key].box.value = got.sheet[key];
+      sheet[key].box.value = got.sheet[key] ?? "";
     source.value = got.description;
     stated.value = "";
     statedAgain.value = "";
@@ -529,7 +529,8 @@ ${text}`;
     always: sheetField("Always include", "always", "The type tags that define the character."),
     appearance: sheetField("Permanent appearance tags", "appearance", "Verified tags first, then short phrases for what no tag says.", true),
     outfit: sheetField("Default outfit tags", "outfit", "Clothing from the description. Leave it out for a character whose clothes change with the story.", true),
-    anatomy: sheetField("Conditional visible anatomy", "anatomy", "Explicit anatomy, kept out of the permanent tags so it never appears in scenes that do not show it. Set its rule in Lumi Studio.", true)
+    anatomy: sheetField("Conditional visible anatomy", "anatomy", "Explicit anatomy, kept out of the permanent tags so it never appears in scenes that do not show it. Set its rule in Lumi Studio.", true),
+    moss: sheetField("Description for MOSS (plain English)", "moss", "Face and body only, in plain words, with nothing explicit, since NanoGPT refuses NSFW. MOSS presets in Lumi Studio use it word for word; Anima ignores it.", true)
   };
   const provenance = el("div");
   const issues = el("div");
@@ -797,7 +798,7 @@ ${text}`;
     notify("Search complete. Popularity is not an Anima quality score.");
   });
   searchCard.append(field("Tag name or the start of one", query, "Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched."), search, found);
-  app.append(intro, settings, status, studioNews, castCard, input, gapsCard, output, refine, sheetCard, searchCard, el("p", "LumiCast 0.14.3 · Draft stays in this tab until reload."));
+  app.append(intro, settings, status, studioNews, castCard, input, gapsCard, output, refine, sheetCard, searchCard, el("p", "LumiCast 0.15.0 · Draft stays in this tab until reload."));
   const controls = [readOoc, translate, studio, sendBack, again, save, refreshButton, testGel, saveNotes, saveQuality, startOver, verify, rebuild, copy, copyTags, copyProse, suggest, apply, search, ...Object.values(sheet).map((f) => f.copyField)];
   let shareTimer;
   function share() {
