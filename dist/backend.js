@@ -1,4 +1,7 @@
 // @bun
+// src/backend.ts
+import { AsyncLocalStorage } from "async_hooks";
+
 // src/contracts.ts
 var GROUPS = ["subject", "body", "hair", "face", "anatomy", "outfit", "moment"];
 var segmentOf = (group) => group === "moment" || group === "anatomy" ? "scene" : group === "outfit" ? "outfit" : "character";
@@ -1201,7 +1204,7 @@ function setupBackend(api) {
     await s.load;
   };
   const dictionaryFor = (s) => s.dictionary ??= new BooruDictionary(async (url) => {
-    const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.14.1 (tag metadata client)" } }));
+    const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.14.2 (tag metadata client)" } }));
     if (typeof response.status !== "number" || typeof response.body !== "string")
       throw new Error("Invalid proxy response.");
     return { status: response.status, body: response.body };
@@ -1487,7 +1490,7 @@ function setupBackend(api) {
         const entered = gelCredentials(text(v.gelUser ?? "", "Gelbooru user", 300), v.gelKey ? text(v.gelKey, "Gelbooru key", 300) : "");
         const credentials = { user: entered.user || settings.gelUser, key: entered.key || settings.gelKey };
         const outcome = await testGelbooru(async (url) => {
-          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.14.1 (tag metadata client)" } }));
+          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.14.2 (tag metadata client)" } }));
           return { status: Number(response.status), body: typeof response.body === "string" ? response.body : "" };
         }, credentials);
         const unsaved = credentials.user !== settings.gelUser || credentials.key !== settings.gelKey;
@@ -1565,6 +1568,16 @@ function setupBackend(api) {
       pool?.sync?.("paige.status", status, { requires: [] });
     } catch {}
   };
+  const paigeQueue = [];
+  let paigeBusy = false, wakePaige = null;
+  const outside = (() => {
+    try {
+      const snap = AsyncLocalStorage.snapshot?.();
+      if (snap)
+        return snap;
+    } catch {}
+    return (fn) => fn();
+  })();
   async function startFromPaige(requester) {
     if (requester !== "paige")
       return { ok: false, message: "Only Paige can send characters this way." };
@@ -1588,66 +1601,94 @@ function setupBackend(api) {
     }));
     if (!looks.length)
       return { ok: false, message: "None of the looks Paige sent had a name and a description." };
+    if (paigeBusy || paigeQueue.length)
+      return { ok: false, message: "LumiCast is still working on the last batch from Paige. Wait for it, then press Send looks again." };
+    paigeQueue.push({ looks, userId, sessionId });
+    paigeStatus({ sessionId, done: 0, total: looks.length, running: true, finished: [] });
+    wakePaige?.();
+    return { ok: true, count: looks.length };
+  }
+  async function runPaigeJob({ looks, userId, sessionId }) {
+    const status = { sessionId, done: 0, total: looks.length, running: true, finished: [] };
+    const fail = (error) => {
+      status.running = false;
+      status.error = error;
+      paigeStatus(status);
+    };
     if (!api.permissions.has("generation") || !api.permissions.has("cors_proxy"))
-      return { ok: false, message: "Grant LumiCast generation and CORS proxy permissions in Extensions." };
+      return fail("Grant LumiCast generation and CORS proxy permissions in Extensions.");
     const s = stateFor(userId ?? "owner");
     if (s.jobs.size)
-      return { ok: false, message: "LumiCast is busy with another translation. Wait for it, then press Send looks again in Paige." };
+      return fail("LumiCast is busy with another translation. Wait for it, then press Send looks again in Paige.");
     await loadSettings(s, userId);
     const settings = s.settings;
     if (!settings.connectionId)
-      return { ok: false, message: "Pick a connection in LumiCast first (Connection & tag services), then press Send looks again in Paige." };
+      return fail("Pick a connection in LumiCast first (Connection & tag services), then press Send looks again in Paige.");
     let connection;
     try {
       connection = await pickConnectionFor(settings.connectionId, userId);
     } catch (error) {
-      return { ok: false, message: error instanceof Error ? error.message : "LumiCast's connection is unavailable." };
+      return fail(error instanceof Error ? error.message : "LumiCast's connection is unavailable.");
     }
     const controller = new AbortController;
     s.jobs.set("paige", controller);
-    const status = { sessionId, done: 0, total: looks.length, running: true, finished: [] };
     paigeStatus(status);
-    (async () => {
-      try {
-        for (const look of looks) {
-          if (closed || controller.signal.aborted)
-            break;
-          status.current = look.name;
-          paigeStatus(status);
-          let ok = false, message = "";
-          const one = new AbortController;
-          const stop = () => one.abort();
-          controller.signal.addEventListener("abort", stop);
-          const timer = setTimeout(() => one.abort(), 240000);
-          try {
-            let calls = 0;
-            const translator = new Translator(callerFor(connection, () => ++calls === 1 ? "trait extraction" : "tag review and caption", settings, userId), dictionaryFor(s));
-            const result = await translator.translate(look.description, one.signal, `${connection.provider} / ${connection.model}`, { scope: "outfit", notes: settings.notes });
-            pool.sync("paige.sheet", { version: 1, sessionId, name: look.name, aliases: look.aliases, kind: look.kind, userId: userId ?? "", sentAt: Date.now(), sheet: result.sheet }, { requires: [] });
-            const answer = record(await pool.read("lumidraw_studio.lumicast.add"));
-            ok = answer.ok === true;
-            const saved = typeof answer.name === "string" ? answer.name.slice(0, 80) : look.name, clash = typeof answer.clashWith === "string" ? answer.clashWith.slice(0, 80) : "";
-            message = !ok ? "Lumi Studio gave no answer" : clash ? `saved as \u201C${saved}\u201D because Lumi Studio already had a ${clash}; give one of them a new name there` : answer.updated ? "updated" : "added";
-          } catch (error) {
-            const text = error instanceof Error ? error.message : "";
-            message = /not registered|not found/i.test(text) ? "Lumi Studio is missing or too old; update it" : error instanceof ModelRequestError || /^The model /.test(text) ? text.slice(0, 200) : error instanceof Error && error.name === "AbortError" ? "took too long" : text.replace(/^.*?:\s*(?=[A-Z])/, "").slice(0, 200) || "failed";
-          } finally {
-            clearTimeout(timer);
-            controller.signal.removeEventListener("abort", stop);
-          }
-          status.done++;
-          status.finished.push({ name: look.name, ok, message });
-          paigeStatus(status);
-        }
-      } finally {
-        status.running = false;
-        delete status.current;
+    try {
+      for (const look of looks) {
+        if (closed || controller.signal.aborted)
+          break;
+        status.current = look.name;
         paigeStatus(status);
-        s.jobs.delete("paige");
+        let ok = false, message = "";
+        const one = new AbortController;
+        const stop = () => one.abort();
+        controller.signal.addEventListener("abort", stop);
+        const timer = setTimeout(() => one.abort(), 240000);
+        try {
+          let calls = 0;
+          const translator = new Translator(callerFor(connection, () => ++calls === 1 ? "trait extraction" : "tag review and caption", settings, userId), dictionaryFor(s));
+          const result = await translator.translate(look.description, one.signal, `${connection.provider} / ${connection.model}`, { scope: "outfit", notes: settings.notes });
+          pool.sync("paige.sheet", { version: 1, sessionId, name: look.name, aliases: look.aliases, kind: look.kind, userId: userId ?? "", sentAt: Date.now(), sheet: result.sheet }, { requires: [] });
+          const answer = record(await pool.read("lumidraw_studio.lumicast.add"));
+          ok = answer.ok === true;
+          const saved = typeof answer.name === "string" ? answer.name.slice(0, 80) : look.name, clash = typeof answer.clashWith === "string" ? answer.clashWith.slice(0, 80) : "";
+          message = !ok ? "Lumi Studio gave no answer" : clash ? `saved as \u201C${saved}\u201D because Lumi Studio already had a ${clash}; give one of them a new name there` : answer.updated ? "updated" : "added";
+        } catch (error) {
+          const text = error instanceof Error ? error.message : "";
+          message = /not registered|not found/i.test(text) ? "Lumi Studio is missing or too old; update it" : error instanceof ModelRequestError || /^The model /.test(text) ? text.slice(0, 200) : error instanceof Error && error.name === "AbortError" ? "took too long" : text.replace(/^.*?:\s*(?=[A-Z])/, "").slice(0, 200) || "failed";
+        } finally {
+          clearTimeout(timer);
+          controller.signal.removeEventListener("abort", stop);
+        }
+        status.done++;
+        status.finished.push({ name: look.name, ok, message });
+        paigeStatus(status);
       }
-    })();
-    return { ok: true, count: looks.length };
+    } finally {
+      status.running = false;
+      delete status.current;
+      paigeStatus(status);
+      s.jobs.delete("paige");
+    }
   }
+  outside(() => void (async () => {
+    while (!closed) {
+      if (!paigeQueue.length)
+        await new Promise((resolve) => {
+          wakePaige = resolve;
+        });
+      wakePaige = null;
+      const job = paigeQueue.shift();
+      if (!job || closed)
+        continue;
+      paigeBusy = true;
+      try {
+        await runPaigeJob(job);
+      } catch {} finally {
+        paigeBusy = false;
+      }
+    }
+  })());
   if (typeof pool?.handle === "function") {
     try {
       pool.handle("paige.start", ({ requesterExtensionId }) => startFromPaige(requesterExtensionId), { requires: [] });
@@ -1669,6 +1710,7 @@ function setupBackend(api) {
   } catch {}
   return () => {
     closed = true;
+    wakePaige?.();
     off();
     offEnded();
     for (const s of users.values())

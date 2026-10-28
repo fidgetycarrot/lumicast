@@ -180,6 +180,10 @@ A live prompt for a full-figured character paired `abs, toned` with a caption sa
 
 After a Lumiverse staging update, every connection the user tried (two OpenRouter, one direct DeepSeek) failed with "The model returned empty or truncated text" after a long wait, while chat and the Gelbooru test worked. The single message could not say which call failed or why. The reading of Lumiverse's staging diff found no change to raw generation that would explain it, so the cause is not established. v0.8.2 raises the per-call output limit from 6,000 to 16,000 tokens (reasoning tokens count against it), returns a reply left in the reasoning field when content is empty, reads JSON wrapped in prose, and reports the stage and the kind of failure. Typecheck, tests and the build passed; a panel-to-backend test covers each reply shape.
 
+## v0.14.2: Paige's batch runs with LumiCast's own permissions
+
+The user hit "Grant LumiCast generation and CORS proxy permissions" from Make my card in Paige. In Lumiverse's worker runtime (`src/spindle/worker-runtime.ts`), a shared RPC handler runs inside an AsyncLocalStorage scope holding only the read's effective permissions, `[]` for `requires: []`; `permissions.has` and every host call made from that async context, including the background translation started from it, carry that scope. `paige.start` now only checks and queues the job, and a loop started at setup (outside any scope, plus `AsyncLocalStorage.snapshot()` where available) runs it. Setup problems (permissions, no connection) are reported through `paige.status.error`. The test host now scopes handler calls with AsyncLocalStorage the same way; the old code fails it with the user's exact message, the new code passes. Typecheck, 106 tests and the build passed.
+
 ## v0.14.1: name clashes reported
 
 Lumi Studio 1.13.1 never replaces an entry from Paige; a taken name comes back as `{name:'Vesper 2', clashWith:'Vesper'}`. LumiCast passes that into Paige's progress as a plain sentence. Tested against a fake host. Typecheck, tests and the build passed.

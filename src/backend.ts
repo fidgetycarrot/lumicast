@@ -1,4 +1,5 @@
 import type { SpindleAPI, GenerationRequestDTO } from 'lumiverse-spindle-types';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { BooruDictionary, testGelbooru } from './dictionary';
 import { Translator } from './engine';
 import { answersOoc, CAST, entryComment, entryContent, lastOocExchange, parseCast, type CastRead, type CastSaved, type ChatLine } from './cast';
@@ -22,7 +23,7 @@ export function setupBackend(api: SpindleAPI) {
     await s.load;
   };
   const dictionaryFor=(s:UserState)=>s.dictionary ??= new BooruDictionary(async url=> {
-    const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.14.1 (tag metadata client)'}}));
+    const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.14.2 (tag metadata client)'}}));
     if(typeof response.status!=='number'||typeof response.body!=='string')throw new Error('Invalid proxy response.');
     return {status:response.status,body:response.body};
   },{user:s.settings!.gelUser,key:s.settings!.gelKey});
@@ -232,7 +233,7 @@ export function setupBackend(api: SpindleAPI) {
         const entered=gelCredentials(text(v.gelUser ?? '','Gelbooru user',300),v.gelKey ? text(v.gelKey,'Gelbooru key',300) : '');
         const credentials={user:entered.user||settings.gelUser,key:entered.key||settings.gelKey};
         const outcome=await testGelbooru(async url=> {
-          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.14.1 (tag metadata client)'}}));
+          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.14.2 (tag metadata client)'}}));
           return {status:Number(response.status),body:typeof response.body==='string'?response.body:''};
         },credentials);
         const unsaved=credentials.user!==settings.gelUser||credentials.key!==settings.gelKey;
@@ -298,9 +299,19 @@ export function setupBackend(api: SpindleAPI) {
    * into Lumi Studio (lumidraw_studio.lumicast.add), new or updated by name. Progress is shared at paige.status.
    */
   type PaigeLook={name:string;aliases:string[];kind:'character'|'persona';description:string};
-  type PaigeStatus={sessionId:string;done:number;total:number;running:boolean;current?:string;finished:{name:string;ok:boolean;message:string}[]};
+  type PaigeStatus={sessionId:string;done:number;total:number;running:boolean;current?:string;error?:string;finished:{name:string;ok:boolean;message:string}[]};
   const pool=(api as unknown as {rpcPool?:{sync?:(e:string,v:unknown,p?:{requires?:string[]})=>string;read?:(e:string)=>Promise<unknown>;handle?:(e:string,h:(ctx:{requesterExtensionId:string})=>unknown,p?:{requires?:string[]})=>string}}).rpcPool;
   const paigeStatus=(status:PaigeStatus)=>{try{pool?.sync?.('paige.status',status,{requires:[]});}catch{/* best effort */}};
+  /**
+   * Lumiverse answers another extension's read with only the permissions that read was granted, and that
+   * holds for everything started from inside the answer. So paige.start only checks and queues the work; a
+   * loop started here, in LumiCast's own context, runs it with LumiCast's real permissions.
+   */
+  type PaigeJob={looks:PaigeLook[];userId?:string;sessionId:string};
+  const paigeQueue:PaigeJob[]=[];
+  let paigeBusy=false,wakePaige:(()=>void)|null=null;
+  // Also escape explicitly where the runtime offers it.
+  const outside:<T>(fn:()=>T)=>T=(()=>{try{const snap=(AsyncLocalStorage as unknown as {snapshot?:()=>(<T>(fn:()=>T)=>T)}).snapshot?.();if(snap)return snap;}catch{/* older runtime */}return <T>(fn:()=>T)=>fn();})();
   async function startFromPaige(requester:string):Promise<{ok:boolean;message?:string;count?:number}> {
     if (requester!=='paige') return {ok:false,message:'Only Paige can send characters this way.'};
     if (typeof pool?.read!=='function'||typeof pool.sync!=='function') return {ok:false,message:'This Lumiverse version cannot share data between extensions.'};
@@ -313,48 +324,64 @@ export function setupBackend(api: SpindleAPI) {
       name:String(c.name).trim().slice(0,80),aliases:(Array.isArray(c.aliases)?c.aliases:[]).filter((a):a is string=>typeof a==='string').map(a=>a.trim().slice(0,60)).filter(Boolean).slice(0,8),
       kind:c.kind==='persona'?'persona':'character',description:String(c.description).slice(0,12_000)}));
     if (!looks.length) return {ok:false,message:'None of the looks Paige sent had a name and a description.'};
-    if (!api.permissions.has('generation')||!api.permissions.has('cors_proxy')) return {ok:false,message:'Grant LumiCast generation and CORS proxy permissions in Extensions.'};
-    const s=stateFor(userId ?? 'owner');
-    if (s.jobs.size) return {ok:false,message:'LumiCast is busy with another translation. Wait for it, then press Send looks again in Paige.'};
-    await loadSettings(s,userId);
-    const settings=s.settings!;
-    if (!settings.connectionId) return {ok:false,message:'Pick a connection in LumiCast first (Connection & tag services), then press Send looks again in Paige.'};
-    let connection:{id:string;provider:string;model:string};
-    try {connection=await pickConnectionFor(settings.connectionId,userId);} catch (error) {return {ok:false,message:error instanceof Error?error.message:'LumiCast\'s connection is unavailable.'};}
-    const controller=new AbortController();s.jobs.set('paige',controller);
-    const status:PaigeStatus={sessionId,done:0,total:looks.length,running:true,finished:[]};
-    paigeStatus(status);
-    void (async()=>{
-      try {
-        for (const look of looks) {
-          if (closed||controller.signal.aborted) break;
-          status.current=look.name;paigeStatus(status);
-          let ok=false,message='';
-          const one=new AbortController();const stop=()=>one.abort();controller.signal.addEventListener('abort',stop);
-          const timer=setTimeout(()=>one.abort(),240_000);
-          try {
-            let calls=0;
-            const translator=new Translator(callerFor(connection,()=>++calls===1?'trait extraction':'tag review and caption',settings,userId),dictionaryFor(s));
-            const result=await translator.translate(look.description,one.signal,`${connection.provider} / ${connection.model}`,{scope:'outfit',notes:settings.notes});
-            pool!.sync!('paige.sheet',{version:1,sessionId,name:look.name,aliases:look.aliases,kind:look.kind,userId:userId ?? '',sentAt:Date.now(),sheet:result.sheet},{requires:[]});
-            const answer=record(await pool!.read!('lumidraw_studio.lumicast.add'));
-            ok=answer.ok===true;
-            // Lumi Studio never replaces anyone; a taken name comes back as "Vesper 2" with the name it clashed with.
-            const saved=typeof answer.name==='string'?answer.name.slice(0,80):look.name,clash=typeof answer.clashWith==='string'?answer.clashWith.slice(0,80):'';
-            message=!ok?'Lumi Studio gave no answer':clash?`saved as “${saved}” because Lumi Studio already had a ${clash}; give one of them a new name there`:answer.updated?'updated':'added';
-          } catch (error) {
-            const text=error instanceof Error?error.message:'';
-            message=/not registered|not found/i.test(text)?'Lumi Studio is missing or too old; update it':error instanceof ModelRequestError||/^The model /.test(text)?text.slice(0,200):error instanceof Error&&error.name==='AbortError'?'took too long':text.replace(/^.*?:\s*(?=[A-Z])/,'').slice(0,200)||'failed';
-          } finally {clearTimeout(timer);controller.signal.removeEventListener('abort',stop);}
-          status.done++;status.finished.push({name:look.name,ok,message});
-          paigeStatus(status);
-        }
-      } finally {
-        status.running=false;delete status.current;paigeStatus(status);s.jobs.delete('paige');
-      }
-    })();
+    if (paigeBusy||paigeQueue.length) return {ok:false,message:'LumiCast is still working on the last batch from Paige. Wait for it, then press Send looks again.'};
+    paigeQueue.push({looks,userId,sessionId});
+    paigeStatus({sessionId,done:0,total:looks.length,running:true,finished:[]});
+    wakePaige?.();
     return {ok:true,count:looks.length};
   }
+  async function runPaigeJob({looks,userId,sessionId}:PaigeJob) {
+    const status:PaigeStatus={sessionId,done:0,total:looks.length,running:true,finished:[]};
+    const fail=(error:string)=>{status.running=false;status.error=error;paigeStatus(status);};
+    if (!api.permissions.has('generation')||!api.permissions.has('cors_proxy')) return fail('Grant LumiCast generation and CORS proxy permissions in Extensions.');
+    const s=stateFor(userId ?? 'owner');
+    if (s.jobs.size) return fail('LumiCast is busy with another translation. Wait for it, then press Send looks again in Paige.');
+    await loadSettings(s,userId);
+    const settings=s.settings!;
+    if (!settings.connectionId) return fail('Pick a connection in LumiCast first (Connection & tag services), then press Send looks again in Paige.');
+    let connection:{id:string;provider:string;model:string};
+    try {connection=await pickConnectionFor(settings.connectionId,userId);} catch (error) {return fail(error instanceof Error?error.message:'LumiCast\'s connection is unavailable.');}
+    const controller=new AbortController();s.jobs.set('paige',controller);
+    paigeStatus(status);
+    try {
+      for (const look of looks) {
+        if (closed||controller.signal.aborted) break;
+        status.current=look.name;paigeStatus(status);
+        let ok=false,message='';
+        const one=new AbortController();const stop=()=>one.abort();controller.signal.addEventListener('abort',stop);
+        const timer=setTimeout(()=>one.abort(),240_000);
+        try {
+          let calls=0;
+          const translator=new Translator(callerFor(connection,()=>++calls===1?'trait extraction':'tag review and caption',settings,userId),dictionaryFor(s));
+          const result=await translator.translate(look.description,one.signal,`${connection.provider} / ${connection.model}`,{scope:'outfit',notes:settings.notes});
+          pool!.sync!('paige.sheet',{version:1,sessionId,name:look.name,aliases:look.aliases,kind:look.kind,userId:userId ?? '',sentAt:Date.now(),sheet:result.sheet},{requires:[]});
+          const answer=record(await pool!.read!('lumidraw_studio.lumicast.add'));
+          ok=answer.ok===true;
+          // Lumi Studio never replaces anyone; a taken name comes back as "Vesper 2" with the name it clashed with.
+          const saved=typeof answer.name==='string'?answer.name.slice(0,80):look.name,clash=typeof answer.clashWith==='string'?answer.clashWith.slice(0,80):'';
+          message=!ok?'Lumi Studio gave no answer':clash?`saved as “${saved}” because Lumi Studio already had a ${clash}; give one of them a new name there`:answer.updated?'updated':'added';
+        } catch (error) {
+          const text=error instanceof Error?error.message:'';
+          message=/not registered|not found/i.test(text)?'Lumi Studio is missing or too old; update it':error instanceof ModelRequestError||/^The model /.test(text)?text.slice(0,200):error instanceof Error&&error.name==='AbortError'?'took too long':text.replace(/^.*?:\s*(?=[A-Z])/,'').slice(0,200)||'failed';
+        } finally {clearTimeout(timer);controller.signal.removeEventListener('abort',stop);}
+        status.done++;status.finished.push({name:look.name,ok,message});
+        paigeStatus(status);
+      }
+    } finally {
+      status.running=false;delete status.current;paigeStatus(status);s.jobs.delete('paige');
+    }
+  }
+  // The loop waits here, in LumiCast's own context, until paige.start queues something.
+  outside(()=>void (async()=>{
+    while (!closed) {
+      if (!paigeQueue.length) await new Promise<void>(resolve=>{wakePaige=resolve;});
+      wakePaige=null;
+      const job=paigeQueue.shift();
+      if (!job||closed) continue;
+      paigeBusy=true;
+      try {await runPaigeJob(job);} catch {/* reported per look */} finally {paigeBusy=false;}
+    }
+  })());
   if (typeof pool?.handle==='function') {
     try {pool.handle('paige.start',({requesterExtensionId})=>startFromPaige(requesterExtensionId),{requires:[]});}
     catch {/* older hosts */}
@@ -371,7 +398,7 @@ export function setupBackend(api: SpindleAPI) {
       }).catch(()=>{/* best effort */});
     });
   } catch {/* older hosts without the event */}
-  return () => {closed=true;off();offEnded();for(const s of users.values()) for(const c of s.jobs.values()) c.abort();users.clear();};
+  return () => {closed=true;wakePaige?.();off();offEnded();for(const s of users.values()) for(const c of s.jobs.values()) c.abort();users.clear();};
 }
 declare const spindle: SpindleAPI;
 if (typeof spindle !== 'undefined') setupBackend(spindle);
