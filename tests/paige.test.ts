@@ -27,7 +27,7 @@ function host(options: { connection?: string; studio?: boolean } = {}) {
         if (endpoint === 'paige.cast') { if (!cast) throw new Error('no value'); return cast; }
         if (endpoint === 'lumidraw_studio.lumicast.add') {
           if (options.studio === false) throw new Error('Shared RPC endpoint "lumidraw_studio.lumicast.add" is not registered');
-          added.push(synced.get('paige.sheet')); return { ok: true, updated: false };
+          const sheet = synced.get('paige.sheet') as { name: string }; added.push(sheet); return sheet.name === 'Wes' ? { ok: true, updated: false, name: 'Wes 2', clashWith: 'Wes' } : { ok: true, updated: false, name: sheet.name };
         }
         throw new Error('no value');
       },
@@ -47,6 +47,7 @@ test('Paige looks become Lumi Studio characters, one by one', async () => {
   const status = await h.finished() as { done: number; total: number; sessionId: string; finished: { name: string; ok: boolean }[] };
   expect(status).toMatchObject({ done: 2, total: 2, sessionId: 'sess1' });
   expect(status.finished.map(f => [f.name, f.ok])).toEqual([['Jory Kett', true], ['Wes', true]]);
+  expect((status.finished as unknown as { message: string }[])[1].message).toBe('saved as “Wes 2” because Lumi Studio already had a Wes; give one of them a new name there');
   const sheets = h.added as { name: string; kind: string; aliases: string[]; userId: string; sheet: { appearance: string; subject: string } }[];
   expect(sheets.map(s => [s.name, s.kind])).toEqual([['Jory Kett', 'character'], ['Wes', 'persona']]);
   expect(sheets[0].sheet.appearance).toContain('red hair');

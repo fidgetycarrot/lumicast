@@ -22,7 +22,7 @@ export function setupBackend(api: SpindleAPI) {
     await s.load;
   };
   const dictionaryFor=(s:UserState)=>s.dictionary ??= new BooruDictionary(async url=> {
-    const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.14.0 (tag metadata client)'}}));
+    const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.14.1 (tag metadata client)'}}));
     if(typeof response.status!=='number'||typeof response.body!=='string')throw new Error('Invalid proxy response.');
     return {status:response.status,body:response.body};
   },{user:s.settings!.gelUser,key:s.settings!.gelKey});
@@ -232,7 +232,7 @@ export function setupBackend(api: SpindleAPI) {
         const entered=gelCredentials(text(v.gelUser ?? '','Gelbooru user',300),v.gelKey ? text(v.gelKey,'Gelbooru key',300) : '');
         const credentials={user:entered.user||settings.gelUser,key:entered.key||settings.gelKey};
         const outcome=await testGelbooru(async url=> {
-          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.14.0 (tag metadata client)'}}));
+          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.14.1 (tag metadata client)'}}));
           return {status:Number(response.status),body:typeof response.body==='string'?response.body:''};
         },credentials);
         const unsaved=credentials.user!==settings.gelUser||credentials.key!==settings.gelKey;
@@ -338,7 +338,10 @@ export function setupBackend(api: SpindleAPI) {
             const result=await translator.translate(look.description,one.signal,`${connection.provider} / ${connection.model}`,{scope:'outfit',notes:settings.notes});
             pool!.sync!('paige.sheet',{version:1,sessionId,name:look.name,aliases:look.aliases,kind:look.kind,userId:userId ?? '',sentAt:Date.now(),sheet:result.sheet},{requires:[]});
             const answer=record(await pool!.read!('lumidraw_studio.lumicast.add'));
-            ok=answer.ok===true;message=ok?(answer.updated?'updated':'added'):'Lumi Studio gave no answer';
+            ok=answer.ok===true;
+            // Lumi Studio never replaces anyone; a taken name comes back as "Vesper 2" with the name it clashed with.
+            const saved=typeof answer.name==='string'?answer.name.slice(0,80):look.name,clash=typeof answer.clashWith==='string'?answer.clashWith.slice(0,80):'';
+            message=!ok?'Lumi Studio gave no answer':clash?`saved as “${saved}” because Lumi Studio already had a ${clash}; give one of them a new name there`:answer.updated?'updated':'added';
           } catch (error) {
             const text=error instanceof Error?error.message:'';
             message=/not registered|not found/i.test(text)?'Lumi Studio is missing or too old; update it':error instanceof ModelRequestError||/^The model /.test(text)?text.slice(0,200):error instanceof Error&&error.name==='AbortError'?'took too long':text.replace(/^.*?:\s*(?=[A-Z])/,'').slice(0,200)||'failed';
