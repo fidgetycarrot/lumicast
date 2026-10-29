@@ -24,7 +24,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
     await s.load;
   };
   const dictionaryFor=(s:UserState)=>s.dictionary ??= new BooruDictionary(async url=> {
-    const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.15.0 (tag metadata client)'}}));
+    const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.16.0 (tag metadata client)'}}));
     if(typeof response.status!=='number'||typeof response.body!=='string')throw new Error('Invalid proxy response.');
     return {status:response.status,body:response.body};
   },{user:s.settings!.gelUser,key:s.settings!.gelKey});
@@ -234,7 +234,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
         const entered=gelCredentials(text(v.gelUser ?? '','Gelbooru user',300),v.gelKey ? text(v.gelKey,'Gelbooru key',300) : '');
         const credentials={user:entered.user||settings.gelUser,key:entered.key||settings.gelKey};
         const outcome=await testGelbooru(async url=> {
-          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.15.0 (tag metadata client)'}}));
+          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.16.0 (tag metadata client)'}}));
           return {status:Number(response.status),body:typeof response.body==='string'?response.body:''};
         },credentials);
         const unsaved=credentials.user!==settings.gelUser||credentials.key!==settings.gelKey;
@@ -242,7 +242,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
         if (outcome.ok&&!unsaved) s.dictionary=undefined;
         return {ok:outcome.ok,message:outcome.ok&&unsaved?`${outcome.message} Save settings to start using them.`:outcome.message};
       }
-      if (!['translate','refine','search','verify','castRead'].includes(String(r.action))) throw new Error('Unknown LumiCast action.');
+      if (!['translate','refine','search','verify','castRead','mossify'].includes(String(r.action))) throw new Error('Unknown LumiCast action.');
       if (s.jobs.size) throw new Error('An operation is already running. Wait or cancel it first.');
       const controller=new AbortController();s.jobs.set(session,controller);
       const timer=setTimeout(()=>controller.abort(),240_000);
@@ -275,6 +275,11 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
         let modelCalls=0;const refining=r.action==='refine';
         const translator=new Translator(caller(connection,()=>refining?'refinement':++modelCalls===1?'trait extraction':'tag review and caption'),dictionary());
         const label=`${connection.provider} / ${connection.model}`;
+        if (r.action==='mossify') {
+          progress('The model is writing the MOSS description…');
+          const sheet=record(input.sheet);const field=(key:string,max=4000)=>text(sheet[key] ?? '',key,max);
+          return await new Translator(caller(connection,()=>'writing the MOSS description'),dictionary()).mossify({sheet:{countTag:field('countTag',40),subject:field('subject',200),always:field('always'),appearance:field('appearance'),outfit:field('outfit'),anatomy:'',moss:field('moss',1500)},description:text(input.description ?? '','description',12_000)},controller.signal);
+        }
         if (refining) {
           progress('The model is thinking about your feedback…');
           const refinement=await translator.refine({tags:Array.isArray(input.tags)?input.tags.map(v=>text(v,'tag',120)):[],caption:text(input.caption ?? '','caption',16_000),feedback:text(input.feedback,'feedback (maximum 2,000 characters)',2000),description:text(input.description ?? '','description',12_000),stated:text(input.stated ?? '','character type',300),notes:settings.notes,locked:Array.isArray(input.locked)?input.locked.map(v=>text(v,'tag',120)):[],history:Array.isArray(input.history)?input.history:[]},controller.signal,label);

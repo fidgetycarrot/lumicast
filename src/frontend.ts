@@ -176,7 +176,9 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
       `Say what the images get wrong in 03 / Refine. When you are done, press ${sendBack.textContent}.`].join('\n'));
     markSeen(got.sentAt);
     studioText.textContent=`${got.name||'The character'} came from Lumi Studio. Its tags are in 04 / Lumi Studio character sheet. Say what the pictures get wrong in 03 / Refine, then send the new sheet back.`;
-    studioButtons.replaceChildren(sendBack,showTags,hideNews);studioNews.hidden=false;
+    studioButtons.replaceChildren(sendBack,writeMoss,showTags,hideNews);studioNews.hidden=false;
+    // A character with no MOSS description yet gets one written straight away, so converting many is load, check, update.
+    if(!(got.sheet.moss??'').trim())setTimeout(()=>{if(!closed&&studioRef)writeMoss.click();},0);
   };
   // Replaces the six sheet fields of that saved entry in Lumi Studio, empty ones included. Nothing else in it changes.
   const sendBack=button('Update in Lumi Studio',async()=> {
@@ -187,6 +189,15 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
     studioText.textContent=`${who} is updated in Lumi Studio. Generate a new picture there to check it. You can keep refining and send it again.`;
     notify(`${who} updated in Lumi Studio.`);
   },true);
+  // Rewrites the loaded character for MOSS: the Description for MOSS and the outfit as whole garments. The Anima tags stay.
+  const writeMoss=button('Write the MOSS description',async()=> {
+    const values=Object.fromEntries((Object.keys(sheet) as (keyof typeof sheet)[]).map(k=>[k,sheet[k].box.value]));
+    const got=await clocked<{moss:string;outfit:string[];notices:string[]}>('mossify',{connectionId:connection.value,sheet:values,description:source.value});
+    sheet.moss.box.value=got.moss;if(got.outfit.length)sheet.outfit.box.value=got.outfit.join(', ');
+    sheetCard.open=true;share();
+    notify([got.moss||got.outfit.length?'MOSS description and outfit written. Check them in 04 / Lumi Studio character sheet.':'',...got.notices,
+      studioRef?`Then press ${sendBack.textContent}.`:''].filter(Boolean).join('\n'));
+  });
   const studio=button('Load it',async()=>applyStudio(await rpc.request<StudioCharacter>('fromStudio')),true);
   const notNow=plain('Not now',()=>{markSeen(studioOffered);studioNews.hidden=true;notify('Kept what you have. To load that character later, press Tweak in LumiCast in Lumi Studio again.');});
   const showTags=plain('Show the tags',()=>{sheetCard.open=true;sheetCard.scrollIntoView?.({behavior:'smooth',block:'start'});});
@@ -398,8 +409,8 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   });
   searchCard.append(field('Tag name or the start of one',query,'Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched.'),search,found);
 
-  app.append(intro,settings,status,studioNews,castCard,input,gapsCard,output,refine,sheetCard,searchCard,el('p','LumiCast 0.15.0 · Draft stays in this tab until reload.'));
-  const controls=[readOoc,translate,studio,sendBack,again,save,refreshButton,testGel,saveNotes,saveQuality,startOver,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
+  app.append(intro,settings,status,studioNews,castCard,input,gapsCard,output,refine,sheetCard,searchCard,el('p','LumiCast 0.16.0 · Draft stays in this tab until reload.'));
+  const controls=[readOoc,translate,studio,sendBack,writeMoss,again,save,refreshButton,testGel,saveNotes,saveQuality,startOver,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
 
   // Every change to the sheet is offered to Lumi Studio, a moment after typing stops.
   let shareTimer:ReturnType<typeof setTimeout>|undefined;

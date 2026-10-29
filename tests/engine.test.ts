@@ -221,7 +221,8 @@ test('Lumi Studio sheet: fields the character editor takes, with phrases only fo
   expect(result.sheet).toEqual({
     countTag:'1boy',subject:'adult male android',always:'android, trap',
     appearance:'narrow waist, wide hips, silver hair, short hair, engineered hourglass silhouette, narrow shoulders, pale polymer skin, choppy silver-white hair, a, b',
-    outfit:'thighhighs, black thighhighs, no shoes, sheer black thigh-high stockings',anatomy:'',moss:'',
+    // Whole-garment phrases replace the bare tags they cover.
+    outfit:'sheer black thigh-high stockings, no shoes',anatomy:'',moss:'',
   });
   // The sheet does not depend on the Include choice, and never carries solo or scene detail.
   expect((await run(fixture.source,{traits:fixture.traits},{},{scope:'scene'})).result.sheet).toEqual({countTag:'1boy',subject:'',always:'android, trap',appearance:'narrow waist, wide hips, silver hair, short hair',outfit:'thighhighs, black thighhighs, no shoes',anatomy:'',moss:''});

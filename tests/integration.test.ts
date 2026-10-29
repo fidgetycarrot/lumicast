@@ -393,7 +393,7 @@ test('a Lumi Studio character loads on its own for Refine, with its Cast descrip
   h.story.books.set('cast',{id:'cast',name:'Cast · Harbour story',metadata:{lumicast:'cast'}});h.story.chat!.metadata.chat_world_book_ids=['mine','cast'];
   h.story.entries.push({id:'e1',world_book_id:'cast',key:['Maren','the dockmaster'],content:"[Maren's appearance]\nMaren is tall, with a grey-streaked black braid.",comment:'LumiCast: Maren'});
   // An empty panel loads the sent character by itself.
-  h.setStudio({version:1,name:'Maren',anchor:'Maren',userId:'u1',sentAt:Date.now(),sheet:{countTag:'1girl',subject:'tall woman',always:'',appearance:'black hair, braid, tall female',outfit:'coat',anatomy:''}});
+  h.setStudio({version:1,name:'Maren',anchor:'Maren',userId:'u1',sentAt:Date.now(),sheet:{moss:'already written.',countTag:'1girl',subject:'tall woman',always:'',appearance:'black hair, braid, tall female',outfit:'coat',anatomy:''}});
   await until(()=>sheetValue('appearance')==='black hair, braid, tall female');await until(()=>!b('Translate').disabled);
   expect(sheetValue('countTag')).toBe('1girl');
   expect(named(h.root,'source').value).toBe('Maren is tall, with a grey-streaked black braid.');
@@ -409,7 +409,7 @@ test('a Lumi Studio character loads on its own for Refine, with its Cast descrip
   const sent=(h.calls.filter(c=>(c as unknown[])[0]==='generation').at(-1) as unknown[])[1] as {messages:{content:string}[]};
   expect(JSON.parse(sent.messages[1].content)).toMatchObject({tags:['1girl','black_hair','braid','tall_female','coat'],description:'Maren is tall, with a grey-streaked black braid.'});
   // A second send while a Refine answer waits: asked first, nothing replaced.
-  h.setStudio({version:1,name:'Tobin',anchor:'Tobin',userId:'u1',sentAt:Date.now()+1,sheet:{countTag:'1boy',subject:'wiry man',always:'',appearance:'short hair',outfit:'',anatomy:''}});
+  h.setStudio({version:1,name:'Tobin',anchor:'Tobin',userId:'u1',sentAt:Date.now()+1,sheet:{moss:'already written.',countTag:'1boy',subject:'wiry man',always:'',appearance:'short hair',outfit:'',anatomy:''}});
   await until(()=>news().textContent!.includes('Tobin was sent from Lumi Studio'));
   expect(sheetValue('appearance')).toBe('black hair, braid, tall female');
   b('Not now').click();expect(news().hidden).toBe(true);await Bun.sleep(120);expect(news().hidden).toBe(true);
@@ -421,7 +421,7 @@ test('a Lumi Studio character loads on its own for Refine, with its Cast descrip
   expect((shared[2] as {sheet:{appearance:string}}).sheet.appearance).toBe('black hair, braid, tall female, streaked hair');
   // A third send while Refine feedback is typed: Load it replaces on request.
   named(h.root,'feedback').value='Taller, please.';
-  h.setStudio({version:1,name:'Tobin',anchor:'Tobin',userId:'u1',sentAt:Date.now()+2,sheet:{countTag:'1boy',subject:'wiry man',always:'',appearance:'short hair',outfit:'',anatomy:''}});
+  h.setStudio({version:1,name:'Tobin',anchor:'Tobin',userId:'u1',sentAt:Date.now()+2,sheet:{moss:'already written.',countTag:'1boy',subject:'wiry man',always:'',appearance:'short hair',outfit:'',anatomy:''}});
   await until(()=>news().textContent!.includes('Tobin was sent'));b('Load it').click();await until(()=>sheetValue('appearance')==='short hair');
   await until(()=>!b('Translate').disabled);expect(status()).toContain('Tobin loaded from Lumi Studio');
   // Another user's character is never loaded or offered.
@@ -436,18 +436,18 @@ test('the revised sheet goes back to the Lumi Studio entry it came from, and onl
   const status=()=>h.root.querySelector('.lc-status')!.textContent!;
   const sheetBox=(key:string)=>h.root.querySelector(`[data-sheet="${key}"]`) as HTMLInputElement;
   // Not saved in Lumi Studio yet: there is nothing to update.
-  h.setStudio({version:1,name:'Riley',anchor:'Riley',userId:'u1',sentAt:Date.now(),id:'',kind:'character',sheet:{countTag:'1girl',appearance:'glasses, round eyewear',outfit:''}});
+  h.setStudio({version:1,name:'Riley',anchor:'Riley',userId:'u1',sentAt:Date.now(),id:'',kind:'character',sheet:{moss:'already written.',countTag:'1girl',appearance:'glasses, round eyewear',outfit:''}});
   await until(()=>!!b('Update Riley in Lumi Studio'));await until(()=>!b('Translate').disabled);
   b('Update Riley in Lumi Studio').click();await until(()=>!b('Translate').disabled);expect(status()).toContain('Save this character in Lumi Studio first');
   // Saved there: the edited sheet goes back, empty fields included, and Lumi Studio's answer is shown.
   const sentAt=Date.now()+1;
-  h.setStudio({version:1,name:'Riley',anchor:'Riley',userId:'u1',sentAt,id:'character_7',kind:'character',sheet:{countTag:'1girl',appearance:'glasses, round eyewear',outfit:'hoodie'}});
+  h.setStudio({version:1,name:'Riley',anchor:'Riley',userId:'u1',sentAt,id:'character_7',kind:'character',sheet:{moss:'already written.',countTag:'1girl',appearance:'glasses, round eyewear',outfit:'hoodie'}});
   await until(()=>sheetBox('outfit').value==='hoodie');await until(()=>!b('Translate').disabled);
   sheetBox('appearance').value='round eyewear';sheetBox('outfit').value='';
   let asked=0;h.setApply(()=>{asked++;return {ok:true,name:'Riley'};});
   b('Update Riley in Lumi Studio').click();await until(()=>status().includes('updated in Lumi Studio'));
   const result=h.calls.filter(c=>(c as unknown[])[0]==='sync'&&(c as unknown[])[1]==='tweak.result').at(-1) as unknown[];
-  expect(result[2]).toEqual({version:1,id:'character_7',kind:'character',sentAt,userId:'u1',sheet:{countTag:'1girl',subject:'',always:'',appearance:'round eyewear',outfit:'',anatomy:'',moss:''}});
+  expect(result[2]).toEqual({version:1,id:'character_7',kind:'character',sentAt,userId:'u1',sheet:{countTag:'1girl',subject:'',always:'',appearance:'round eyewear',outfit:'',anatomy:'',moss:'already written.'}});
   expect(result[3]).toEqual({requires:[]});expect(asked).toBe(1);
   expect(h.root.querySelector('.lc-studio')!.textContent).toContain('Riley is updated in Lumi Studio.');
   // Lumi Studio's refusal is passed on; an older Lumi Studio says so plainly.
@@ -457,4 +457,21 @@ test('the revised sheet goes back to the Lumi Studio entry it came from, and onl
   h.setResponses([{traits:[{id:'1',group:'hair',evidence:'Short red hair.',tags:['red_hair'],detail:'Short red hair'}]},{drop:[],captions:{character:'Short red hair.'},issues:[]}]);
   named(h.root,'source').value='Short red hair.';named(h.root,'source').dispatchEvent(new Event('input'));b('Translate').click();await until(()=>!b('Translate').disabled);
   expect((h.root.querySelector('.lc-studio') as HTMLElement).hidden).toBe(true);expect(status()).not.toContain('Update Riley');
+});
+test('a character from Lumi Studio with no MOSS description gets one written straight away, ready to send back',async()=> {
+  dom();const h=harness();cleanups.push(h.stop);const dispose=setup(h.ctx,{studioPollMs:20});cleanups.push(dispose);
+  const b=(name:string)=>Array.from(h.root.querySelectorAll('button')).find(x=>x.textContent===name)!;
+  await until(()=>!b('Translate').disabled);h.root.querySelector('select')!.value='c1';
+  const sheetBox=(key:string)=>h.root.querySelector(`[data-sheet="${key}"]`) as HTMLTextAreaElement;
+  h.setResponses([{moss:'A sharp-featured adult man with smooth fair skin and sharp, half-lidded amber eyes.',outfit:['crimson silk officer coat with heavy gold bullion epaulets','thigh-high black leather boots']}]);
+  h.setStudio({version:1,name:'Vesper',anchor:'Vesper',userId:'u1',sentAt:Date.now(),id:'character_9',kind:'character',sheet:{countTag:'1boy',subject:'adult man',always:'trap',appearance:'amber eyes',outfit:'red coat, epaulettes, thigh boots, white gloves',anatomy:'',moss:''}});
+  await until(()=>sheetBox('moss').value!=='');await until(()=>!b('Translate').disabled);
+  expect(sheetBox('moss').value).toBe('a sharp-featured adult man with smooth fair skin and sharp, half-lidded amber eyes.');
+  expect(sheetBox('outfit').value).toBe('crimson silk officer coat with heavy gold bullion epaulets, thigh-high black leather boots, white gloves');
+  expect(sheetBox('appearance').value).toBe('amber eyes');
+  expect(h.root.querySelector('.lc-status')!.textContent).toContain('Then press Update Vesper in Lumi Studio.');
+  const sent=(h.calls.filter(c=>(c as unknown[])[0]==='generation').at(-1) as unknown[])[1] as {messages:{content:string}[];reasoning?:unknown};
+  expect(sent.messages[0].content).toContain('MOSS Image');
+  // Pressing it again writes it again; nothing runs by itself a second time.
+  const calls=()=>h.calls.filter(c=>(c as unknown[])[0]==='generation').length;const before=calls();await Bun.sleep(100);expect(calls()).toBe(before);
 });
