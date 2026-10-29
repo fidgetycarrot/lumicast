@@ -44,6 +44,9 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   let pending:Proposal[]=[];
   // Refine's memory for the current character: kept until the description changes or Start over.
   let rounds:RefineRound[]=[];let roundFeedback='';let translatedFrom='';
+  // Each Refine mode keeps its own earlier rounds; `rounds` is the shown mode's list.
+  const roundsBy:Record<string,RefineRound[]>={anima:[],moss:[]};let pendingMode='anima';
+  const forgetRounds=()=>{roundsBy.anima=[];roundsBy.moss=[];rounds=[];};
   const rpc=createRpc(ctx);
   const tab=ctx.ui.registerDrawerTab({id:'translator',title:'LumiCast',shortName:'LumiCast',description:'Turn a written appearance into an Anima prompt',keywords:['anima','booru','prompt','translator'],iconSvg:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 3H4v18h4M16 3h4v18h-4M9 8l3-3 3 3M9 16l3 3 3-3M12 5v14"/></svg>'});
     const removeStyle=ctx.dom.addStyle(STYLES);
@@ -141,7 +144,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
     // Say what a re-run settled, so answering a gap never looks like nothing happened.
     const before=result?result.gaps.map(g=>g.what):[];
     // A new description is a new character, so Refine starts with a clean memory.
-    if(source.value!==translatedFrom){rounds=[];roundFeedback='';translatedFrom=source.value;showRounds();}
+    if(source.value!==translatedFrom){forgetRounds();roundFeedback='';translatedFrom=source.value;showRounds();}
     // A description that no longer names the Lumi Studio character is someone else; it must not be sent over them.
     if(studioRef&&studioRef.name&&!source.value.toLowerCase().includes(studioRef.name.toLowerCase())){studioRef=null;studioNews.hidden=true;}
     result=next;fromStudio=false;showSheet();showStandalone();
@@ -166,7 +169,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
     studioRef={id:got.id,kind:got.kind,sentAt:got.sentAt,name:got.name};sendBack.textContent=`Update ${got.name||'this character'} in Lumi Studio`;
     for(const key of Object.keys(sheet) as (keyof typeof sheet)[])sheet[key].box.value=got.sheet[key]??'';
     source.value=got.description;stated.value='';statedAgain.value='';revision++;translatedFrom=source.value;
-    result=null;fromStudio=true;rounds=[];roundFeedback='';showRounds();pending=[];proposed.replaceChildren();reply.textContent='';
+    result=null;fromStudio=true;forgetRounds();roundFeedback='';showRounds();pending=[];proposed.replaceChildren();reply.textContent='';
     tags.value='';prose.value='';prompt.value='';verified=true;edited=false;gapsCard.hidden=true;provenance.replaceChildren();issues.replaceChildren();sourceQuotes.replaceChildren();
     tagState.textContent='This character came from Lumi Studio. Its tags are in the character sheet below.';
     sheetCard.open=true;share();update();
@@ -264,7 +267,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
     subject:sheetField('Stable subject phrase','subject','Lumi Studio builds its own sentence around this.'),
     always:sheetField('Always include','always','The type tags that define the character.'),
     appearance:sheetField('Permanent appearance tags','appearance','Verified tags first, then short phrases for what no tag says.',true),
-    outfit:sheetField('Default outfit tags','outfit','Clothing from the description. Leave it out for a character whose clothes change with the story.',true),
+    outfit:sheetField('Default outfit tags','outfit','Clothing from the description, one whole garment per item, which suits both Anima and MOSS. Leave it out for a character whose clothes change with the story.',true),
     anatomy:sheetField('Conditional visible anatomy','anatomy','Explicit anatomy, kept out of the permanent tags so it never appears in scenes that do not show it. Set its rule in Lumi Studio.',true),
     moss:sheetField('Description for MOSS (plain English)','moss','Face and body only, in plain words, with nothing explicit, since NanoGPT refuses NSFW. MOSS presets in Lumi Studio use it word for word; Anima ignores it.',true),
   };
@@ -276,9 +279,14 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   const refine=card('03 / Refine');
   const feedback=named(el('textarea'),'feedback');feedback.rows=3;feedback.maxLength=2000;feedback.placeholder='Generate an image, then say what came out wrong: “reads too masculine”, “eyes came out blue”, “no visible seams”.';
   const reply=el('p');const proposed=el('div');
-  const said=(p:Proposal)=>{const tag=p.tag?formatWeighted({name:p.tag,weight:p.weight===1?undefined:p.weight},true):'';return p.kind==='add'?`add ${tag}`:p.kind==='remove'?`remove ${tag}`:p.kind==='weight'?(p.weight===1?`clear the weight on ${tag}`:`weight ${tag}`):'new caption';};
+  const said=(p:Proposal)=>{const tag=p.tag?formatWeighted({name:p.tag,weight:p.weight===1?undefined:p.weight},true):'';return p.kind==='add'?`add ${tag}`:p.kind==='remove'?`remove ${tag}`:p.kind==='weight'?(p.weight===1?`clear the weight on ${tag}`:`weight ${tag}`):p.kind==='moss'?(p.text?`new MOSS description: ${p.text.slice(0,160)}`:'empty the MOSS description'):p.kind==='garment-add'?`add “${p.text}”`:p.kind==='garment-remove'?`remove “${p.text}”`:p.kind==='garment-change'?`change “${p.from}” to “${p.text}”`:'new caption';};
+  // Which picture model the feedback is about. MOSS works on the MOSS description and outfit wording; Anima on tags.
+  const refineMode=el('select');refineMode.setAttribute('aria-label','Fixing pictures from');refineMode.append(option('MOSS','moss'),option('Anima','anima'));
+  try{refineMode.value=localStorage.getItem('lumicast.refine')==='anima'?'anima':'moss';}catch{refineMode.value='moss';}
+  rounds=roundsBy[refineMode.value];
+  refineMode.addEventListener('change',()=>{closeRound([]);roundsBy[refineMode.value==='moss'?'anima':'moss']=rounds;rounds=roundsBy[refineMode.value];showRounds();pending=[];proposed.replaceChildren();reply.textContent='';roundFeedback='';try{localStorage.setItem('lumicast.refine',refineMode.value);}catch{/* not kept */}update();notify(refineMode.value==='moss'?'Refine now fixes MOSS pictures: it changes the MOSS description and outfit wording.':'Refine now fixes Anima pictures: it changes tags and weights.');});
   const historyList=el('ol');const historyBox=el('details');historyBox.className='lc-sub';historyBox.hidden=true;
-  const startOver=button('Start over',()=>{rounds=[];showRounds();notify('Refine has forgotten the earlier rounds for this character.');});startOver.className='lc-mini';
+  const startOver=button('Start over',()=>{rounds=[];roundsBy[refineMode.value]=rounds;showRounds();notify('Refine has forgotten the earlier rounds for this character.');});startOver.className='lc-mini';
   historyBox.append(el('summary','Earlier rounds'),el('small','Refine remembers these while you work on this character, so it does not repeat itself.'),historyList,startOver);
   function showRounds(){
     historyList.replaceChildren();historyBox.hidden=!rounds.length;
@@ -289,24 +297,28 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   const closeRound=(applied:Proposal[])=>{
     if(!roundFeedback)return;
     rounds.push({feedback:roundFeedback,applied:applied.map(said),declined:pending.filter(p=>!applied.includes(p)).map(said)});
-    rounds=rounds.slice(-8);roundFeedback='';showRounds();
+    rounds=rounds.slice(-8);roundsBy[pendingMode]=rounds;roundFeedback='';showRounds();
   };
   // Refine sees every tag in use, from the Anima prompt and the sheet, once each.
   const inUse=()=>{const seen=new Set<string>();return [...splitTags(tags.value),...sheetEntries()].filter(v=>{const k=v.replace(/^\((.+?):[\d.]+\)$/,'$1').trim().toLowerCase().replace(/[\s_]+/g,' ');if(seen.has(k))return false;seen.add(k);return true;});};
   const sheetEntries=()=>[sheet.countTag.box.value,...splitTags(sheet.always.box.value),...splitTags(sheet.appearance.box.value),...splitTags(sheet.outfit.box.value),...splitTags(sheet.anatomy.box.value)].map(v=>v.trim()).filter(Boolean);
   const suggest=button('Suggest changes',async()=> {
+    const moss=refineMode.value==='moss';
     const entries=inUse();
-    if(!entries.length)throw new Error('Translate a character first.');
+    if(moss?!sheet.moss.box.value.trim()&&!sheet.outfit.box.value.trim():!entries.length)throw new Error(moss?'There is no MOSS description or outfit yet. Translate the character first, or write the MOSS description.':'Translate a character first.');
     if(!feedback.value.trim())throw new Error('Say what the image got wrong first.');
-    closeRound([]);
-    const next=await clocked<Refinement>('refine',{connectionId:connection.value,tags:entries,caption:prose.value,feedback:feedback.value,description:source.value,stated:stated.value,locked:splitTags(sheet.always.box.value),history:rounds});
+    closeRound([]);pendingMode=refineMode.value;
+    const next=moss
+      ?await clocked<Refinement>('refineMoss',{connectionId:connection.value,moss:sheet.moss.box.value,outfit:splitTags(sheet.outfit.box.value),feedback:feedback.value,description:source.value,stated:stated.value,history:rounds})
+      :await clocked<Refinement>('refine',{connectionId:connection.value,tags:entries,caption:prose.value,feedback:feedback.value,description:source.value,stated:stated.value,locked:splitTags(sheet.always.box.value),history:rounds});
     roundFeedback=feedback.value.trim().slice(0,600);pending=next.proposals;reply.textContent=next.reply;proposed.replaceChildren();
     pending.forEach((p,i)=> {
       const line=el('label');line.className='lc-proposal';const box=el('input');box.type='checkbox';box.checked=true;box.dataset.index=String(i);
       const shown=p.tag?formatWeighted({name:p.tag,weight:p.weight===1?undefined:p.weight},true):'';
-      const what=p.kind==='add'?`Add ${shown}`:p.kind==='remove'?`Remove ${shown}`:p.kind==='weight'?(p.weight===1?`Clear the weight on ${shown}`:`Weight ${shown}`):'Replace the standalone detail';
+      const what=p.kind==='add'?`Add ${shown}`:p.kind==='remove'?`Remove ${shown}`:p.kind==='weight'?(p.weight===1?`Clear the weight on ${shown}`:`Weight ${shown}`):p.kind==='moss'?(p.text?'Replace the MOSS description':'Empty the MOSS description'):p.kind==='garment-add'?`Add “${p.text}” to the outfit`:p.kind==='garment-remove'?`Remove “${p.text}” from the outfit`:p.kind==='garment-change'?`Change “${p.from}” to “${p.text}”`:'Replace the standalone detail';
       const body=el('span');body.append(el('strong',what),document.createTextNode(p.why?` — ${p.why}`:''));
       if(p.kind==='caption')body.append(el('blockquote',p.caption));
+      if(p.kind==='moss'&&p.text)body.append(el('blockquote',p.text));
       if(p.definition)body.append(el('small',` Danbooru: ${p.definition}`));
       line.append(box,body);proposed.append(line);
     });
@@ -316,6 +328,19 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
     const chosen=Array.from(proposed.querySelectorAll('input')).filter(b=>b.checked).map(b=>pending[Number(b.dataset.index)]);
     if(!chosen.length)throw new Error('Tick at least one suggestion.');
     closeRound(chosen);
+    if(pendingMode==='moss'){
+      let items=splitTags(sheet.outfit.box.value);const same=(a:string,b:string)=>a.trim().toLowerCase()===b.trim().toLowerCase();
+      for(const p of chosen){
+        if(p.kind==='moss')sheet.moss.box.value=p.text??'';
+        if(p.kind==='garment-remove')items=items.filter(i=>!same(i,p.text!));
+        if(p.kind==='garment-change')items=items.map(i=>same(i,p.from!)?p.text!:i);
+        if(p.kind==='garment-add'&&!items.some(i=>same(i,p.text!)))items.push(p.text!);
+      }
+      sheet.outfit.box.value=items.join(', ');
+      pending=[];proposed.replaceChildren();feedback.value='';sheetCard.open=true;share();
+      notify(studioRef?`Changes applied to the MOSS description and outfit. Press ${sendBack.textContent} to save them there.`:'Changes applied to the MOSS description and outfit. In Lumi Studio, choose Fill from LumiCast on this character, then save.');
+      return;
+    }
     const COUNT=/^1(?:girl|boy|other)$/;
     // The count tag has its own box in Lumi Studio, so a count change goes there and nowhere else.
     for(const p of chosen)if(p.tag&&COUNT.test(p.tag)){if(p.kind==='add')sheet.countTag.box.value=p.tag;if(p.kind==='remove'&&sheet.countTag.box.value.trim()===p.tag)sheet.countTag.box.value='';}
@@ -344,8 +369,8 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   });
   const notes=named(el('textarea'),'notes');notes.rows=4;notes.maxLength=2000;notes.placeholder='e.g. Femboys: weight trap at 1.4. Androids: add visible panel seams at the shoulders and concealed joints.';
   const saveNotes=button('Save notes',async()=>{await rpc.request('saveNotes',{notes:notes.value});notify('Notes saved. They apply from the next translation or refinement.');});
-  const notesBox=el('details');notesBox.className='lc-sub';notesBox.append(el('summary','Your Anima notes'),field('What you have learned works',notes,'In your own words. Saved, and read on every translation and refinement. A weight is only ever applied when a note gives the number.'),saveNotes);
-  refine.append(historyBox,field('What did the image get wrong?',feedback,'LumiCast cannot see the image. It works from what you say here, your description, your notes, the Anima prompt and the character sheet.'),row(suggest),reply,proposed,row(apply),notesBox);
+  const notesBox=el('details');notesBox.className='lc-sub';notesBox.append(el('summary','Your notes'),field('What you have learned works',notes,'In your own words. Saved, and read on every translation and refinement. Say which model a note is for (“MOSS: …”, “Anima: …”). A weight is only ever applied when a note gives the number.'),saveNotes);
+  refine.append(field('Fixing pictures from',refineMode,'MOSS changes the MOSS description and the outfit wording. Anima changes tags and weights.'),historyBox,field('What did the image get wrong?',feedback,'LumiCast cannot see the image. It works from what you say here, your description, your notes and the character sheet.'),row(suggest),reply,proposed,row(apply),notesBox);
 
   // ── Standalone prompt: for use without Lumi Studio ──
   const output=card('02 / Anima prompt');
@@ -409,7 +434,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   });
   searchCard.append(field('Tag name or the start of one',query,'Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched.'),search,found);
 
-  app.append(intro,settings,status,studioNews,castCard,input,gapsCard,output,refine,sheetCard,searchCard,el('p','LumiCast 0.16.0 · Draft stays in this tab until reload.'));
+  app.append(intro,settings,status,studioNews,castCard,input,gapsCard,output,refine,sheetCard,searchCard,el('p','LumiCast 0.17.0 · Draft stays in this tab until reload.'));
   const controls=[readOoc,translate,studio,sendBack,writeMoss,again,save,refreshButton,testGel,saveNotes,saveQuality,startOver,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
 
   // Every change to the sheet is offered to Lumi Studio, a moment after typing stops.
@@ -465,7 +490,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   function update(){
     for(const c of [...controls,...castButtons])c.disabled=busy;
     rebuild.disabled=busy||(!verified&&!!tags.value.trim());apply.disabled=busy||!pending.length;copy.disabled=busy||!prompt.value.trim();cancel.hidden=!busy;
-    for(const node of [connection,castConnection,thinking,gelUser,gelKey,clearKey])node.disabled=busy;
+    for(const node of [refineMode,connection,castConnection,thinking,gelUser,gelKey,clearKey])node.disabled=busy;
     for(const node of [source,stated,statedAgain,feedback,notes,quality,tags,prose,prompt,...Object.values(sheet).map(f=>f.box)])node.readOnly=busy;
   }
   // A long request shows its current step and a running clock, so a slow model never looks frozen.

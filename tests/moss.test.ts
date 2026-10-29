@@ -28,3 +28,24 @@ test('a character sent from Lumi Studio is rewritten for MOSS in one call, keepi
   // Explicit anatomy is never sent to the MOSS writer.
   expect(JSON.parse(input).sheet.anatomy).toBeUndefined();expect(JSON.parse(input).description).toBe('Vesper, sharp and haughty.');
 });
+test('Refine for MOSS suggests wording, never tags: a checked new description and garment-by-garment outfit changes',async()=> {
+  let sent:Record<string,unknown>={};
+  const reply={reply:'The pale-skin word turned him grey.',moss:'A devastatingly pretty adult man with porcelain-pale skin and a slight smirk, sharp half-lidded amber eyes.',why:'living skin',
+    outfit:{remove:[{item:'Red Coat',why:'duplicate'},{item:'not worn',why:'x'}],change:[{from:'black corset',to:'sleeveless fitted black corset with white lace cravat',why:'no sleeveless'}],add:[{item:'white silk gloves',why:'in the description'},{item:'thigh-high black leather boots',why:'dup'}]}};
+  const engine=new Translator(async(system,body)=>{sent=JSON.parse(body);expect(system).toContain('You help a user fix how MOSS Image draws');return JSON.stringify(reply);},{resolve:async()=>null,search:async()=>[]});
+  const out=await engine.refineMoss({moss:'a pretty man with pale skin.',outfit:['crimson silk officer coat with gold epaulets','red coat','black corset','thigh-high black leather boots'],feedback:'skin came out grey and he has two coats',notes:'MOSS: keep eyes amber.'},signal(),'m');
+  expect(sent).toMatchObject({moss:'a pretty man with pale skin.',feedback:'skin came out grey and he has two coats',notes:'MOSS: keep eyes amber.'});
+  expect(out.proposals.map(p=>[p.kind,p.from??'',p.text])).toEqual([
+    ['moss','','a devastatingly pretty adult man with fair skin. sharp half-lidded amber eyes.'.replace('fair skin. sharp','fair skin, sharp')],
+    ['garment-remove','','red coat'],
+    ['garment-change','black corset','fitted black corset with white lace cravat'],
+    ['garment-add','','white silk gloves'],
+  ]);
+  expect(out.notices.join(' ')).toContain('A facial expression was left out');
+});
+test('Refine for MOSS empties the description once a helmet is on, and needs something to work on',async()=> {
+  const engine=new Translator(async()=>JSON.stringify({reply:'Helmet.',moss:null,outfit:{add:[{item:'angular steel helmet with a narrow visor slit',why:'it is worn'}]}}),{resolve:async()=>null,search:async()=>[]});
+  const out=await engine.refineMoss({moss:'a tall man with grey hair.',outfit:['steel plate armor'],feedback:'his hair shows'},signal(),'m');
+  expect(out.proposals.map(p=>[p.kind,p.text])).toEqual([['moss',''],['garment-add','angular steel helmet with a narrow visor slit']]);
+  expect(engine.refineMoss({moss:'',outfit:[],feedback:'x'},signal(),'m')).rejects.toThrow('There is no MOSS description or outfit yet');
+});

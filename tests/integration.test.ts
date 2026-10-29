@@ -58,7 +58,8 @@ const named=(root:Element,name:string)=>(root.querySelector(`[data-lc="${name}"]
 const areasOf=(root:Element)=>['source','tags','prose','appearance','outfit','prompt'].map(name=>named(root,name));
 const cleanups:(()=>void)[]=[];
 afterEach(()=>{while(cleanups.length)cleanups.pop()!();});
-function dom(){const window=new Window();Object.assign(globalThis,{document:window.document,navigator:window.navigator,Event:window.Event});cleanups.push(()=>{void window.happyDOM.abort();});}
+// Older Refine tests are about Anima; a test about MOSS switches the mode itself.
+function dom(){const window=new Window();window.localStorage.setItem('lumicast.refine','anima');Object.assign(globalThis,{document:window.document,navigator:window.navigator,Event:window.Event,localStorage:window.localStorage});cleanups.push(()=>{void window.happyDOM.abort();});}
 async function until(predicate:()=>boolean){const start=Date.now();while(!predicate()){if(Date.now()-start>6000)throw new Error('UI did not settle');await Bun.sleep(10);}}
 test('full panel → RPC → backend → editor smoke, copy and disposal',async()=> {
   dom();const h=harness();cleanups.push(h.stop);const dispose=setup(h.ctx);cleanups.push(dispose);
@@ -474,4 +475,29 @@ test('a character from Lumi Studio with no MOSS description gets one written str
   expect(sent.messages[0].content).toContain('MOSS Image');
   // Pressing it again writes it again; nothing runs by itself a second time.
   const calls=()=>h.calls.filter(c=>(c as unknown[])[0]==='generation').length;const before=calls();await Bun.sleep(100);expect(calls()).toBe(before);
+});
+test('Refine has a MOSS mode: wording changes land in the MOSS and Outfit boxes, with their own earlier rounds',async()=> {
+  dom();localStorage.setItem('lumicast.refine','moss');
+  const h=harness();cleanups.push(h.stop);const dispose=setup(h.ctx,{studioPollMs:20});cleanups.push(dispose);
+  const b=(name:string)=>Array.from(h.root.querySelectorAll('button')).find(x=>x.textContent===name)!;
+  await until(()=>!b('Translate').disabled);h.root.querySelector('select')!.value='c1';
+  const box=(key:string)=>h.root.querySelector(`[data-sheet="${key}"]`) as HTMLTextAreaElement;
+  const mode=Array.from(h.root.querySelectorAll('select')).find(s=>Array.from(s.options).some(o=>o.value==='moss'))!;expect(mode.value).toBe('moss');
+  h.setStudio({version:1,name:'Vesper',anchor:'Vesper',userId:'u1',sentAt:Date.now(),id:'character_9',kind:'character',sheet:{countTag:'1boy',appearance:'amber eyes',outfit:'crimson coat, red coat, black corset',moss:'a pretty man with pale skin.'}});
+  await until(()=>box('moss').value==='a pretty man with pale skin.');await until(()=>!b('Translate').disabled);
+  h.setResponses([{reply:'Pale wording.',moss:'A sharp-featured adult man with smooth fair skin.',why:'living skin',outfit:{remove:[{item:'red coat',why:'two coats'}],change:[],add:[]}}]);
+  named(h.root,'feedback').value='grey skin and two coats';b('Suggest changes').click();await until(()=>!b('Translate').disabled);
+  const sent=JSON.parse(((h.calls.filter(c=>(c as unknown[])[0]==='generation').at(-1) as unknown[])[1] as {messages:{content:string}[]}).messages[1].content);
+  expect(sent).toMatchObject({moss:'a pretty man with pale skin.',outfit:['crimson coat','red coat','black corset'],feedback:'grey skin and two coats'});expect(sent.tags).toBeUndefined();
+  expect(h.root.textContent).toContain('Replace the MOSS description');expect(h.root.textContent).toContain('Remove “red coat” from the outfit');
+  b('Apply selected').click();await until(()=>!b('Translate').disabled);
+  expect(box('moss').value).toBe('a sharp-featured adult man with smooth fair skin.');expect(box('outfit').value).toBe('crimson coat, black corset');expect(box('appearance').value).toBe('amber eyes');
+  expect(h.root.querySelector('.lc-status')!.textContent).toContain('Press Update Vesper in Lumi Studio');
+  // The MOSS round is remembered for MOSS only.
+  named(h.root,'feedback').value='more';h.setResponses([{reply:'x',moss:null,outfit:{}}]);b('Suggest changes').click();await until(()=>!b('Translate').disabled);
+  expect(JSON.parse(((h.calls.filter(c=>(c as unknown[])[0]==='generation').at(-1) as unknown[])[1] as {messages:{content:string}[]}).messages[1].content).history[0].feedback).toBe('grey skin and two coats');
+  const history=()=>Array.from(h.root.querySelectorAll('details')).find(d=>d.querySelector('summary')?.textContent?.startsWith('Earlier rounds'))!;
+  expect(history().hidden).toBe(false);
+  mode.value='anima';mode.dispatchEvent(new Event('change'));expect(history().hidden).toBe(true);
+  mode.value='moss';mode.dispatchEvent(new Event('change'));expect(history().hidden).toBe(false);expect(history().querySelector('summary')!.textContent).toBe('Earlier rounds (2)');
 });

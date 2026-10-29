@@ -31,8 +31,15 @@ const EXPLICIT = /\b(?:penis|cock|dick|testicles?|scrotum|vagina|pussy|vulva|lab
 const EXPRESSION = /\b(?:smirk\w*|grin\w*|smil\w*|frown\w*|sneer\w*|pout\w*|scowl\w*|laugh\w*)\b/i;
 const DEAD_SKIN = /\b(?:porcelain(?:-pale| pale)?|alabaster(?:-pale| pale)?|chalk-white|chalky|pallid|ashen|deathly pale|bone-white|paper-white)\b/gi;
 
-/** Cuts every comma part or sentence that matches, keeping the rest readable. */
+/**
+ * Takes out the offending words with their small phrase ("and a slight smirk", ", rosy nipples"), then, if any
+ * remain, every comma part or sentence that still has them, keeping the rest readable.
+ */
 function cut(value: string, bad: RegExp): string {
+  const word = bad.source.replace(/^\\b\(\?:/, '(?:').replace(/\)\\b$/, ')');
+  const phrase = new RegExp(`(?:,\\s*|\\s+(?:and|with)\\s+)(?:(?:a|an|the|his|her|their)\\s+)?(?:(?!(?:and|with)\\b)[\\w-]+\\s+){0,2}${word}(?=[\\s,.;]|$)`, 'gi');
+  value = value.replace(phrase, '');
+  if (!bad.test(value)) return value.replace(/\s+([,.;])/g, '$1').trim();
   const kept = value.split(/(?<=[.;])\s+|,\s+(?=(?:and\s+)?[a-z])/).filter(part => !bad.test(part));
   let out = kept.join(', ').replace(/,\s*,/g, ',').replace(/[,;]\s*$/, '').replace(/,\s*(?=[A-Z])/g, '. ').trim();
   if (out && !/[.!?]$/.test(out)) out += '.';

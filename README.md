@@ -1,4 +1,6 @@
-# LumiCast 0.16.0
+# LumiCast 0.17.0
+
+**v0.17.0 gives Refine a MOSS mode.** **Fixing pictures from: MOSS / Anima** at the top of 03 / Refine picks the model your feedback is about; it starts on MOSS and remembers your choice. In MOSS mode Refine works on words, not tags: it suggests a reworded MOSS description and outfit changes one garment at a time (add, remove or reword), each with a short reason, and knows the usual MOSS fixes (grey skin, doll eyes, two coats, baggy trousers, vanishing sleeves, a face showing through a helmet). When the fix belongs in the MOSS negative prompt or a setting, it says so. Its suggestions get the same checks as the MOSS writer. Apply puts them in the MOSS and Outfit boxes; then press Update in Lumi Studio. Each mode keeps its own earlier rounds. Anima mode is unchanged. Notes can say which model they're for ("MOSS: …").
 
 **v0.16.0 writes for MOSS the way that has worked in practice.**
 - **The MOSS description follows the tested rules.** A feminine man gets a face that matches his attitude (sharp and noble, or soft and sweet), then a separate sentence that pins the figure and the flat chest together. Skin is living skin: "porcelain", "alabaster" and "chalk-white" become fair skin, since MOSS draws those as grey undead skin. Iris details are "inside the irises", never "around" them. Normal eyes are never "glowing". No smirks, grins or frowns: attitude goes into eye shape and bone structure instead. 35 to 95 words. A character whose outfit has a helmet on gets no MOSS description, so Lumi Studio can hide the face itself.
