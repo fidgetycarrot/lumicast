@@ -1,4 +1,6 @@
-# LumiCast 0.17.0
+# LumiCast 0.17.1
+
+**v0.17.1 adds three MOSS rules from the Inquisitor test.** A human or humanoid always gets an eye colour and a skin tone, a plain one when the description gives none, since MOSS draws blank white eyes otherwise; LumiCast also warns when a MOSS description names no eyes. Cyborgs lead with their human build and role, and cables and tubes are tied to where they enter (temples, neck collar), never "running from the body", which MOSS draws as a robot torso. Under a hat or hood, scalp implants go at the temples and neck. Refine for MOSS knows these fixes too.
 
 **v0.17.0 gives Refine a MOSS mode.** **Fixing pictures from: MOSS / Anima** at the top of 03 / Refine picks the model your feedback is about; it starts on MOSS and remembers your choice. In MOSS mode Refine works on words, not tags: it suggests a reworded MOSS description and outfit changes one garment at a time (add, remove or reword), each with a short reason, and knows the usual MOSS fixes (grey skin, doll eyes, two coats, baggy trousers, vanishing sleeves, a face showing through a helmet). When the fix belongs in the MOSS negative prompt or a setting, it says so. Its suggestions get the same checks as the MOSS writer. Apply puts them in the MOSS and Outfit boxes; then press Update in Lumi Studio. Each mode keeps its own earlier rounds. Anima mode is unchanged. Notes can say which model they're for ("MOSS: …").
 

@@ -65,12 +65,14 @@ function assemble(tags, prose) {
 
 // src/moss.ts
 var MOSS_RULES = `- MOSS Image is a plain-English image model that knows no booru tags. An image tool puts the character's name in front of this text ("Rory, " followed by it) and uses it word for word in every scene, so it must stand alone.
-- Start with "a" or "an" and the kind of person, then the lasting look: apparent age, build and figure, skin, face, eyes, hair, marks, species features. Every fact the source states about these, each once, and nothing it does not state. No name.
+- Start with "a" or "an" and the kind of person, then the lasting look: apparent age, build and figure, skin, face, eyes, hair, marks, species features. Every fact the source states about these, each once, and nothing it does not state, with one exception: a human or humanoid always gets an eye colour and a skin tone. When the source gives none, choose a plain one that fits ("weathered fair skin", "cold grey eyes", "dark eyes"); left out, MOSS draws blank white eyes. No name.
 - Face and body only: no clothing, accessories, pose, expression or setting; those come from the scene.
 - Plain words only: no tags, underscores, weights, and no booru terms such as trap or otoko no ko. Say what they look like.
 - A feminine man: describe the face and the figure separately. Match the face to the character's attitude. A sharp, haughty or dangerous one: "a devastatingly pretty, ultra-feminine adult man with the delicate facial bone structure of a noblewoman, high cheekbones, long dark eyelashes and sharp, half-lidded amber eyes". Only a sweet or innocent one gets a soft, cute face. Then anchor the figure and the chest together in their own sentence, so MOSS neither broadens the shoulders nor adds a bust: "His slender body has a feminine hourglass curve with narrow shoulders, a flat male chest, a narrow waist, wide feminine hips and soft thighs" (keep only what the source supports).
 - Skin is living skin. Never porcelain, alabaster, chalk-white, pallid, ashen or plain white skin: MOSS draws grey, undead skin and black lips from those, worst of all beside ash, dust, scars, crimson or noble. Write "smooth fair skin", "warm ivory skin" or "fair skin", and when the source mentions pale skin or lips, give the lips a natural colour ("glossy pink-tinted lips").
 - Eyes: patterns, rings or veins are "inside the irises", never "around" them, which MOSS paints on the skin around the eyes. Normal and cybernetic eyes are never "glowing" (MOSS draws giant doll eyes); write "sharp, expressive amber eyes with subtle golden tech-ring patterns inside the irises". "Glowing" is only for visors and lenses.
+- Cyborgs: lead with the human build and role ("a gaunt middle-aged woman", "a broad-shouldered veteran"), not "a cyborg woman", unless the whole body is a mechanical frame. Anchor every cable, tube or implant to where it enters ("brass neural tubes and thin cybernetic cables plugged into her temples and neck collar"), never "cables running from her body", which MOSS draws as an exposed robot torso and arms over the clothes.
+- When the character wears a hat, hood or cap, put scalp implants or markings where they show beneath it, at the temples and the neck, not "set into the scalp", or MOSS drops the hat or pushes tubes through it.
 - Attitude goes into lasting eye shape and bone structure, never a mouth expression (no smirk, grin, smile, frown, sneer or pout, or the character wears it even while crying): calculating, haughty or dangerous means high cheekbones and sharp half-lidded eyes; gentle or sweet means soft round cheeks and big expressive eyes; tired or rugged means a strong square jaw and heavy-lidded eyes.
 - It must be safe for an image service that refuses nudity and sexual content: no genitals, nipples or other explicit anatomy and no sexual words, whatever the source says. Body shape in neutral words ("wide hips and full thighs", not "a fat bubble butt").
 - Concrete, drawable words, no figures of speech. One to three sentences, 35 to 95 words; a complex character (cybernetic eyes, scars, an unusual figure) needs the upper end so nothing is dropped.
@@ -134,6 +136,9 @@ MOSS reads plain English and every word counts; it ignores weights and knows no 
 - The same expression in every picture: an expression in the description; move the attitude into eye shape and bone structure.
 - A feminine man drawn masculine, broad-shouldered or with a bust: restate the figure and the flat chest together in their own sentence.
 - Looks too old, too young or too cute: the age words and the face structure.
+- Blank white or pupil-less eyes: the description names no eye colour; add one.
+- A robot torso or mechanical arms over the clothes: cables "running from the body"; anchor them where they enter (temples, neck collar).
+- A hat dropped, or tubes through it: scalp implants; place them at the temples and neck instead.
 - Duplicate garments (two coats, two pairs of boots): merge the items into one whole garment.
 - Baggy or period-looking clothes: say the fit ("fitted high-waisted black breeches").
 - Sleeves vanishing, on this character or someone else: remove "sleeveless" from corsets and vests.
@@ -962,7 +967,7 @@ ${text}`;
     notify("Search complete. Popularity is not an Anima quality score.");
   });
   searchCard.append(field("Tag name or the start of one", query, "Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched."), search, found);
-  app.append(intro, settings, status, studioNews, castCard, input, gapsCard, output, refine, sheetCard, searchCard, el("p", "LumiCast 0.17.0 · Draft stays in this tab until reload."));
+  app.append(intro, settings, status, studioNews, castCard, input, gapsCard, output, refine, sheetCard, searchCard, el("p", "LumiCast 0.17.1 · Draft stays in this tab until reload."));
   const controls = [readOoc, translate, studio, sendBack, writeMoss, again, save, refreshButton, testGel, saveNotes, saveQuality, startOver, verify, rebuild, copy, copyTags, copyProse, suggest, apply, search, ...Object.values(sheet).map((f) => f.copyField)];
   let shareTimer;
   function share() {

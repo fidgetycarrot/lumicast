@@ -515,12 +515,14 @@ function reviewUncertainty(value, source, traits) {
 
 // src/moss.ts
 var MOSS_RULES = `- MOSS Image is a plain-English image model that knows no booru tags. An image tool puts the character's name in front of this text ("Rory, " followed by it) and uses it word for word in every scene, so it must stand alone.
-- Start with "a" or "an" and the kind of person, then the lasting look: apparent age, build and figure, skin, face, eyes, hair, marks, species features. Every fact the source states about these, each once, and nothing it does not state. No name.
+- Start with "a" or "an" and the kind of person, then the lasting look: apparent age, build and figure, skin, face, eyes, hair, marks, species features. Every fact the source states about these, each once, and nothing it does not state, with one exception: a human or humanoid always gets an eye colour and a skin tone. When the source gives none, choose a plain one that fits ("weathered fair skin", "cold grey eyes", "dark eyes"); left out, MOSS draws blank white eyes. No name.
 - Face and body only: no clothing, accessories, pose, expression or setting; those come from the scene.
 - Plain words only: no tags, underscores, weights, and no booru terms such as trap or otoko no ko. Say what they look like.
 - A feminine man: describe the face and the figure separately. Match the face to the character's attitude. A sharp, haughty or dangerous one: "a devastatingly pretty, ultra-feminine adult man with the delicate facial bone structure of a noblewoman, high cheekbones, long dark eyelashes and sharp, half-lidded amber eyes". Only a sweet or innocent one gets a soft, cute face. Then anchor the figure and the chest together in their own sentence, so MOSS neither broadens the shoulders nor adds a bust: "His slender body has a feminine hourglass curve with narrow shoulders, a flat male chest, a narrow waist, wide feminine hips and soft thighs" (keep only what the source supports).
 - Skin is living skin. Never porcelain, alabaster, chalk-white, pallid, ashen or plain white skin: MOSS draws grey, undead skin and black lips from those, worst of all beside ash, dust, scars, crimson or noble. Write "smooth fair skin", "warm ivory skin" or "fair skin", and when the source mentions pale skin or lips, give the lips a natural colour ("glossy pink-tinted lips").
 - Eyes: patterns, rings or veins are "inside the irises", never "around" them, which MOSS paints on the skin around the eyes. Normal and cybernetic eyes are never "glowing" (MOSS draws giant doll eyes); write "sharp, expressive amber eyes with subtle golden tech-ring patterns inside the irises". "Glowing" is only for visors and lenses.
+- Cyborgs: lead with the human build and role ("a gaunt middle-aged woman", "a broad-shouldered veteran"), not "a cyborg woman", unless the whole body is a mechanical frame. Anchor every cable, tube or implant to where it enters ("brass neural tubes and thin cybernetic cables plugged into her temples and neck collar"), never "cables running from her body", which MOSS draws as an exposed robot torso and arms over the clothes.
+- When the character wears a hat, hood or cap, put scalp implants or markings where they show beneath it, at the temples and the neck, not "set into the scalp", or MOSS drops the hat or pushes tubes through it.
 - Attitude goes into lasting eye shape and bone structure, never a mouth expression (no smirk, grin, smile, frown, sneer or pout, or the character wears it even while crying): calculating, haughty or dangerous means high cheekbones and sharp half-lidded eyes; gentle or sweet means soft round cheeks and big expressive eyes; tired or rugged means a strong square jaw and heavy-lidded eyes.
 - It must be safe for an image service that refuses nudity and sexual content: no genitals, nipples or other explicit anatomy and no sexual words, whatever the source says. Body shape in neutral words ("wide hips and full thighs", not "a fat bubble butt").
 - Concrete, drawable words, no figures of speech. One to three sentences, 35 to 95 words; a complex character (cybernetic eyes, scars, an unusual figure) needs the upper end so nothing is dropped.
@@ -573,6 +575,8 @@ function cleanMoss(raw, source, outfit) {
     notices.push("A facial expression was left out of the MOSS description, so the character can still cry or laugh in a scene.");
   }
   moss = moss.replace(DEAD_SKIN, "fair").replace(/\bfair(?:[ -]fair)+\b/gi, "fair").replace(/\b(around|surrounding|circling|ringing)\s+(?:the|his|her|their)\s+irises\b/gi, "inside the irises").replace(/\bglowing\s+(?=(?:[\w-]+\s+){0,3}eyes\b)/gi, "");
+  if (moss && !/\beyes?\b/i.test(moss))
+    notices.push("The MOSS description names no eyes; MOSS may draw blank white eyes. Add an eye colour.");
   return { moss: moss.replace(/^(A|An)\b/, (m) => m.toLowerCase()), notices };
 }
 function cleanOutfit(value, source) {
@@ -703,6 +707,9 @@ MOSS reads plain English and every word counts; it ignores weights and knows no 
 - The same expression in every picture: an expression in the description; move the attitude into eye shape and bone structure.
 - A feminine man drawn masculine, broad-shouldered or with a bust: restate the figure and the flat chest together in their own sentence.
 - Looks too old, too young or too cute: the age words and the face structure.
+- Blank white or pupil-less eyes: the description names no eye colour; add one.
+- A robot torso or mechanical arms over the clothes: cables "running from the body"; anchor them where they enter (temples, neck collar).
+- A hat dropped, or tubes through it: scalp implants; place them at the temples and neck instead.
 - Duplicate garments (two coats, two pairs of boots): merge the items into one whole garment.
 - Baggy or period-looking clothes: say the fit ("fitted high-waisted black breeches").
 - Sleeves vanishing, on this character or someone else: remove "sleeveless" from corsets and vests.
@@ -1427,7 +1434,7 @@ function setupBackend(api, options = {}) {
     await s.load;
   };
   const dictionaryFor = (s) => s.dictionary ??= new BooruDictionary(async (url) => {
-    const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.17.0 (tag metadata client)" } }));
+    const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.17.1 (tag metadata client)" } }));
     if (typeof response.status !== "number" || typeof response.body !== "string")
       throw new Error("Invalid proxy response.");
     return { status: response.status, body: response.body };
@@ -1713,7 +1720,7 @@ function setupBackend(api, options = {}) {
         const entered = gelCredentials(text(v.gelUser ?? "", "Gelbooru user", 300), v.gelKey ? text(v.gelKey, "Gelbooru key", 300) : "");
         const credentials = { user: entered.user || settings.gelUser, key: entered.key || settings.gelKey };
         const outcome = await testGelbooru(async (url) => {
-          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.17.0 (tag metadata client)" } }));
+          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.17.1 (tag metadata client)" } }));
           return { status: Number(response.status), body: typeof response.body === "string" ? response.body : "" };
         }, credentials);
         const unsaved = credentials.user !== settings.gelUser || credentials.key !== settings.gelKey;

@@ -101,6 +101,9 @@ MOSS reads plain English and every word counts; it ignores weights and knows no 
 - The same expression in every picture: an expression in the description; move the attitude into eye shape and bone structure.
 - A feminine man drawn masculine, broad-shouldered or with a bust: restate the figure and the flat chest together in their own sentence.
 - Looks too old, too young or too cute: the age words and the face structure.
+- Blank white or pupil-less eyes: the description names no eye colour; add one.
+- A robot torso or mechanical arms over the clothes: cables "running from the body"; anchor them where they enter (temples, neck collar).
+- A hat dropped, or tubes through it: scalp implants; place them at the temples and neck instead.
 - Duplicate garments (two coats, two pairs of boots): merge the items into one whole garment.
 - Baggy or period-looking clothes: say the fit ("fitted high-waisted black breeches").
 - Sleeves vanishing, on this character or someone else: remove "sleeveless" from corsets and vests.

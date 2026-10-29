@@ -49,3 +49,7 @@ test('Refine for MOSS empties the description once a helmet is on, and needs som
   expect(out.proposals.map(p=>[p.kind,p.text])).toEqual([['moss',''],['garment-add','angular steel helmet with a narrow visor slit']]);
   expect(engine.refineMoss({moss:'',outfit:[],feedback:'x'},signal(),'m')).rejects.toThrow('There is no MOSS description or outfit yet');
 });
+test('a MOSS description with no eyes is flagged, since MOSS then draws blank white eyes',()=> {
+  expect(cleanMoss('A gaunt middle-aged woman with weathered fair skin.','',[]).notices.join(' ')).toContain('names no eyes');
+  expect(cleanMoss('A gaunt middle-aged woman with weathered fair skin and cold grey eyes.','',[]).notices).toEqual([]);
+});
