@@ -125,7 +125,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
       state.textContent=`${saved.updated?'Updated':'Saved'} in “${saved.book}”${saved.createdBook?', a new lorebook for this chat only':''}.${saved.moved?' The Cast lorebook was taken off the character card and attached to this chat, so it stays with this story.':''} You can delete the [ooc] exchange from the chat now.`;
       notify(`${name.value.trim()} ${saved.updated?'updated':'saved'} in the Cast lorebook.`);
     },true);
-    const toPrompt=button('Make the prompts (MOSS and Anima)',async()=> {
+    const toPrompt=button('Make the Studio character',async()=> {
       const who=name.value.trim();const text=description.value.trim();
       source.value=text.toLowerCase().startsWith(who.toLowerCase())?text:`${who}\n${text}`;revision++;
       await runTranslate();input.scrollIntoView?.({block:'start'});
@@ -445,7 +445,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   });
   searchCard.append(field('Tag name or the start of one',query,'Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched.'),search,found);
 
-  app.append(intro,settings,status,studioNews,castCard,input,gapsCard,output,refine,sheetCard,searchCard,el('p','LumiCast 0.18.1 · Draft stays in this tab until reload.'));
+  app.append(intro,settings,status,studioNews,castCard,input,gapsCard,output,refine,sheetCard,searchCard,el('p','LumiCast 0.18.2 · Draft stays in this tab until reload.'));
   const controls=[readOoc,readCard,translate,studio,sendBack,writeMoss,again,save,refreshButton,testGel,saveNotes,saveQuality,startOver,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
 
   // Every change to the sheet is offered to Lumi Studio, a moment after typing stops.

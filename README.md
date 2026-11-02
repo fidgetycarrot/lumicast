@@ -1,6 +1,6 @@
-# LumiCast 0.18.1
+# LumiCast 0.18.2
 
-**v0.18.1 says what the buttons make.** The button on each character from a card or an [ooc] reply is now **Make the prompts (MOSS and Anima)**: it always wrote both, the MOSS description and outfit as well as the Anima tags. The panel's header says so too.
+**v0.18.2 says what the buttons make.** The button on each character from a card or an [ooc] reply is now **Make the Studio character**, a name that holds whatever image models Lumi Studio uses next: it always wrote both, the MOSS description and outfit as well as the Anima tags. The panel's header says so too.
 
 **v0.18.0 reads characters from a card.** With a chat open, **Get the characters from this card** in "From your story" reads the chat's character card (description, personality, scenario, first message, examples, a few alternate greetings) and the lorebooks attached to it, and one model call lists every character whose looks it describes, the card's main character first, up to 20. `{{char}}` is read as the card's name; the player (`{{user}}`) is left out. Each entry has an editable description and a button that translates it as usual, MOSS description included. It uses the "Model for [ooc] replies" connection. Very long lorebooks are read up to a limit and you're told when some entries were left out. Sending them all to Lumi Studio and setting up its cast come later.
 
