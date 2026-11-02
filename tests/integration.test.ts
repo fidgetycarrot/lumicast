@@ -358,7 +358,7 @@ test('an [ooc] reply becomes clean descriptions, saved once to a Cast lorebook o
   expect(h.calls.filter(c=>(c as unknown[])[0]==='chatUpdate').length).toBe(1);expect(h.calls.filter(c=>(c as unknown[])[0]==='attach').length).toBe(0);
   // The description can go straight into the Anima prompt.
   h.setResponses([{traits:[{id:'t1',group:'hair',evidence:'shaved head',tags:['very_short_hair'],detail:'A shaved head'}]},{drop:[],captions:{character:'A shaved head.'},issues:[]}]);
-  Array.from(entries[1].querySelectorAll('button')).find(x=>x.textContent==='Make the Anima prompt')!.click();await until(()=>named(h.root,'tags').value!=='');
+  Array.from(entries[1].querySelectorAll('button')).find(x=>x.textContent==='Make the prompts (MOSS and Anima)')!.click();await until(()=>named(h.root,'tags').value!=='');
   expect(named(h.root,'source').value).toBe('Tobin is a wiry boy with a shaved head.');
 });
 test('[ooc] replies explain what is missing: no chat, no question, no reply yet, permissions',async()=> {
@@ -518,7 +518,7 @@ test('a character card becomes one entry per described character, main first, re
   expect(entries).toEqual(['Vesper','Tobin','Maren']);
   expect(h.root.textContent).toContain('Vesper (the card’s main character)');
   const first=h.root.querySelector('[data-cast="Vesper"]')!;
-  expect(Array.from(first.querySelectorAll('button')).map(x=>x.textContent)).toEqual(['Make the Anima prompt']);
+  expect(Array.from(first.querySelectorAll('button')).map(x=>x.textContent)).toEqual(['Make the prompts (MOSS and Anima)']);
   h.setResponses([{traits:[{id:'t1',group:'face',evidence:'amber eyes',tags:['orange_eyes'],detail:'Amber eyes'}]},{drop:[],captions:{character:'Amber eyes.'},issues:[],moss:'A lean noble with amber eyes.'}]);
   (first.querySelector('button') as HTMLButtonElement).click();await until(()=>named(h.root,'source').value!=='');await until(()=>!b('Translate').disabled);
   expect(named(h.root,'source').value).toBe('Vesper is a lean noble with amber eyes.');

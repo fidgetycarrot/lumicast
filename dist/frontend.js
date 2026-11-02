@@ -280,9 +280,9 @@ function setup(ctx, options = {}) {
     return box;
   };
   const intro = el("header");
-  const kicker = el("div", "DESCRIPTION → ANIMA");
+  const kicker = el("div", "DESCRIPTION → MOSS + ANIMA");
   kicker.className = "lc-kicker";
-  intro.append(kicker, el("h1", "LumiCast"), el("p", "Turn a written character into an Anima prompt and a Lumi Studio character sheet, built from real booru tags."));
+  intro.append(kicker, el("h1", "LumiCast"), el("p", "Turn a written character into a MOSS description, an Anima prompt built from real booru tags, and a Lumi Studio character sheet."));
   const status = el("div");
   status.className = "lc-status";
   status.setAttribute("role", "status");
@@ -381,7 +381,7 @@ function setup(ctx, options = {}) {
       state.textContent = `${saved.updated ? "Updated" : "Saved"} in “${saved.book}”${saved.createdBook ? ", a new lorebook for this chat only" : ""}.${saved.moved ? " The Cast lorebook was taken off the character card and attached to this chat, so it stays with this story." : ""} You can delete the [ooc] exchange from the chat now.`;
       notify(`${name.value.trim()} ${saved.updated ? "updated" : "saved"} in the Cast lorebook.`);
     }, true);
-    const toPrompt = button("Make the Anima prompt", async () => {
+    const toPrompt = button("Make the prompts (MOSS and Anima)", async () => {
       const who = name.value.trim();
       const text = description.value.trim();
       source.value = text.toLowerCase().startsWith(who.toLowerCase()) ? text : `${who}
@@ -391,7 +391,7 @@ ${text}`;
       input.scrollIntoView?.({ block: "start" });
     });
     castButtons.push(...fromCard ? [toPrompt] : [saveEntry, toPrompt]);
-    box.append(el("h2", member.main ? `${member.name} (the card’s main character)` : member.name), field("Name", name), ...fromCard ? [field("Description", description, "Taken from the card. The prompt and the MOSS description are built from it; edit anything first."), row(toPrompt)] : [field("Other names", aliases, "Comma separated. Any of these names in the story brings the description into the story model’s context."), field("Description", description, "Goes into the lorebook as written, and the Anima prompt is built from it. Edit anything first."), row(saveEntry, toPrompt)], state);
+    box.append(el("h2", member.main ? `${member.name} (the card’s main character)` : member.name), field("Name", name), ...fromCard ? [field("Description", description, "Taken from the card. The MOSS description, the outfit and the Anima tags are all built from it; edit anything first."), row(toPrompt)] : [field("Other names", aliases, "Comma separated. Any of these names in the story brings the description into the story model’s context."), field("Description", description, "Goes into the lorebook as written, and the MOSS description and Anima tags are built from it. Edit anything first."), row(saveEntry, toPrompt)], state);
     return box;
   }
   castCard.append(el("p", "Two ways to bring characters in. Ask the story model about someone with a message that starts with [ooc], then use its answer: LumiCast keeps only the description, one per character, and can save it to this chat’s Cast lorebook. Or read the open chat’s character card: LumiCast lists each character it describes, ready for a prompt."), castNews, row(readOoc, readCard), castList);
@@ -976,7 +976,7 @@ ${text}`;
     notify("Search complete. Popularity is not an Anima quality score.");
   });
   searchCard.append(field("Tag name or the start of one", query, "Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched."), search, found);
-  app.append(intro, settings, status, studioNews, castCard, input, gapsCard, output, refine, sheetCard, searchCard, el("p", "LumiCast 0.18.0 · Draft stays in this tab until reload."));
+  app.append(intro, settings, status, studioNews, castCard, input, gapsCard, output, refine, sheetCard, searchCard, el("p", "LumiCast 0.18.1 · Draft stays in this tab until reload."));
   const controls = [readOoc, readCard, translate, studio, sendBack, writeMoss, again, save, refreshButton, testGel, saveNotes, saveQuality, startOver, verify, rebuild, copy, copyTags, copyProse, suggest, apply, search, ...Object.values(sheet).map((f) => f.copyField)];
   let shareTimer;
   function share() {
