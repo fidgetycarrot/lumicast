@@ -1,7 +1,7 @@
 import type { SpindleFrontendContext } from 'lumiverse-spindle-types';
 import { assemble, editList, formatWeighted, parseWeighted, splitTags, withQuality, type GelbooruTest, type Proposal, type RefineRound, type Refinement, type Scope, type Snapshot, type StudioCharacter, type Translation, type VerifiedTag } from './contracts';
 import { removeConflicts } from './engine';
-import type { CastMember, CastRead, CastSaved } from './cast';
+import type { CardRead, CastMember, CastRead, CastSaved } from './cast';
 
 export function createRpc(ctx: Pick<SpindleFrontendContext,'sendToBackend'|'onBackendMessage'>, timeout=250_000) {
   let closed=false;
@@ -85,7 +85,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   const credentialNotice=el('p');credentialNotice.className='lc-muted';
   settings.append(
     field('Generative connection',connection,'Uses the model saved in Lumiverse. Pick a fast text model that follows JSON instructions; Jev, Decisions and embedding models cannot translate.'),
-    field('Model for [ooc] replies',castConnection,'Cleans up a story model’s [ooc] answer into plain descriptions for the lorebook. A small job, so a stronger model costs little here.'),
+    field('Model for [ooc] replies',castConnection,'Cleans up a story model’s [ooc] answer, or reads a character card, into plain descriptions. A small job, so a stronger model costs little here.'),
     field('Model thinking',thinking,'How long the model thinks before answering. Long thinking is most of the wait and rarely improves tags. If a model refuses to work with thinking off, choose Light.'),
     field('Gelbooru user ID (optional)',gelUser,'The number, not your username. You can also paste Gelbooru’s whole “&api_key=…&user_id=…” line into the key box and leave this empty.'),
     field('Gelbooru API key (optional)',gelKey,'Stored in your extension storage on the Lumiverse server. Never returned to this panel. Sent only to Gelbooru over HTTPS.'),
@@ -105,7 +105,16 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
     update();
     notify(`${read.characters.length===1?'1 character':`${read.characters.length} characters`} found: ${read.characters.map(c=>c.name).join(', ')}.`);
   });
-  function castEntry(member:CastMember){
+  // A character card often describes several people; each becomes an entry here, ready for a prompt.
+  const readCard=button('Get the characters from this card',async()=> {
+    const read=await clocked<CardRead>('cardRead',{connectionId:connection.value});
+    castList.replaceChildren(el('p',`From the card “${read.card}”. Check each description, then make its prompt.${read.cut?' The card’s lorebooks were too long to read in full, so some entries were left out.':''}`));
+    castButtons.splice(0);
+    for(const member of read.characters)castList.append(castEntry(member,true));
+    update();
+    notify(`${read.characters.length===1?'1 character':`${read.characters.length} characters`} found: ${read.characters.map(c=>c.main?`${c.name} (main)`:c.name).join(', ')}.`);
+  });
+  function castEntry(member:CastMember,fromCard=false){
     const box=el('div');box.className='lc-sub';box.dataset.cast=member.name;
     const name=el('input');name.value=member.name;name.maxLength=80;name.autocomplete='off';
     const aliases=el('input');aliases.value=member.aliases.join(', ');aliases.maxLength=300;aliases.autocomplete='off';aliases.placeholder='e.g. the dockmaster, Mare';
@@ -121,12 +130,14 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
       source.value=text.toLowerCase().startsWith(who.toLowerCase())?text:`${who}\n${text}`;revision++;
       await runTranslate();input.scrollIntoView?.({block:'start'});
     });
-    castButtons.push(saveEntry,toPrompt);
-    box.append(el('h2',member.name),field('Name',name),field('Other names',aliases,'Comma separated. Any of these names in the story brings the description into the story model’s context.'),
-      field('Description',description,'Goes into the lorebook as written, and the Anima prompt is built from it. Edit anything first.'),row(saveEntry,toPrompt),state);
+    // A card already tells the story model what its characters look like, so its entries need no lorebook.
+    castButtons.push(...(fromCard?[toPrompt]:[saveEntry,toPrompt]));
+    box.append(el('h2',member.main?`${member.name} (the card’s main character)`:member.name),field('Name',name),
+      ...(fromCard?[field('Description',description,'Taken from the card. The prompt and the MOSS description are built from it; edit anything first.'),row(toPrompt)]
+        :[field('Other names',aliases,'Comma separated. Any of these names in the story brings the description into the story model’s context.'),field('Description',description,'Goes into the lorebook as written, and the Anima prompt is built from it. Edit anything first.'),row(saveEntry,toPrompt)]),state);
     return box;
   }
-  castCard.append(el('p','Ask the story model about someone with a message that starts with [ooc]. When it answers, bring the answer in here: LumiCast keeps only the description, one per character, and saves it to this chat’s Cast lorebook so the story stays consistent. A new chat on the same card starts with an empty cast.'),castNews,row(readOoc),castList);
+  castCard.append(el('p','Two ways to bring characters in. Ask the story model about someone with a message that starts with [ooc], then use its answer: LumiCast keeps only the description, one per character, and can save it to this chat’s Cast lorebook. Or read the open chat’s character card: LumiCast lists each character it describes, ready for a prompt.'),castNews,row(readOoc,readCard),castList);
   const offOoc=ctx.onBackendMessage(value=>{
     if((value as {type?:string})?.type!=='lumicast:ooc'||closed)return;
     castNews.textContent='Your [ooc] message has a reply.';castNews.hidden=false;readOoc.className='lc-primary';
@@ -434,8 +445,8 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   });
   searchCard.append(field('Tag name or the start of one',query,'Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched.'),search,found);
 
-  app.append(intro,settings,status,studioNews,castCard,input,gapsCard,output,refine,sheetCard,searchCard,el('p','LumiCast 0.17.1 · Draft stays in this tab until reload.'));
-  const controls=[readOoc,translate,studio,sendBack,writeMoss,again,save,refreshButton,testGel,saveNotes,saveQuality,startOver,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
+  app.append(intro,settings,status,studioNews,castCard,input,gapsCard,output,refine,sheetCard,searchCard,el('p','LumiCast 0.18.0 · Draft stays in this tab until reload.'));
+  const controls=[readOoc,readCard,translate,studio,sendBack,writeMoss,again,save,refreshButton,testGel,saveNotes,saveQuality,startOver,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
 
   // Every change to the sheet is offered to Lumi Studio, a moment after typing stops.
   let shareTimer:ReturnType<typeof setTimeout>|undefined;

@@ -2,7 +2,7 @@ import type { SpindleAPI, GenerationRequestDTO } from 'lumiverse-spindle-types';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { BooruDictionary, testGelbooru } from './dictionary';
 import { Translator } from './engine';
-import { answersOoc, CAST, entryComment, entryContent, lastOocExchange, parseCast, type CastRead, type CastSaved, type ChatLine } from './cast';
+import { answersOoc, CARD, CAST, entryComment, entryContent, lastOocExchange, parseCast, type CardRead, type CastRead, type CastSaved, type ChatLine } from './cast';
 import { gelCredentials, isGenerative, nameFrom, record, text, THINKING, type Settings, type Thinking, type SharedSheet, type Snapshot, type StudioCharacter } from './contracts';
 import { generationError, ModelRequestError } from './generation-errors';
 
@@ -24,7 +24,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
     await s.load;
   };
   const dictionaryFor=(s:UserState)=>s.dictionary ??= new BooruDictionary(async url=> {
-    const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.17.1 (tag metadata client)'}}));
+    const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.18.0 (tag metadata client)'}}));
     if(typeof response.status!=='number'||typeof response.body!=='string')throw new Error('Invalid proxy response.');
     return {status:response.status,body:response.body};
   },{user:s.settings!.gelUser,key:s.settings!.gelKey});
@@ -67,7 +67,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
       await loadSettings(s,userId);
       const settings=s.settings!;
       /** Fails with the missing permissions named, in the words of the Extensions page. */
-      const need=(list:string[])=>{const missing=list.filter(p=>!api.permissions.has(p as never));if(missing.length)throw new Error(`Grant LumiCast these permissions in Extensions to use [ooc] replies: ${missing.join(', ')}.`);};
+      const need=(list:string[])=>{const missing=list.filter(p=>!api.permissions.has(p as never));if(missing.length)throw new Error(`Grant LumiCast these permissions in Extensions: ${missing.join(', ')}.`);};
       const chatLines=async(chatId:string):Promise<ChatLine[]>=>(await api.chat.getMessages(chatId)).map(m=>({id:m.id,role:m.role,content:typeof m.content==='string'?m.content:''}));
       /**
        * The Cast lorebook belongs to the chat, so a character met in one story never turns up in a replay of
@@ -234,7 +234,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
         const entered=gelCredentials(text(v.gelUser ?? '','Gelbooru user',300),v.gelKey ? text(v.gelKey,'Gelbooru key',300) : '');
         const credentials={user:entered.user||settings.gelUser,key:entered.key||settings.gelKey};
         const outcome=await testGelbooru(async url=> {
-          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.17.1 (tag metadata client)'}}));
+          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.18.0 (tag metadata client)'}}));
           return {status:Number(response.status),body:typeof response.body==='string'?response.body:''};
         },credentials);
         const unsaved=credentials.user!==settings.gelUser||credentials.key!==settings.gelKey;
@@ -242,7 +242,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
         if (outcome.ok&&!unsaved) s.dictionary=undefined;
         return {ok:outcome.ok,message:outcome.ok&&unsaved?`${outcome.message} Save settings to start using them.`:outcome.message};
       }
-      if (!['translate','refine','refineMoss','search','verify','castRead','mossify'].includes(String(r.action))) throw new Error('Unknown LumiCast action.');
+      if (!['translate','refine','refineMoss','search','verify','castRead','cardRead','mossify'].includes(String(r.action))) throw new Error('Unknown LumiCast action.');
       if (s.jobs.size) throw new Error('An operation is already running. Wait or cancel it first.');
       const controller=new AbortController();s.jobs.set(session,controller);
       const timer=setTimeout(()=>controller.abort(),240_000);
@@ -257,6 +257,44 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
         }
         const pickConnection=(id:string)=>pickConnectionFor(id,userId);
         const caller=(connection:{id:string;provider:string;model:string},stageOf:()=>string)=>callerFor(connection,stageOf,settings,userId);
+        if (r.action === 'cardRead') {
+          need(['chats','characters','world_books']);
+          const chat=await api.chats.getActive(userId);
+          if (!chat) throw new Error('Open a chat with the card first. LumiCast reads the card of the chat that is open.');
+          const card=chat.character_id?await api.characters.get(chat.character_id,userId):null;
+          if (!card) throw new Error('This chat has no single character card to read.');
+          progress('Reading the card and its lorebooks…');
+          // {{char}} is the card's character; {{user}} stays, and the model is told to leave the player out.
+          const own=(v:unknown)=>typeof v==='string'?v.replace(/\{\{char\}\}/gi,card.name).trim():'';
+          const fields=Object.fromEntries(Object.entries({description:card.description,personality:card.personality,scenario:card.scenario,first_message:card.first_mes,example_messages:card.mes_example,alternate_greetings:(card.alternate_greetings ?? []).slice(0,3).join('\n\n'),system_prompt:card.system_prompt})
+            .map(([k,v])=>[k,own(v).slice(0,16_000)]).filter(([,v])=>v));
+          // The card's own lorebooks (and this chat's Cast book is left out: those came from LumiCast already).
+          const LIMIT=60_000;let used=JSON.stringify(fields).length;let cut=false;const lore:{keys:string[];text:string}[]=[];
+          for (const id of card.world_book_ids ?? []) {
+            const book=await api.world_books.get(id,userId);if(!book||record(book.metadata).lumicast==='cast')continue;
+            for (let offset=0;offset<2000&&!cut;offset+=200) {
+              const page=await api.world_books.entries.list(id,{limit:200,offset,userId});
+              for (const e of page.data) {
+                if (e.disabled||!e.content?.trim()) continue;
+                const item={keys:(e.key ?? []).slice(0,6),text:own(e.content).slice(0,6000)};
+                const size=JSON.stringify(item).length;
+                if (used+size>LIMIT){cut=true;break;}
+                lore.push(item);used+=size;
+              }
+              if (page.data.length<200) break;
+            }
+            if (cut) break;
+          }
+          const source=[card.name,...Object.values(fields),...lore.flatMap(l=>[...l.keys,l.text])].join('\n');
+          const connection=await pickConnection(settings.castConnectionId||text(input.connectionId,'connection',100));
+          progress('The model is picking out each character’s looks…');
+          const raw=await caller(connection,()=>'reading the card')(CARD,JSON.stringify({card:card.name,fields,lore}),controller.signal);
+          const characters=parseCast(raw,source,20);
+          if (!characters.length) throw new Error('No character looks were found in this card or its lorebooks.');
+          // The main one first, then as the model listed them.
+          characters.sort((a,b)=>Number(!!b.main)-Number(!!a.main));
+          return {card:card.name,characters,cut} satisfies CardRead;
+        }
         if (r.action === 'castRead') {
           need(['chats','chat_mutation']);
           const chat=await api.chats.getActive(userId);
@@ -299,7 +337,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
     })().then(result=>reply(result)).catch(error=> {
       // Provider errors may embed URLs, headers or keys. Never forward raw upstream errors.
       const message=error instanceof Error ? error.message : '';
-      const trusted=/^(Grant LumiCast|There is no MOSS|Save this character in Lumi Studio|This Lumi Studio cannot|Lumi Studio did not save|Nothing sent from|Lumi Studio sent|The character sent|Open your story|Your latest|No \[ooc\]|No character descriptions|The connection for|Give the character|Wait for|This connection|Gelbooru user|Unknown LumiCast|An operation|Use at most|Use a tag|This Lumiverse|Select a saved|The model |Invalid |Use a plain|Paste a |No explicit|Too many|Conflicting|Tag service|Tag lookup|Cyclic tag|Tag alias|Oversized|Unexpected)/.test(message);
+      const trusted=/^(Grant LumiCast|Open a chat with the card|This chat has no single|No character looks|There is no MOSS|Save this character in Lumi Studio|This Lumi Studio cannot|Lumi Studio did not save|Nothing sent from|Lumi Studio sent|The character sent|Open your story|Your latest|No \[ooc\]|No character descriptions|The connection for|Give the character|Wait for|This connection|Gelbooru user|Unknown LumiCast|An operation|Use at most|Use a tag|This Lumiverse|Select a saved|The model |Invalid |Use a plain|Paste a |No explicit|Too many|Conflicting|Tag service|Tag lookup|Cyclic tag|Tag alias|Oversized|Unexpected)/.test(message);
       reply(undefined,error instanceof Error && error.name==='AbortError' ? 'Operation cancelled or timed out. Your edits are preserved.' : error instanceof ModelRequestError || trusted ? message : 'The operation failed. Check your connection, provider status and tag-service access. Your edits are preserved.');
     });
   });

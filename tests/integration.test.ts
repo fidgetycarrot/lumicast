@@ -367,7 +367,7 @@ test('[ooc] replies explain what is missing: no chat, no question, no reply yet,
   expect(await ask()).toContain('No [ooc] message with a reply');
   h.story.messages.push({id:'m1',role:'user',content:'(OOC: describe her)'});expect(await ask()).toContain('has no reply yet');
   h.story.chat=null;expect(await ask()).toContain('Open your story chat first');
-  h.story.denied.push('chat_mutation');expect(await ask()).toBe('Grant LumiCast these permissions in Extensions to use [ooc] replies: chat_mutation.');
+  h.story.denied.push('chat_mutation');expect(await ask()).toBe('Grant LumiCast these permissions in Extensions: chat_mutation.');
   expect(await rpc.request('castSave',{name:'Maren',aliases:[],description:'Tall.'}).then(()=>'ok',(e:Error)=>e.message)).toContain('Open your story chat first');
 });
 test('a Cast lorebook that 0.10.0 put on the character card moves onto the chat, keeping its entries',async()=> {
@@ -500,4 +500,36 @@ test('Refine has a MOSS mode: wording changes land in the MOSS and Outfit boxes,
   expect(history().hidden).toBe(false);
   mode.value='anima';mode.dispatchEvent(new Event('change'));expect(history().hidden).toBe(true);
   mode.value='moss';mode.dispatchEvent(new Event('change'));expect(history().hidden).toBe(false);expect(history().querySelector('summary')!.textContent).toBe('Earlier rounds (2)');
+});
+test('a character card becomes one entry per described character, main first, ready for a prompt',async()=> {
+  dom();const h=harness();cleanups.push(h.stop);const dispose=setup(h.ctx);cleanups.push(dispose);
+  const b=(name:string)=>Array.from(h.root.querySelectorAll('button')).find(x=>x.textContent===name)!;
+  await until(()=>!b('Translate').disabled);h.root.querySelector('select')!.value='c1';
+  Object.assign(h.story.card,{name:'Vesper',description:'{{char}} is a lean noble with amber eyes. His guard Tobin is a wiry boy with a shaved head.',scenario:'{{user}} arrives at the manor.',personality:'',first_mes:'',mes_example:'',alternate_greetings:[],system_prompt:''});
+  h.story.books.set('lore',{id:'lore',name:'Manor lore',metadata:{}});h.story.card.world_book_ids=['other','lore'];
+  h.story.entries.push({id:'l1',world_book_id:'lore',key:['Maren'],content:'Maren, the cook, is stout with red cheeks.',comment:''},{id:'l2',world_book_id:'lore',key:['old'],content:'Off.',comment:'',disabled:true} as never);
+  h.setResponses([{characters:[{name:'Tobin',aliases:[],main:false,description:'Tobin is a wiry boy with a shaved head.'},{name:'Vesper',aliases:['the noble'],main:true,description:'Vesper is a lean noble with amber eyes.'},{name:'Maren',main:false,description:'Maren is stout with red cheeks.'},{name:'Ghost',description:'Invented.'}]}]);
+  b('Get the characters from this card').click();await until(()=>!b('Translate').disabled);
+  const sent=JSON.parse(((h.calls.filter(c=>(c as unknown[])[0]==='generation').at(-1) as unknown[])[1] as {messages:{content:string}[]}).messages[1].content);
+  expect(sent.card).toBe('Vesper');expect(sent.fields.description).toBe('Vesper is a lean noble with amber eyes. His guard Tobin is a wiry boy with a shaved head.');
+  expect(sent.fields.scenario).toBe('{{user}} arrives at the manor.');expect(sent.fields.personality).toBeUndefined();
+  expect(sent.lore).toEqual([{keys:['Maren'],text:'Maren, the cook, is stout with red cheeks.'}]);
+  const entries=Array.from(h.root.querySelectorAll('[data-cast]')).map(e=>(e as HTMLElement).dataset.cast);
+  expect(entries).toEqual(['Vesper','Tobin','Maren']);
+  expect(h.root.textContent).toContain('Vesper (the card’s main character)');
+  const first=h.root.querySelector('[data-cast="Vesper"]')!;
+  expect(Array.from(first.querySelectorAll('button')).map(x=>x.textContent)).toEqual(['Make the Anima prompt']);
+  h.setResponses([{traits:[{id:'t1',group:'face',evidence:'amber eyes',tags:['orange_eyes'],detail:'Amber eyes'}]},{drop:[],captions:{character:'Amber eyes.'},issues:[],moss:'A lean noble with amber eyes.'}]);
+  (first.querySelector('button') as HTMLButtonElement).click();await until(()=>named(h.root,'source').value!=='');await until(()=>!b('Translate').disabled);
+  expect(named(h.root,'source').value).toBe('Vesper is a lean noble with amber eyes.');
+  expect((h.root.querySelector('[data-sheet="moss"]') as HTMLTextAreaElement).value).toBe('a lean noble with amber eyes.');
+});
+test('reading a card explains what is missing',async()=> {
+  dom();const h=harness();cleanups.push(h.stop);const rpc=createRpc(h.ctx);cleanups.push(()=>rpc.destroy());
+  const ask=()=>rpc.request('cardRead',{connectionId:'c1'}).then(()=>'ok',(e:Error)=>e.message);
+  h.setResponses([{characters:[]}]);Object.assign(h.story.card,{description:'A quiet town.'});
+  expect(await ask()).toBe('No character looks were found in this card or its lorebooks.');
+  h.story.chat!.character_id='';expect(await ask()).toBe('This chat has no single character card to read.');
+  h.story.chat=null;expect(await ask()).toContain('Open a chat with the card first');
+  h.story.denied.push('world_books');expect(await ask()).toBe('Grant LumiCast these permissions in Extensions: world_books.');
 });

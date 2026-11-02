@@ -1,4 +1,6 @@
-# LumiCast 0.17.1
+# LumiCast 0.18.0
+
+**v0.18.0 reads characters from a card.** With a chat open, **Get the characters from this card** in "From your story" reads the chat's character card (description, personality, scenario, first message, examples, a few alternate greetings) and the lorebooks attached to it, and one model call lists every character whose looks it describes, the card's main character first, up to 20. `{{char}}` is read as the card's name; the player (`{{user}}`) is left out. Each entry has an editable description and **Make the Anima prompt**, which translates it as usual, MOSS description included. It uses the "Model for [ooc] replies" connection. Very long lorebooks are read up to a limit and you're told when some entries were left out. Sending them all to Lumi Studio and setting up its cast come later.
 
 **v0.17.1 adds three MOSS rules from the Inquisitor test.** A human or humanoid always gets an eye colour and a skin tone, a plain one when the description gives none, since MOSS draws blank white eyes otherwise; LumiCast also warns when a MOSS description names no eyes. Cyborgs lead with their human build and role, and cables and tubes are tied to where they enter (temples, neck collar), never "running from the body", which MOSS draws as a robot torso. Under a hat or hood, scalp implants go at the temples and neck. Refine for MOSS knows these fixes too.
 
