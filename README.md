@@ -1,4 +1,6 @@
-# LumiCast 0.18.2
+# LumiCast 0.19.0
+
+**v0.19.0: tag Refine works on the Lumi Studio sheet, for Anima or NovelAI.** "Fixing pictures from" is now **Tags (Anima, NovelAI)** or **MOSS**. In tag mode, Refine no longer rewrites a caption (that only ever fed LumiCast's own copy-and-paste prompt). Instead, when no real booru tag says a trait, it suggests a short plain phrase, such as "thin string-bikini tan lines", which goes to the end of the sheet's appearance field, where LumiCast keeps everything no tag says. Tag adds, removals and weights work as before. Then press Update in Lumi Studio. Tag mode never touches the MOSS description, and MOSS mode never touches tags. A new panel starts in tag mode.
 
 **v0.18.2 says what the buttons make.** The button on each character from a card or an [ooc] reply is now **Make the Studio character**, a name that holds whatever image models Lumi Studio uses next: it always wrote both, the MOSS description and outfit as well as the Anima tags. The panel's header says so too.
 

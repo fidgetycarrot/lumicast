@@ -144,7 +144,7 @@ test('refine: typed feedback becomes verified, selectable changes; weights and n
   expect(h.storage.get('u1:settings.json')).toMatchObject({notes:'Redheads: weight red_hair at 1.4.',connectionId:''});
   h.root.querySelector('select')!.value='c1';
   h.setResponses([{traits:[{id:'1',group:'hair',evidence:'Short red hair.',tags:['(red_hair:1.4)'],detail:'Short red hair'}]},{drop:[],captions:{character:'Short red hair.'},issues:[]},
-    {reply:'The hair read as orange.',remove:[{tag:'made_up',why:'x'}],weight:[{tag:'red_hair',weight:1.8,why:'still too weak'}],add:[{tag:'red_hair',why:'dup'},{tag:'short_hair',weight:null,why:'length was lost'}],caption:'Short, vivid red hair.'}]);
+    {reply:'The hair read as orange.',remove:[{tag:'made_up',why:'x'}],weight:[{tag:'red_hair',weight:1.8,why:'still too weak'}],add:[{tag:'red_hair',why:'dup'},{tag:'short_hair',weight:null,why:'length was lost'}],phrases:[{phrase:'vivid crimson hair',why:'pins the shade'}]}]);
   source.value='Short red hair.';b('Translate').click();await until(()=>!b('Translate').disabled);
   expect(tags.value).toBe('(red_hair:1.4), standing');expect(prompt.value).toBe('(red hair:1.4), standing\n\nShort red hair.');
   const sheetValue=(key:string)=>(h.root.querySelector(`[data-sheet="${key}"]`) as HTMLInputElement).value;
@@ -161,12 +161,16 @@ test('refine: typed feedback becomes verified, selectable changes; weights and n
   const refineInput=JSON.parse(((h.calls.filter(v=>(v as unknown[])[0]==='generation').pop() as unknown[])[1] as {messages:{content:string}[]}).messages[1].content);
   expect(refineInput.tags).toEqual(['(red_hair:1.4)','standing']);expect(refineInput.feedback).toBe('Hair came out orange and long.');expect(refineInput.notes).toContain('Redheads');expect(refineInput.description).toBe('Short red hair.');
   const boxes=Array.from(h.root.querySelectorAll('.lc-proposal input')) as HTMLInputElement[];
-  expect(Array.from(h.root.querySelectorAll('.lc-proposal strong')).map(n=>n.textContent)).toEqual(['Weight (red hair:1.8)','Add short hair','Replace the standalone detail']);
+  expect(Array.from(h.root.querySelectorAll('.lc-proposal strong')).map(n=>n.textContent)).toEqual(['Weight (red hair:1.8)','Add short hair','Add “vivid crimson hair” to the appearance']);
   expect(h.root.textContent).toContain('The hair read as orange.');expect(tags.value).toBe('(red_hair:1.4), standing');
   boxes[2].checked=false;b('Apply selected').click();await until(()=>!b('Translate').disabled);
   expect(tags.value).toBe('(red_hair:1.8), standing, short_hair');expect(prose.value).toBe('Short red hair.');expect(prompt.value).toBe('(red hair:1.8), standing, short hair\n\nShort red hair.');
   expect(feedback.value).toBe('');expect(h.root.querySelectorAll('.lc-proposal').length).toBe(0);
   expect(appearance.value).toBe('(red hair:1.8), short hair');
+  // A phrase goes to the end of the appearance field when it is ticked.
+  feedback.value='Still orange.';h.setResponses([{reply:'Pin the shade.',remove:[],add:[],weight:[],phrases:[{phrase:'vivid crimson hair',why:'pins the shade'}]}]);
+  b('Suggest changes').click();await until(()=>!b('Translate').disabled);b('Apply selected').click();await until(()=>!b('Translate').disabled);
+  expect(appearance.value).toBe('(red hair:1.8), short hair, vivid crimson hair');expect(tags.value).toBe('(red_hair:1.8), standing, short_hair');
 });
 test('Test Gelbooru checks what is typed, falls back to the saved key, and saving accepts the pasted line',async()=> {
   dom();const h=harness();cleanups.push(h.stop);const dispose=setup(h.ctx);cleanups.push(dispose);

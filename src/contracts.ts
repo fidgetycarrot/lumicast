@@ -17,7 +17,7 @@ export interface RefineInput { tags: string[]; caption: string; feedback: string
 export interface RefineRound { feedback: string; applied: string[]; declined: string[] }
 /** One change the user can accept or decline. */
 /** The garment-… and moss kinds come from Refine for MOSS: text is the new wording, from the outfit item it replaces. */
-export interface Proposal { kind: 'add' | 'remove' | 'weight' | 'caption' | 'moss' | 'garment-add' | 'garment-remove' | 'garment-change'; tag?: string; weight?: number; caption?: string; text?: string; from?: string; why: string; definition?: string; url?: string }
+export interface Proposal { kind: 'add' | 'remove' | 'weight' | 'caption' | 'phrase' | 'moss' | 'garment-add' | 'garment-remove' | 'garment-change'; tag?: string; weight?: number; caption?: string; text?: string; from?: string; why: string; definition?: string; url?: string }
 /** What Refine for MOSS works on: the saved MOSS description and outfit, not tags. */
 export interface MossRefineInput { moss: string; outfit: string[]; feedback: string; description?: string; stated?: string; notes?: string; history?: RefineRound[] }
 export interface Refinement { reply: string; proposals: Proposal[]; notices: string[]; model: string }

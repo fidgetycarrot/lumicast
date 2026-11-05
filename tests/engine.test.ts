@@ -193,11 +193,12 @@ test('refine proposes only grounded changes: known tags to remove or weight, ver
     remove:[{tag:'blue_eyes',why:'pulls the wrong colour'},{tag:'green_eyes',why:'not in the prompt'}],
     weight:[{tag:'trap',weight:1.8,why:'still ignored'},{tag:'1boy',weight:44,why:'bad number'},{tag:'not_here',weight:1.5}],
     add:[{tag:'violet_eyes',weight:1.3,why:'asked colour'},{tag:'purple_eyes',why:'duplicate after alias'},{tag:'very_feminine_boy',why:'guess'},{tag:'1boy',why:'already there'},{tag:'androgynous',weight:null,why:'softens the read'}],
-    caption:'A slender, feminine young man with purple_eyes.'},{description:'desc',stated:'femboy',notes:'my notes'},dict);
-  expect(JSON.parse(inputs[0])).toEqual({tags:['1boy','(trap:1.4)','blue_eyes'],caption:'A slender young man.',feedback:'Reads too masculine and the eyes should be purple.',description:'desc',stated:'femboy',notes:'my notes'});
+    phrases:[{phrase:'Soft_Feminine (face).',why:'no tag says it'},{phrase:'blue eyes',why:'already a tag'},{phrase:'x',why:'too short'}],caption:'ignored now'},{description:'desc',stated:'femboy',notes:'my notes'},dict);
+  // The caption is no longer sent or suggested: it only ever fed LumiCast's own prompt.
+  expect(JSON.parse(inputs[0])).toEqual({tags:['1boy','(trap:1.4)','blue_eyes'],feedback:'Reads too masculine and the eyes should be purple.',description:'desc',stated:'femboy',notes:'my notes'});
   expect(result.reply).toBe('The type tag is being outweighed.');
-  expect(result.proposals.map(p=>[p.kind,p.tag,p.weight])).toEqual([['remove','blue_eyes',undefined],['weight','trap',1.8],['add','purple_eyes',1.3],['add','androgynous',undefined],['caption',undefined,undefined]]);
-  expect(result.proposals[2].definition).toBe('Eyes that are coloured purple.');expect(result.proposals[4].caption).toBe('A slender, feminine young man with purple eyes.');
+  expect(result.proposals.map(p=>[p.kind,p.tag,p.weight])).toEqual([['remove','blue_eyes',undefined],['weight','trap',1.8],['add','purple_eyes',1.3],['add','androgynous',undefined],['phrase',undefined,undefined]]);
+  expect(result.proposals[2].definition).toBe('Eyes that are coloured purple.');expect(result.proposals[4].text).toBe('soft feminine face');
   expect(result.notices.join(' ')).toContain('“very_feminine_boy” is not a live booru tag');
 });
 test('refine handles vague feedback, empty input and bad output without inventing changes',async()=> {

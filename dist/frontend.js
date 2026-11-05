@@ -674,15 +674,15 @@ ${text}`;
   const proposed = el("div");
   const said = (p) => {
     const tag = p.tag ? formatWeighted({ name: p.tag, weight: p.weight === 1 ? undefined : p.weight }, true) : "";
-    return p.kind === "add" ? `add ${tag}` : p.kind === "remove" ? `remove ${tag}` : p.kind === "weight" ? p.weight === 1 ? `clear the weight on ${tag}` : `weight ${tag}` : p.kind === "moss" ? p.text ? `new MOSS description: ${p.text.slice(0, 160)}` : "empty the MOSS description" : p.kind === "garment-add" ? `add “${p.text}”` : p.kind === "garment-remove" ? `remove “${p.text}”` : p.kind === "garment-change" ? `change “${p.from}” to “${p.text}”` : "new caption";
+    return p.kind === "add" ? `add ${tag}` : p.kind === "remove" ? `remove ${tag}` : p.kind === "weight" ? p.weight === 1 ? `clear the weight on ${tag}` : `weight ${tag}` : p.kind === "phrase" ? `add phrase “${p.text}”` : p.kind === "moss" ? p.text ? `new MOSS description: ${p.text.slice(0, 160)}` : "empty the MOSS description" : p.kind === "garment-add" ? `add “${p.text}”` : p.kind === "garment-remove" ? `remove “${p.text}”` : p.kind === "garment-change" ? `change “${p.from}” to “${p.text}”` : "new caption";
   };
   const refineMode = el("select");
   refineMode.setAttribute("aria-label", "Fixing pictures from");
-  refineMode.append(option("MOSS", "moss"), option("Anima", "anima"));
+  refineMode.append(option("Tags (Anima, NovelAI)", "anima"), option("MOSS", "moss"));
   try {
-    refineMode.value = localStorage.getItem("lumicast.refine") === "anima" ? "anima" : "moss";
+    refineMode.value = localStorage.getItem("lumicast.refine") === "moss" ? "moss" : "anima";
   } catch {
-    refineMode.value = "moss";
+    refineMode.value = "anima";
   }
   rounds = roundsBy[refineMode.value];
   refineMode.addEventListener("change", () => {
@@ -698,7 +698,7 @@ ${text}`;
       localStorage.setItem("lumicast.refine", refineMode.value);
     } catch {}
     update();
-    notify(refineMode.value === "moss" ? "Refine now fixes MOSS pictures: it changes the MOSS description and outfit wording." : "Refine now fixes Anima pictures: it changes tags and weights.");
+    notify(refineMode.value === "moss" ? "Refine now fixes MOSS pictures: it changes the MOSS description and outfit wording." : "Refine now fixes tag pictures (Anima, NovelAI): it changes the sheet’s tags, weights and short phrases.");
   });
   const historyList = el("ol");
   const historyBox = el("details");
@@ -767,7 +767,7 @@ ${text}`;
       box.checked = true;
       box.dataset.index = String(i);
       const shown = p.tag ? formatWeighted({ name: p.tag, weight: p.weight === 1 ? undefined : p.weight }, true) : "";
-      const what = p.kind === "add" ? `Add ${shown}` : p.kind === "remove" ? `Remove ${shown}` : p.kind === "weight" ? p.weight === 1 ? `Clear the weight on ${shown}` : `Weight ${shown}` : p.kind === "moss" ? p.text ? "Replace the MOSS description" : "Empty the MOSS description" : p.kind === "garment-add" ? `Add “${p.text}” to the outfit` : p.kind === "garment-remove" ? `Remove “${p.text}” from the outfit` : p.kind === "garment-change" ? `Change “${p.from}” to “${p.text}”` : "Replace the standalone detail";
+      const what = p.kind === "add" ? `Add ${shown}` : p.kind === "remove" ? `Remove ${shown}` : p.kind === "weight" ? p.weight === 1 ? `Clear the weight on ${shown}` : `Weight ${shown}` : p.kind === "phrase" ? `Add “${p.text}” to the appearance` : p.kind === "moss" ? p.text ? "Replace the MOSS description" : "Empty the MOSS description" : p.kind === "garment-add" ? `Add “${p.text}” to the outfit` : p.kind === "garment-remove" ? `Remove “${p.text}” from the outfit` : p.kind === "garment-change" ? `Change “${p.from}” to “${p.text}”` : "Replace the standalone detail";
       const body = el("span");
       body.append(el("strong", what), document.createTextNode(p.why ? ` — ${p.why}` : ""));
       if (p.kind === "caption")
@@ -823,7 +823,10 @@ ${text}`;
     sheet.outfit.box.value = editList(sheet.outfit.box.value, changes);
     sheet.anatomy.box.value = editList(sheet.anatomy.box.value, changes);
     const elsewhere = new Set([...splitTags(sheet.always.box.value), ...splitTags(sheet.outfit.box.value), ...splitTags(sheet.anatomy.box.value)].map((v) => v.replace(/^\((.+?):[\d.]+\)$/, "$1").trim().toLowerCase().replace(/_/g, " ")));
-    sheet.appearance.box.value = editList(sheet.appearance.box.value, changes.filter((p) => p.kind !== "add" || !elsewhere.has(p.tag.replace(/_/g, " "))), true);
+    sheet.appearance.box.value = editList(sheet.appearance.box.value, changes.filter((p) => p.tag && (p.kind !== "add" || !elsewhere.has(p.tag.replace(/_/g, " ")))), true);
+    for (const p of chosen)
+      if (p.kind === "phrase" && p.text && !splitTags(sheet.appearance.box.value).some((v) => v.trim().toLowerCase() === p.text))
+        sheet.appearance.box.value = [...splitTags(sheet.appearance.box.value), p.text].join(", ");
     if (fromStudio) {
       pending = [];
       proposed.replaceChildren();
@@ -873,7 +876,7 @@ ${text}`;
   const notesBox = el("details");
   notesBox.className = "lc-sub";
   notesBox.append(el("summary", "Your notes"), field("What you have learned works", notes, "In your own words. Saved, and read on every translation and refinement. Say which model a note is for (“MOSS: …”, “Anima: …”). A weight is only ever applied when a note gives the number."), saveNotes);
-  refine.append(field("Fixing pictures from", refineMode, "MOSS changes the MOSS description and the outfit wording. Anima changes tags and weights."), historyBox, field("What did the image get wrong?", feedback, "LumiCast cannot see the image. It works from what you say here, your description, your notes and the character sheet."), row(suggest), reply, proposed, row(apply), notesBox);
+  refine.append(field("Fixing pictures from", refineMode, "Tags changes the Lumi Studio sheet’s tags, weights and short phrases, for Anima or NovelAI. MOSS changes the MOSS description and the outfit wording. Neither touches the other."), historyBox, field("What did the image get wrong?", feedback, "LumiCast cannot see the image. It works from what you say here, your description, your notes and the character sheet."), row(suggest), reply, proposed, row(apply), notesBox);
   const output = card("02 / Anima prompt");
   const quality = named(el("input"), "quality");
   quality.maxLength = 600;
@@ -976,7 +979,7 @@ ${text}`;
     notify("Search complete. Popularity is not an Anima quality score.");
   });
   searchCard.append(field("Tag name or the start of one", query, "Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched."), search, found);
-  app.append(intro, settings, status, studioNews, castCard, input, gapsCard, output, refine, sheetCard, searchCard, el("p", "LumiCast 0.18.2 · Draft stays in this tab until reload."));
+  app.append(intro, settings, status, studioNews, castCard, input, gapsCard, output, refine, sheetCard, searchCard, el("p", "LumiCast 0.19.0 · Draft stays in this tab until reload."));
   const controls = [readOoc, readCard, translate, studio, sendBack, writeMoss, again, save, refreshButton, testGel, saveNotes, saveQuality, startOver, verify, rebuild, copy, copyTags, copyProse, suggest, apply, search, ...Object.values(sheet).map((f) => f.copyField)];
   let shareTimer;
   function share() {
