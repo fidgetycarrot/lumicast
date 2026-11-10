@@ -171,6 +171,91 @@ function removeConflicts(rows) {
   return rows.filter((r) => !excluded.has(r.name));
 }
 
+// src/safe-id.ts
+var HEX = "0123456789abcdef";
+function uuid() {
+  let out = "";
+  for (let i = 0;i < 36; i++) {
+    if (i === 8 || i === 13 || i === 18 || i === 23) {
+      out += "-";
+      continue;
+    }
+    if (i === 14) {
+      out += "4";
+      continue;
+    }
+    const r = Math.random() * 16 | 0;
+    out += HEX[i === 19 ? r & 3 | 8 : r];
+  }
+  return out;
+}
+var K = new Uint32Array([
+  1116352408,
+  1899447441,
+  3049323471,
+  3921009573,
+  961987163,
+  1508970993,
+  2453635748,
+  2870763221,
+  3624381080,
+  310598401,
+  607225278,
+  1426881987,
+  1925078388,
+  2162078206,
+  2614888103,
+  3248222580,
+  3835390401,
+  4022224774,
+  264347078,
+  604807628,
+  770255983,
+  1249150122,
+  1555081692,
+  1996064986,
+  2554220882,
+  2821834349,
+  2952996808,
+  3210313671,
+  3336571891,
+  3584528711,
+  113926993,
+  338241895,
+  666307205,
+  773529912,
+  1294757372,
+  1396182291,
+  1695183700,
+  1986661051,
+  2177026350,
+  2456956037,
+  2730485921,
+  2820302411,
+  3259730800,
+  3345764771,
+  3516065817,
+  3600352804,
+  4094571909,
+  275423344,
+  430227734,
+  506948616,
+  659060556,
+  883997877,
+  958139571,
+  1322822218,
+  1537002063,
+  1747873779,
+  1955562222,
+  2024104815,
+  2227730452,
+  2361852424,
+  2428436474,
+  2756734187,
+  3204031479,
+  3329325298
+]);
+
 // src/frontend.ts
 function createRpc(ctx, timeout = 250000) {
   let closed = false;
@@ -197,7 +282,7 @@ function createRpc(ctx, timeout = 250000) {
     request(action, input, progress) {
       if (closed)
         return Promise.reject(new Error("LumiCast is closed."));
-      const id = crypto.randomUUID();
+      const id = uuid();
       return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
           pending.delete(id);
@@ -979,7 +1064,7 @@ ${text}`;
     notify("Search complete. Popularity is not an Anima quality score.");
   });
   searchCard.append(field("Tag name or the start of one", query, "Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched."), search, found);
-  app.append(intro, settings, status, studioNews, castCard, input, gapsCard, output, refine, sheetCard, searchCard, el("p", "LumiCast 0.19.0 · Draft stays in this tab until reload."));
+  app.append(intro, settings, status, studioNews, castCard, input, gapsCard, output, refine, sheetCard, searchCard, el("p", "LumiCast 0.19.1 · Draft stays in this tab until reload."));
   const controls = [readOoc, readCard, translate, studio, sendBack, writeMoss, again, save, refreshButton, testGel, saveNotes, saveQuality, startOver, verify, rebuild, copy, copyTags, copyProse, suggest, apply, search, ...Object.values(sheet).map((f) => f.copyField)];
   let shareTimer;
   function share() {
@@ -1207,7 +1292,7 @@ ${text}`;
     clearInterval(studioTimer);
     document.removeEventListener("visibilitychange", lookNow);
     target.removeEventListener?.("focus", lookNow);
-    ctx.sendToBackend({ type: "lumicast:request", id: crypto.randomUUID(), action: "cancel" });
+    ctx.sendToBackend({ type: "lumicast:request", id: uuid(), action: "cancel" });
     offOoc();
     rpc.destroy();
     removeStyle();

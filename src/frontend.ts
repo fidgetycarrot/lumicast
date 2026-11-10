@@ -2,6 +2,7 @@ import type { SpindleFrontendContext } from 'lumiverse-spindle-types';
 import { assemble, editList, formatWeighted, parseWeighted, splitTags, withQuality, type GelbooruTest, type Proposal, type RefineRound, type Refinement, type Scope, type Snapshot, type StudioCharacter, type Translation, type VerifiedTag } from './contracts';
 import { removeConflicts } from './engine';
 import type { CardRead, CastMember, CastRead, CastSaved } from './cast';
+import { uuid } from './safe-id';
 
 export function createRpc(ctx: Pick<SpindleFrontendContext,'sendToBackend'|'onBackendMessage'>, timeout=250_000) {
   let closed=false;
@@ -17,7 +18,7 @@ export function createRpc(ctx: Pick<SpindleFrontendContext,'sendToBackend'|'onBa
   return {
     request<T>(action:string,input?:unknown,progress?:(stage:string)=>void):Promise<T> {
       if(closed)return Promise.reject(new Error('LumiCast is closed.'));
-      const id=crypto.randomUUID();
+      const id=uuid();
       return new Promise((resolve,reject)=> {
         const timer=setTimeout(()=>{pending.delete(id);reject(new Error('Lumiverse did not respond in time. Your edits are preserved.'));},timeout);
         pending.set(id,{resolve:v=>resolve(v as T),reject,timer,progress});
@@ -447,7 +448,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   });
   searchCard.append(field('Tag name or the start of one',query,'Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched.'),search,found);
 
-  app.append(intro,settings,status,studioNews,castCard,input,gapsCard,output,refine,sheetCard,searchCard,el('p','LumiCast 0.19.0 · Draft stays in this tab until reload.'));
+  app.append(intro,settings,status,studioNews,castCard,input,gapsCard,output,refine,sheetCard,searchCard,el('p','LumiCast 0.19.1 · Draft stays in this tab until reload.'));
   const controls=[readOoc,readCard,translate,studio,sendBack,writeMoss,again,save,refreshButton,testGel,saveNotes,saveQuality,startOver,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
 
   // Every change to the sheet is offered to Lumi Studio, a moment after typing stops.
@@ -543,5 +544,5 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   document.addEventListener('visibilitychange',lookNow);
   const target=globalThis as {addEventListener?:(t:string,f:()=>void)=>void;removeEventListener?:(t:string,f:()=>void)=>void};
   target.addEventListener?.('focus',lookNow);
-  return () => {closed=true;clearInterval(studioTimer);document.removeEventListener('visibilitychange',lookNow);target.removeEventListener?.('focus',lookNow);ctx.sendToBackend({type:'lumicast:request',id:crypto.randomUUID(),action:'cancel'});offOoc();rpc.destroy();removeStyle();tab.destroy();};
+  return () => {closed=true;clearInterval(studioTimer);document.removeEventListener('visibilitychange',lookNow);target.removeEventListener?.('focus',lookNow);ctx.sendToBackend({type:'lumicast:request',id:uuid(),action:'cancel'});offOoc();rpc.destroy();removeStyle();tab.destroy();};
 }
