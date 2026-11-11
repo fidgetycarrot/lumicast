@@ -335,7 +335,7 @@ function field(label, input, hint) {
     wrapper.append(el("small", hint));
   return wrapper;
 }
-var STYLES = `.lc-app{box-sizing:border-box;font:14px/1.55 system-ui,sans-serif;color:var(--lumiverse-text,#eee);padding:24px;max-width:860px;margin:auto}.lc-app *{box-sizing:border-box}.lc-app h1{font-size:32px;letter-spacing:-1px;margin:2px 0}.lc-app h2{font-size:18px;margin:0 0 12px}.lc-app p{margin:8px 0}.lc-kicker{color:#d4b7ff;font-size:11px;letter-spacing:2px;text-transform:uppercase}.lc-muted,.lc-app small{color:var(--lumiverse-text-muted,#b4adc1);font-size:12px}.lc-card{border:1px solid #81708e55;background:#83709c0a;border-radius:16px;padding:18px;margin-top:18px}.lc-field{display:flex;flex-direction:column;gap:7px;margin:12px 0}.lc-field>span{font-size:13px;font-weight:600}.lc-app textarea,.lc-app input,.lc-app select{width:100%;border:1px solid #9484a566;border-radius:9px;background:var(--lumiverse-bg,#211c29);color:inherit;padding:11px;font:inherit}.lc-app textarea{resize:vertical;min-height:95px;line-height:1.55}.lc-app button{border:1px solid #a18caf66;border-radius:9px;padding:9px 15px;background:#8b719025;color:inherit;font:inherit;cursor:pointer}.lc-app button.lc-primary{background:#d0adf3;color:#261733;border-color:#d0adf3;font-weight:650}.lc-app button:disabled{opacity:.45;cursor:default}.lc-app :focus-visible{outline:2px solid #d0adf3;outline-offset:3px}.lc-row{display:flex;flex-wrap:wrap;gap:9px;align-items:center}.lc-status{padding:10px 0;white-space:pre-wrap;min-height:45px;position:sticky;top:0;z-index:2;background:var(--lumiverse-bg,#17131d);border-bottom:1px solid #81708e33}.lc-head{display:flex;justify-content:space-between;align-items:center;gap:8px}.lc-head>span{font-size:13px;font-weight:600}.lc-app button.lc-mini{padding:3px 11px;font-size:12px}.lc-status[data-error=true]{color:#ffa7a7}.lc-app summary{cursor:pointer;font-weight:600}.lc-app a{color:#d4b7ff}.lc-studio{background:#d0adf31a;border-radius:0 10px 10px 0}.lc-studio p{margin:0 0 8px}.lc-gaps,.lc-news,.lc-studio{border-left:3px solid #d0adf3;padding:6px 12px;margin:10px 0}.lc-gaps .lc-row{margin-top:8px}.lc-gaps input{flex:1;min-width:180px}.lc-sub{margin-top:14px}.lc-sub>summary{font-weight:600}.lc-gaps ul{margin:6px 0;padding-left:18px}.lc-proposal{display:flex;gap:9px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #81708e33}.lc-proposal input{width:auto;margin-top:4px}.lc-proposal small{display:block}.lc-provenance{overflow-wrap:anywhere;padding:9px 0;border-bottom:1px solid #81708e33}.lc-provenance blockquote{margin:4px 0 0;padding-left:12px;border-left:2px solid #8b7190;font-size:12px}.lc-app [hidden]{display:none!important}@media(max-width:450px){.lc-app{padding:14px}.lc-card{padding:13px}}`;
+var STYLES = `.lc-app{box-sizing:border-box;font:14px/1.55 system-ui,sans-serif;color:var(--lumiverse-text,#eee);padding:24px;max-width:860px;margin:auto}.lc-app *{box-sizing:border-box}.lc-app h1{font-size:32px;letter-spacing:-1px;margin:2px 0}.lc-app h2{font-size:18px;margin:0 0 12px}.lc-app p{margin:8px 0}.lc-kicker{color:#d4b7ff;font-size:11px;letter-spacing:2px;text-transform:uppercase}.lc-muted,.lc-app small{color:var(--lumiverse-text-muted,#b4adc1);font-size:12px}.lc-card{border:1px solid #81708e55;background:#83709c0a;border-radius:16px;padding:18px;margin-top:18px}.lc-field{display:flex;flex-direction:column;gap:7px;margin:12px 0}.lc-field>span{font-size:13px;font-weight:600}.lc-app textarea,.lc-app input,.lc-app select{width:100%;border:1px solid #9484a566;border-radius:9px;background:var(--lumiverse-bg,#211c29);color:inherit;padding:11px;font:inherit}.lc-app textarea{resize:vertical;min-height:95px;line-height:1.55}.lc-app button{border:1px solid #a18caf66;border-radius:9px;padding:9px 15px;background:#8b719025;color:inherit;font:inherit;cursor:pointer}.lc-app button.lc-primary{background:#d0adf3;color:#261733;border-color:#d0adf3;font-weight:650}.lc-app button:disabled{opacity:.45;cursor:default}.lc-app :focus-visible{outline:2px solid #d0adf3;outline-offset:3px}.lc-row{display:flex;flex-wrap:wrap;gap:9px;align-items:center}.lc-status{padding:10px 0;white-space:pre-wrap;min-height:45px;position:sticky;top:0;z-index:2;background:var(--lumiverse-bg,#17131d);border-bottom:1px solid #81708e33}.lc-head{display:flex;justify-content:space-between;align-items:center;gap:8px}.lc-head>span{font-size:13px;font-weight:600}.lc-app button.lc-mini{padding:3px 11px;font-size:12px}.lc-tabs{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 6px;border-bottom:1px solid #a18caf44;padding-bottom:8px}.lc-app .lc-tab{border-radius:9px 9px 0 0;background:transparent;border-color:transparent;opacity:.75}.lc-app .lc-tab-on{background:#d0adf3;color:#261733;font-weight:650;opacity:1}.lc-app{display:flex;flex-direction:column}.lc-app[data-show]>[data-tab]{display:none}.lc-app[data-show="start"]>[data-tab="start"],.lc-app[data-show="character"]>[data-tab="character"],.lc-app[data-show="pictures"]>[data-tab="pictures"],.lc-app[data-show="setup"]>[data-tab="setup"]{display:revert}.lc-working{margin:6px 0;font-weight:600}.lc-lead{margin:10px 0 14px;opacity:.85}.lc-status[data-error=true]{color:#ffa7a7}.lc-app summary{cursor:pointer;font-weight:600}.lc-app a{color:#d4b7ff}.lc-studio{background:#d0adf31a;border-radius:0 10px 10px 0}.lc-studio p{margin:0 0 8px}.lc-gaps,.lc-news,.lc-studio{border-left:3px solid #d0adf3;padding:6px 12px;margin:10px 0}.lc-gaps .lc-row{margin-top:8px}.lc-gaps input{flex:1;min-width:180px}.lc-sub{margin-top:14px}.lc-sub>summary{font-weight:600}.lc-gaps ul{margin:6px 0;padding-left:18px}.lc-proposal{display:flex;gap:9px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #81708e33}.lc-proposal input{width:auto;margin-top:4px}.lc-proposal small{display:block}.lc-provenance{overflow-wrap:anywhere;padding:9px 0;border-bottom:1px solid #81708e33}.lc-provenance blockquote{margin:4px 0 0;padding-left:12px;border-left:2px solid #8b7190;font-size:12px}.lc-app [hidden]{display:none!important}@media(max-width:450px){.lc-app{padding:14px}.lc-card{padding:13px}}`;
 function setup(ctx, options = {}) {
   let closed = false, busy = false, verified = false, edited = false, fromStudio = false, result = null, revision = 0;
   let pending = [];
@@ -361,7 +361,9 @@ function setup(ctx, options = {}) {
   };
   const remembered = (box, name) => {
     try {
-      box.open = localStorage.getItem(`lumicast.open.${name}`) === "1";
+      const kept = localStorage.getItem(`lumicast.open.${name}`);
+      if (kept !== null)
+        box.open = kept === "1";
     } catch {}
     box.addEventListener("toggle", () => {
       try {
@@ -370,10 +372,11 @@ function setup(ctx, options = {}) {
     });
     return box;
   };
+  const tabs = [];
   const intro = el("header");
-  const kicker = el("div", "DESCRIPTION → MOSS + ANIMA");
+  const kicker = el("div", "CHARACTERS FOR LUMI STUDIO");
   kicker.className = "lc-kicker";
-  intro.append(kicker, el("h1", "LumiCast"), el("p", "Turn a written character into a MOSS description, an Anima prompt built from real booru tags, and a Lumi Studio character sheet."));
+  intro.append(kicker, el("h1", "LumiCast"), el("p", "Bring a character in, get how they look right, then make pictures of them. Work left to right through the tabs."));
   const status = el("div");
   status.className = "lc-status";
   status.setAttribute("role", "status");
@@ -490,7 +493,7 @@ ${text}`;
     box.append(el("h2", member.main ? `${member.name} (the card’s main character)` : member.name), field("Name", name), ...fromCard ? [field("Description", description, "Taken from the card. The MOSS description, the outfit and the Anima tags are all built from it; edit anything first."), row(toPrompt)] : [field("Other names", aliases, "Comma separated. Any of these names in the story brings the description into the story model’s context."), field("Description", description, "Goes into the lorebook as written, and the MOSS description and Anima tags are built from it. Edit anything first."), row(saveEntry, toPrompt)], state);
     return box;
   }
-  castCard.append(el("p", "Two ways to bring characters in. Ask the story model about someone with a message that starts with [ooc], then use its answer: LumiCast keeps only the description, one per character, and can save it to this chat’s Cast lorebook. Or read the open chat’s character card: LumiCast lists each character it describes, ready for a prompt."), castNews, row(readOoc, readCard), castList);
+  castCard.append(el("p", "Playing a story? Bring its characters in. “Get the characters from this card” reads the open chat’s card and lists everyone it describes. “Use the last [ooc] reply” is for someone new in the story: ask the story model about them in a message that starts with [ooc], then press it."), castNews, row(readOoc, readCard), castList);
   const offOoc = ctx.onBackendMessage((value) => {
     if (value?.type !== "lumicast:ooc" || closed)
       return;
@@ -498,7 +501,7 @@ ${text}`;
     castNews.hidden = false;
     readOoc.className = "lc-primary";
   });
-  const input = card("01 / Describe");
+  const input = card("Describe a character");
   const source = named(el("textarea"), "source");
   source.rows = 7;
   source.maxLength = 12000;
@@ -536,6 +539,7 @@ ${text}`;
     const outcome = before.length ? [closed.length ? `Pinned down: ${closed.join(", ")}.` : "", still.length ? `Still open: ${still.join(", ")}.` : ""].filter(Boolean).join(" ") : "";
     const secs = (ms) => `${Math.round(ms / 1000)} s`;
     const took = next.timing ? `Took ${secs(next.timing.total)}: model ${secs(next.timing.model)}, tag lookups ${secs(next.timing.lookups)}.` : "";
+    showTab("character");
     notify([before.length ? `Translated again. ${outcome}` : "Translation ready.", took, studioRef ? `Press ${sendBack.textContent} to send the new sheet there.` : "", !gelUser.value ? "Gelbooru is not configured; verified tags use Danbooru." : "", ...next.views.scene.notices].filter(Boolean).join(`
 `));
   };
@@ -600,18 +604,14 @@ ${text}`;
     notify([
       `${got.name || "The character"} loaded from Lumi Studio${minutes === null ? "" : minutes < 1 ? " (sent just now)" : ` (sent ${minutes} min ago)`}.`,
       got.description ? `The description comes from the lorebook “${got.book}”.` : "No description was found in this chat’s Cast lorebook, so Refine works from the tags alone. Paste one into the description box to help it.",
-      `Say what the images get wrong in 03 / Refine. When you are done, press ${sendBack.textContent}.`
+      `Say what the images get wrong in Refine. When you are done, press ${sendBack.textContent}.`
     ].join(`
 `));
     markSeen(got.sentAt);
-    studioText.textContent = `${got.name || "The character"} came from Lumi Studio. Its tags are in 04 / Lumi Studio character sheet. Say what the pictures get wrong in 03 / Refine, then send the new sheet back.`;
+    studioText.textContent = `${got.name || "The character"} came from Lumi Studio. Its tags are in the Character sheet. Say what the pictures get wrong in Refine, then send the new sheet back.`;
     studioButtons.replaceChildren(sendBack, writeMoss, showTags, hideNews);
     studioNews.hidden = false;
-    if (!(got.sheet.moss ?? "").trim())
-      setTimeout(() => {
-        if (!closed && studioRef)
-          writeMoss.click();
-      }, 0);
+    showTab("character");
   };
   const sendBack = button("Update in Lumi Studio", async () => {
     if (!studioRef)
@@ -620,7 +620,7 @@ ${text}`;
     const done = await rpc.request("toStudio", { id: studioRef.id, kind: studioRef.kind, sentAt: studioRef.sentAt, sheet: values });
     const who = done.name || studioRef.name || "The character";
     studioText.textContent = `${who} is updated in Lumi Studio. Generate a new picture there to check it. You can keep refining and send it again.`;
-    notify(`${who} updated in Lumi Studio.`);
+    notify(`${who} updated in Lumi Studio.${groupTake ? " To put the change into your cast picture, open Pictures and press Use the updated looks." : ""}`);
   }, true);
   const writeMoss = button("Write the MOSS description", async () => {
     const values = Object.fromEntries(Object.keys(sheet).map((k) => [k, sheet[k].box.value]));
@@ -631,7 +631,7 @@ ${text}`;
     sheetCard.open = true;
     share();
     notify([
-      got.moss || got.outfit.length ? "MOSS description and outfit written. Check them in 04 / Lumi Studio character sheet." : "",
+      got.moss || got.outfit.length ? "MOSS description and outfit written. Check them in the Character sheet." : "",
       ...got.notices,
       studioRef ? `Then press ${sendBack.textContent}.` : ""
     ].filter(Boolean).join(`
@@ -707,9 +707,9 @@ ${text}`;
       notify("Clipboard is unavailable here. Select the text and use your usual Copy shortcut.");
     }
   };
-  const sheetCard = remembered(el("details"), "sheet");
+  const sheetCard = remembered(Object.assign(el("details"), { open: true }), "sheet");
   sheetCard.className = "lc-card";
-  sheetCard.append(el("summary", "04 / Lumi Studio character sheet"));
+  sheetCard.append(el("summary", "Character sheet"));
   sheetCard.append(el("p", "One field per box in Lumi Studio’s character editor. In Lumi Studio, open a new reusable character or persona and choose Fill from LumiCast to copy all of them at once, or copy each field below."));
   const shareState = el("small");
   shareState.className = "lc-muted";
@@ -761,7 +761,7 @@ ${text}`;
   evidence.className = "lc-sub";
   evidence.append(el("summary", "Where each tag came from"), provenance, issues, sourceQuotes);
   sheetCard.append(evidence);
-  const refine = card("03 / Refine");
+  const refine = card("Refine: fix what the pictures get wrong");
   const feedback = named(el("textarea"), "feedback");
   feedback.rows = 3;
   feedback.maxLength = 2000;
@@ -973,7 +973,7 @@ ${text}`;
   notesBox.className = "lc-sub";
   notesBox.append(el("summary", "Your notes"), field("What you have learned works", notes, "In your own words. Saved, and read on every translation and refinement. Say which model a note is for (“MOSS: …”, “Anima: …”). A weight is only ever applied when a note gives the number."), saveNotes);
   refine.append(field("Fixing pictures from", refineMode, "Tags changes the Lumi Studio sheet’s tags, weights and short phrases, for Anima or NovelAI. MOSS changes the MOSS description and the outfit wording. Neither touches the other."), historyBox, field("What did the image get wrong?", feedback, "LumiCast cannot see the image. It works from what you say here, your description, your notes and the character sheet."), row(suggest), reply, proposed, row(apply), notesBox);
-  const output = card("02 / Anima prompt");
+  const output = card("Prompt for other apps");
   const quality = named(el("input"), "quality");
   quality.maxLength = 600;
   quality.autocomplete = "off";
@@ -1052,9 +1052,9 @@ ${text}`;
   editBox.className = "lc-sub";
   editBox.append(el("summary", "Edit tags and caption"), field("Booru tags — comma separated", tags, "Underscores here; the prompt uses spaces. Add emphasis as (tag:1.4)."), tagState, row(verify, copyTags), field("Caption", prose, "Edit freely; nothing the text leaves out is filled in."), copyProse);
   output.append(el("p", "Your quality tags, then booru tags, then a short caption: ready to paste into SwarmUI or any Anima setup."), qualityField, field("Include", scope, "What this prompt covers. Switching needs no new translation. For a full-body picture, also pick a tall image size in SwarmUI, such as 832×1216."), field("Caption", captionMode, "Turn the caption off if its wording fights your tags. The tags stay the same."), field("Prompt", prompt, "Rebuild applies edits from below and replaces this field. Copy copies exactly what is shown."), row(copy, rebuild), editBox);
-  const introCard = remembered(el("details"), "intro");
+  const introCard = remembered(Object.assign(el("details"), { open: true }), "intro");
   introCard.className = "lc-card";
-  introCard.append(el("summary", "05 / Intro card"));
+  introCard.append(el("summary", "Intro card"));
   const introName = el("input");
   introName.maxLength = 20;
   introName.autocomplete = "off";
@@ -1083,6 +1083,7 @@ ${text}`;
   introState.className = "lc-muted";
   let introTakes = [];
   let introFor = "";
+  const loadedName = () => nameFrom(source.value) || /^([A-Z][\p{L}'’-]+(?:\s[A-Z][\p{L}'’-]+){0,2})\s+(?:is|has|stands|was|wears)\b/u.exec(source.value.trim())?.[1] || "";
   const characterName = () => studioRef?.name || nameFrom(source.value) || /^([A-Z][\p{L}'’-]+(?:\s[A-Z][\p{L}'’-]+){0,2})\s+(?:is|has|stands|was|wears)\b/u.exec(source.value.trim())?.[1] || "";
   let introSlots = {};
   const introFeedback = el("textarea");
@@ -1125,9 +1126,9 @@ ${text}`;
   const introCopyUndesired = button("Copy", () => copyText(introUndesired.value, "undesired content"));
   introCopyUndesired.className = "lc-mini";
   introCard.append(el("p", "A picture that introduces the character: posed in front of their own name in giant letters, in a place from their story, showing who they are. Each character gets their own pose, place and camera. Made for NovelAI from the character sheet above and the open chat; it changes nothing in the sheet."), field("Name on the card", introName, "Leave empty to use the first name. Four to seven letters spell most reliably."), introAnatomyLabel, row(introMake, another), introState, field("Prompt", introPrompt, "Paste into NovelAI. “Text: NAME” has to stay last: NovelAI letters everything after it. Edit anything else."), row(introCopy), field("Add to Undesired Content", introUndesired), row(introCopyUndesired), field("What to keep or change", introFeedback, "Say what you liked and what you did not. Revise keeps the rest of this take as it is. For a taste that always applies, add a note that starts with “Intro:” to Your notes."), row(introRevise));
-  const groupCard = remembered(el("details"), "group");
+  const groupCard = remembered(Object.assign(el("details"), { open: true }), "group");
   groupCard.className = "lc-card";
-  groupCard.append(el("summary", "06 / Cast picture"));
+  groupCard.append(el("summary", "Cast picture"));
   const groupList = el("div");
   groupList.dataset.lc = "groupList";
   const groupFormat = el("select");
@@ -1160,6 +1161,10 @@ ${text}`;
   groupFeedback.maxLength = 1000;
   groupFeedback.dataset.lc = "groupFeedback";
   groupFeedback.placeholder = "“move the knight to the left, make it daytime”";
+  let groupStudio = [];
+  const groupRefineRow = el("div");
+  groupRefineRow.className = "lc-row";
+  groupRefineRow.dataset.lc = "groupRefine";
   let candidates = [];
   let groupTake = null;
   let groupEarlier = [];
@@ -1211,22 +1216,42 @@ ${text}`;
       throw new Error("Tick at least one person for the cast picture. Press Find the cast first.");
     if (chosen.length > MAX_CAST)
       throw new Error(`Tick at most ${MAX_CAST} people. More than that and image models mix them up.`);
-    if (revise && !groupFeedback.value.trim())
+    if (revise === true && !groupFeedback.value.trim())
       throw new Error("Say what to keep or change first.");
-    if (revise && !groupTake)
+    if (revise === true && !groupTake)
       throw new Error("Make a cast picture first, then revise it.");
-    const got = await clocked("castPicture", {
+    const rebuild = revise === "looks";
+    if (rebuild && !groupTake)
+      throw new Error("Make a cast picture first.");
+    const got = await clocked(rebuild ? "castRebuild" : "castPicture", {
       connectionId: connection.value,
       format: groupFormat.value,
       titled: groupTitled.checked,
       title: groupTitle.value,
       members: chosen.map((c) => ({ name: c.name, description: c.description, main: c.main, persona: c.persona })),
-      ...revise ? { feedback: groupFeedback.value, current: groupTake } : { earlier: groupEarlier }
+      ...rebuild ? { current: groupTake } : revise ? { feedback: groupFeedback.value, current: groupTake } : { earlier: groupEarlier }
     });
     groupTake = got.take;
-    groupEarlier = [...groupEarlier, JSON.stringify(got.take).slice(0, 600)].slice(-4);
-    if (revise)
+    if (!rebuild)
+      groupEarlier = [...groupEarlier, JSON.stringify(got.take).slice(0, 600)].slice(-4);
+    if (revise === true)
       groupFeedback.value = "";
+    groupStudio = got.studio ?? [];
+    groupRefineRow.replaceChildren();
+    if (groupStudio.length) {
+      groupRefineRow.append(el("small", "Fix how someone looks:"));
+      for (const entry of groupStudio) {
+        const fix = plain(`Refine ${entry.member}`, () => {
+          if (busy)
+            return;
+          applyStudio(entry);
+          notify(`${entry.member} is loaded in the Character tab. Say what the pictures get wrong in Refine, apply, then press ${sendBack.textContent}. Your cast picture is kept; come back to Pictures and press Use the updated looks.`);
+        });
+        fix.className = "lc-mini";
+        groupRefineRow.append(fix);
+      }
+    }
+    groupLooks.hidden = false;
     groupOut.replaceChildren();
     const pieces = [...got.pieces, ...got.undesired ? [{ label: "Add to Undesired Content", text: got.undesired }] : []];
     for (const piece of pieces) {
@@ -1245,7 +1270,7 @@ ${text}`;
     groupRevise.hidden = false;
     groupCopyAll.hidden = false;
     groupState.textContent = `${got.summary}.${got.fromStudio.length ? ` Looks from Lumi Studio: ${got.fromStudio.join(", ")}.` : ""}${got.styleFrom ? ` Style line from the Lumi Studio preset “${got.styleFrom}”.` : ""}`;
-    notify([`Cast picture ready. ${groupFormat.value === "nai" ? "Paste the base prompt, then each character into its own character box in NovelAI." : "Copy the prompt into your image model."}`, ...got.notices].join(`
+    notify([rebuild ? "Cast picture rebuilt with the looks Lumi Studio has now. Same place, poses and positions; no model call." : `Cast picture ready. ${groupFormat.value === "nai" ? "Paste the base prompt, then each character into its own character box in NovelAI." : "Copy the prompt into your image model."}`, ...got.notices].join(`
 `));
   };
   const groupCopyAll = plain("Copy all", () => {
@@ -1261,7 +1286,9 @@ ${text}`;
   groupAnother.hidden = true;
   const groupRevise = button("Revise", () => makeGroup(true));
   groupRevise.hidden = true;
-  groupCard.append(el("p", `One picture of the story’s people together, in a place from the card, each doing something of their own. Up to ${MAX_CAST} people; more than that and image models mix them up. It changes nothing in any character.`), row(findCast), groupList, field("Made for", groupFormat, "NovelAI wants each person in their own character box. Plain English is one prompt, and stays safe for work."), groupTitledLabel, field("Title", groupTitle, "Only used when the box above is ticked. Short titles spell most reliably."), row(groupMake, groupAnother, groupCopyAll), groupState, el("small", "Copy all puts the base prompt and every character in one text, split by “|”. Paste it into NovelAI’s main prompt box with no character boxes open; NovelAI splits it itself."), groupOut, field("What to keep or change", groupFeedback, "Revise keeps the rest of this staging as it is."), row(groupRevise));
+  const groupLooks = button("Use the updated looks", () => makeGroup("looks"));
+  groupLooks.hidden = true;
+  groupCard.append(el("p", `One picture of the story’s people together, in a place from the card, each doing something of their own. Up to ${MAX_CAST} people; more than that and image models mix them up. It changes nothing in any character.`), row(findCast), groupList, field("Made for", groupFormat, "NovelAI wants each person in their own character box. Plain English is one prompt, and stays safe for work."), groupTitledLabel, field("Title", groupTitle, "Only used when the box above is ticked. Short titles spell most reliably."), row(groupMake, groupAnother, groupLooks, groupCopyAll), groupState, groupRefineRow, el("small", "Your cast and this staging are kept while you fix a character in the Character tab. Use the updated looks then puts the new tags into the same staging, with no model call."), el("small", "Copy all puts the base prompt and every character in one text, split by “|”. Paste it into NovelAI’s main prompt box with no character boxes open; NovelAI splits it itself."), groupOut, field("What to keep or change", groupFeedback, "Revise keeps the rest of this staging as it is."), row(groupRevise));
   const searchCard = el("details");
   searchCard.className = "lc-card";
   searchCard.append(el("summary", "Find a real tag"));
@@ -1285,8 +1312,48 @@ ${text}`;
     notify("Search complete. Popularity is not an Anima quality score.");
   });
   searchCard.append(field("Tag name or the start of one", query, "Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched."), search, found);
-  app.append(intro, settings, status, studioNews, castCard, input, gapsCard, output, refine, sheetCard, introCard, groupCard, searchCard, el("p", "LumiCast 0.21.1 · Draft stays in this tab until reload."));
-  const controls = [readOoc, readCard, introMake, another, introRevise, findCast, groupMake, groupAnother, groupRevise, introCopy, introCopyUndesired, translate, studio, sendBack, writeMoss, again, save, refreshButton, testGel, saveNotes, saveQuality, startOver, verify, rebuild, copy, copyTags, copyProse, suggest, apply, search, ...Object.values(sheet).map((f) => f.copyField)];
+  const working = el("p");
+  working.className = "lc-working";
+  working.dataset.lc = "working";
+  const tabBar = el("div");
+  tabBar.className = "lc-tabs";
+  tabBar.setAttribute("role", "tablist");
+  const leads = [];
+  let slot = 10;
+  const panel = (id, label, about, ...children) => {
+    const tab = el("button", label);
+    tab.type = "button";
+    tab.className = "lc-tab";
+    tab.setAttribute("role", "tab");
+    tab.dataset.tab = id;
+    tab.addEventListener("click", () => showTab(id));
+    const lead = el("p", about);
+    lead.className = "lc-lead";
+    for (const node of [lead, ...children]) {
+      node.dataset.tab = id;
+      node.style.order = String(slot++);
+    }
+    tabBar.append(tab);
+    tabs.push({ id, tab });
+    leads.push(lead);
+  };
+  panel("start", "1 · Get a character", "Start here. Pull characters out of the story you are playing, or paste a description of your own. Either way you end up with one character loaded in the next tab.", castCard, input);
+  panel("character", "2 · Character", "The character you are working on. The sheet is what Lumi Studio draws from. If pictures come out wrong, say how in Refine, then send the sheet to Lumi Studio.", studioNews, gapsCard, sheetCard, refine);
+  panel("pictures", "3 · Pictures", "Prompts for show-off pictures: an intro card for the loaded character, or a cast picture of several people from the story. Neither changes a character.", introCard, groupCard);
+  panel("setup", "Setup", "Set once: which model LumiCast uses and your tag services. The last two are extras most people will not need.", settings, output, searchCard);
+  intro.style.order = "1";
+  tabBar.style.order = "2";
+  working.style.order = "3";
+  status.style.order = "4";
+  const footer = el("p", "LumiCast 0.22.0 · Draft stays in this tab until reload.");
+  footer.style.order = "99";
+  app.append(intro, settings, status, studioNews, castCard, input, gapsCard, output, refine, sheetCard, introCard, groupCard, searchCard, tabBar, working, ...leads, footer);
+  try {
+    showTab(localStorage.getItem("lumicast.tab") || "start", false);
+  } catch {
+    showTab("start", false);
+  }
+  const controls = [readOoc, readCard, introMake, another, introRevise, findCast, groupMake, groupAnother, groupRevise, groupLooks, introCopy, introCopyUndesired, translate, studio, sendBack, writeMoss, again, save, refreshButton, testGel, saveNotes, saveQuality, startOver, verify, rebuild, copy, copyTags, copyProse, suggest, apply, search, ...Object.values(sheet).map((f) => f.copyField)];
   let shareTimer;
   function share() {
     clearTimeout(shareTimer);
@@ -1358,7 +1425,23 @@ ${text}`;
     tagState.textContent = view.tags.length ? `${view.tags.length} tags: ${mine ? `${mine} from your notes as you wrote them, the rest` : "each"} a live booru tag.${posed ? " “standing” is added so the figure has a pose; change it freely." : ""} ${result.model}.` : `No verified tags to show here. ${result.model}.`;
     update();
   }
+  function showTab(id, keep = true) {
+    const known = tabs.some((t) => t.id === id) ? id : "start";
+    app.dataset.show = known;
+    for (const t of tabs) {
+      t.tab.setAttribute("aria-selected", String(t.id === known));
+      t.tab.classList.toggle("lc-tab-on", t.id === known);
+    }
+    if (keep)
+      try {
+        localStorage.setItem("lumicast.tab", known);
+      } catch {}
+  }
   function update() {
+    try {
+      const who = studioRef?.name || loadedName();
+      working.textContent = who ? `Working on: ${who}${studioRef ? " (from Lumi Studio)" : ""}` : "No character loaded yet. Start in “1 · Get a character”.";
+    } catch {}
     for (const c of [...controls, ...castButtons])
       c.disabled = busy;
     rebuild.disabled = busy || !verified && !!tags.value.trim();

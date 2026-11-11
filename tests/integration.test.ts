@@ -464,14 +464,16 @@ test('the revised sheet goes back to the Lumi Studio entry it came from, and onl
   named(h.root,'source').value='Short red hair.';named(h.root,'source').dispatchEvent(new Event('input'));b('Translate').click();await until(()=>!b('Translate').disabled);
   expect((h.root.querySelector('.lc-studio') as HTMLElement).hidden).toBe(true);expect(status()).not.toContain('Update Riley');
 });
-test('a character from Lumi Studio with no MOSS description gets one written straight away, ready to send back',async()=> {
+test('loading a character from Lumi Studio makes no model call by itself; Write the MOSS description does it on request',async()=> {
   dom();const h=harness();cleanups.push(h.stop);const dispose=setup(h.ctx,{studioPollMs:20});cleanups.push(dispose);
   const b=(name:string)=>Array.from(h.root.querySelectorAll('button')).find(x=>x.textContent===name)!;
   await until(()=>!b('Translate').disabled);h.root.querySelector('select')!.value='c1';
   const sheetBox=(key:string)=>h.root.querySelector(`[data-sheet="${key}"]`) as HTMLTextAreaElement;
   h.setResponses([{moss:'A sharp-featured adult man with smooth fair skin and sharp, half-lidded amber eyes.',outfit:['crimson silk officer coat with heavy gold bullion epaulets','thigh-high black leather boots']}]);
   h.setStudio({version:1,name:'Vesper',anchor:'Vesper',userId:'u1',sentAt:Date.now(),id:'character_9',kind:'character',sheet:{countTag:'1boy',subject:'adult man',always:'trap',appearance:'amber eyes',outfit:'red coat, epaulettes, thigh boots, white gloves',anatomy:'',moss:''}});
-  await until(()=>sheetBox('moss').value!=='');await until(()=>!b('Translate').disabled);
+  await until(()=>sheetBox('appearance').value!=='');await Bun.sleep(80);
+  expect(h.calls.filter(c=>(c as unknown[])[0]==='generation').length).toBe(0);expect(h.root.querySelector('.lc-app')!.getAttribute('data-show')).toBe('character');
+  b('Write the MOSS description').click();await until(()=>sheetBox('moss').value!=='');await until(()=>!b('Translate').disabled);
   expect(sheetBox('moss').value).toBe('a sharp-featured adult man with smooth fair skin and sharp, half-lidded amber eyes.');
   expect(sheetBox('outfit').value).toBe('crimson silk officer coat with heavy gold bullion epaulets, thigh-high black leather boots, white gloves');
   expect(sheetBox('appearance').value).toBe('amber eyes');
@@ -583,7 +585,7 @@ test('the cast picture: tick up to four, looks from Lumi Studio where it has the
   h.story.books.set('cast',{id:'cast',name:'Cast · x',metadata:{lumicast:'cast'}});h.story.chat!.metadata.chat_world_book_ids=['cast'];
   h.story.entries.push({id:'e1',world_book_id:'cast',key:['Mera'],content:"[Mera's appearance]\nMera is a stout barkeep.",comment:'LumiCast: Mera'});
   h.setPersona({name:'Jason',description:'Jason is a massive man with dark hair.'});
-  h.setLibrary({entries:[{asked:'lyraen',name:'Lyraen',kind:'character',sheet:{countTag:'1boy',always:'(trap:1.4)',appearance:'blonde hair, pointy ears',outfit:'navy scholar robes',moss:'a slim elf with long blonde hair.'}}]});
+  h.setLibrary({entries:[{asked:'lyraen',name:'Lyraen',kind:'character',id:'character_3',sentAt:5,sheet:{countTag:'1boy',always:'(trap:1.4)',appearance:'blonde hair, pointy ears',outfit:'navy scholar robes',anatomy:'penis',moss:'a slim elf with long blonde hair.'}}]});
   h.setStyle({style:'digital painting',preset:'NAI'});
   h.setResponses([{characters:[{name:'Bran',main:true,description:'Bran is a huge red-bearded barbarian.'},{name:'Lyraen',description:'Lyraen is a slim blonde elf scholar.'},{name:'Tobin',description:'Tobin is a curly-haired halfling.'}]}]);
   b('Find the cast').click();await until(()=>named(h.root,'groupList').querySelectorAll('input').length===5);await until(()=>!b('Translate').disabled);
@@ -609,6 +611,16 @@ test('the cast picture: tick up to four, looks from Lumi Studio where it has the
   expect(piece('Character: Bran')).toBe('boy, male focus,\nhuge build, red beard, long red hair,\nfur mantle, leather kilt,\nlaughing with head thrown back, great axe on shoulder,\nfar left');
   expect(piece('Add to Undesired Content')).toContain('extra people');
   expect(h.root.textContent).toContain('Looks from Lumi Studio: Lyraen.');
+  // Refine a cast member: loaded from Lumi Studio's sheet with no model call; the cast is kept; the looks rebuild without a model call.
+  const calls=()=>h.calls.filter(c=>(c as unknown[])[0]==='generation').length;const before=calls();
+  const fix=Array.from(named(h.root,'groupRefine').querySelectorAll('button'));expect(fix.map(x=>x.textContent)).toEqual(['Refine Lyraen']);
+  fix[0].click();
+  expect((h.root.querySelector('[data-sheet="appearance"]') as HTMLTextAreaElement).value).toBe('blonde hair, pointy ears');expect(h.root.querySelector('.lc-app')!.getAttribute('data-show')).toBe('character');
+  expect((h.root.querySelector('[data-sheet="anatomy"]') as HTMLTextAreaElement).value).toBe('penis');
+  expect(named(h.root,'working').textContent).toBe('Working on: Lyraen (from Lumi Studio)');expect(b('Update Lyraen in Lumi Studio')).toBeTruthy();
+  h.setLibrary({entries:[{asked:'lyraen',name:'Lyraen',kind:'character',id:'character_3',sentAt:5,sheet:{countTag:'1boy',always:'(trap:1.4)',appearance:'blonde hair, pointy ears, purple eyes',outfit:'navy scholar robes'}}]});
+  b('Use the updated looks').click();await until(()=>piece('Character: Lyraen').includes('purple eyes'));await until(()=>!b('Translate').disabled);
+  expect(calls()).toBe(before);expect(piece('Character: Bran')).toContain('laughing with head thrown back');expect(h.root.querySelector('.lc-status')!.textContent).toContain('no model call');
   let copied='';Object.defineProperty(navigator,'clipboard',{value:{writeText:async(v:string)=>{copied=v;}},configurable:true});
   b('Copy all').click();await until(()=>copied!=='');
   expect(copied.split('\n|\n').length).toBe(4);expect(copied.startsWith('digital painting,\n3boys, group shot,')).toBe(true);expect(copied).not.toContain('extra people');
@@ -621,7 +633,8 @@ test('the cast picture: tick up to four, looks from Lumi Studio where it has the
   expect(sent().feedback).toBe('make it daytime');expect(sent().current.place).toBe('muddy castle-town street, tavern front');expect(sent().title).toBe('The Broken Helm');
   expect(piece('Prompt')).toBe(['Digital painting. Group shot of 3 people at a muddy castle-town street, with tavern front. Bright noon sun.',
     'Bran, far left, huge build, red beard and long red hair. He wears a fur mantle and a leather kilt. He is laughing with head thrown back and great axe on shoulder.',
-    'Lyraen, centre, a slim elf with long blonde hair. He wears navy scholar robes. He is looking up at jason and clutching a leather book.',
+    // No MOSS description on the sheet now, so the tags are put into plain words.
+    'Lyraen, centre, feminine-looking man, blonde hair, pointy ears and purple eyes. He wears navy scholar robes. He is looking up at jason and clutching a leather book.',
     'Jason, right, massive build and dark hair. He wears a dark leather coat. He is standing with arms crossed and stern look.',
     'Behind them, the words "THE BROKEN HELM" in giant carved stone lettering, partly hidden by the group.'].join('\n\n'));
   expect(named(h.root,'groupOut').querySelector('[data-piece="Add to Undesired Content"]')).toBeNull();

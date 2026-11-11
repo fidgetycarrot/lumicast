@@ -1,4 +1,9 @@
-# LumiCast 0.21.1
+# LumiCast 0.22.0
+
+**v0.22.0 is a tidier panel, and you can fix a character from the cast picture.**
+- **Four tabs, left to right.** **1 · Get a character** (from your story, or paste a description), **2 · Character** (the sheet, Refine, and sending it to Lumi Studio), **3 · Pictures** (intro card and cast picture) and **Setup** (connection, tag services, and two extras: the prompt for other apps and the tag finder). Each tab starts with one line saying what it's for, a "Working on" line always shows who is loaded, and LumiCast moves you to the Character tab when a character arrives there. The section numbers are gone.
+- **Refine from the cast picture.** Under a cast picture, **Refine <name>** loads that person's Lumi Studio sheet into the Character tab with no model call. Fix them in Refine, press Update in Lumi Studio, then **Use the updated looks** back in Pictures puts the new tags into the same staging, also with no model call. Your cast and staging are kept the whole time. Needs Lumi Studio 1.27.8.
+- **No hidden model calls.** Loading a character from Lumi Studio no longer writes a MOSS description by itself; press **Write the MOSS description** when you want one.
 
 **v0.21.1 adds Copy all to the cast picture.** It copies the base prompt and every character as one text split by `|`, which NovelAI reads in its main prompt box when no character box is open. Edits you made in the boxes are included; the Undesired Content line keeps its own Copy.
 

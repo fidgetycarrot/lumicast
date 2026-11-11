@@ -26,7 +26,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
     await s.load;
   };
   const dictionaryFor=(s:UserState)=>s.dictionary ??= new BooruDictionary(async url=> {
-    const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.21.1 (tag metadata client)'}}));
+    const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.22.0 (tag metadata client)'}}));
     if(typeof response.status!=='number'||typeof response.body!=='string')throw new Error('Invalid proxy response.');
     return {status:response.status,body:response.body};
   },{user:s.settings!.gelUser,key:s.settings!.gelKey});
@@ -258,7 +258,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
         const entered=gelCredentials(text(v.gelUser ?? '','Gelbooru user',300),v.gelKey ? text(v.gelKey,'Gelbooru key',300) : '');
         const credentials={user:entered.user||settings.gelUser,key:entered.key||settings.gelKey};
         const outcome=await testGelbooru(async url=> {
-          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.21.1 (tag metadata client)'}}));
+          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.22.0 (tag metadata client)'}}));
           return {status:Number(response.status),body:typeof response.body==='string'?response.body:''};
         },credentials);
         const unsaved=credentials.user!==settings.gelUser||credentials.key!==settings.gelKey;
@@ -266,7 +266,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
         if (outcome.ok&&!unsaved) s.dictionary=undefined;
         return {ok:outcome.ok,message:outcome.ok&&unsaved?`${outcome.message} Save settings to start using them.`:outcome.message};
       }
-      if (!['translate','refine','refineMoss','search','verify','castRead','cardRead','mossify','introCard','castPicture'].includes(String(r.action))) throw new Error('Unknown LumiCast action.');
+      if (!['translate','refine','refineMoss','search','verify','castRead','cardRead','mossify','introCard','castPicture','castRebuild'].includes(String(r.action))) throw new Error('Unknown LumiCast action.');
       if (s.jobs.size) throw new Error('An operation is already running. Wait or cancel it first.');
       const controller=new AbortController();s.jobs.set(session,controller);
       const timer=setTimeout(()=>controller.abort(),240_000);
@@ -389,15 +389,16 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
           if (style.note) built.notices.push(style.note);
           return {...built,styleFrom:style.from};
         }
-        if (r.action==='castPicture') {
+        if (r.action==='castPicture'||r.action==='castRebuild') {
           const format=input.format==='plain'?'plain':'nai';
           const listed=(Array.isArray(input.members)?input.members:[]).map(record).map(m=>({name:text(m.name ?? '','name',80).replace(/\s+/g,' '),description:text(m.description ?? '','description',6000),main:m.main===true,persona:m.persona===true})).filter(m=>m.name);
           if (!listed.length) throw new Error('Tick at least one person for the cast picture.');
           if (listed.length>CAST_MAX) throw new Error(`Tick at most ${CAST_MAX} people. More than that and image models mix them up.`);
-          progress('Reading the story…');
-          const story=await storyContext(4);
-          // Anyone Lumi Studio already has keeps the look they have in story pictures.
-          const members:GroupMember[]=listed;
+          const rebuild=r.action==='castRebuild';
+          progress(rebuild?'Getting the looks from Lumi Studio…':'Reading the story…');
+          const story=await storyContext(rebuild?0:4);
+          // Anyone Lumi Studio already has keeps the look they have in story pictures; the id lets one be refined and saved back.
+          const members:GroupMember[]=listed;const studio:(StudioCharacter&{member:string})[]=[];
           try {
             const pool=sharedPool();
             if (pool) {
@@ -406,18 +407,28 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
               for (const entry of (Array.isArray(got.entries)?got.entries:[]).map(record)) {
                 const member=members.find(m=>m.name.trim().toLowerCase().replace(/\s+/g,' ')===entry.asked);const sheet=record(entry.sheet);
                 const field=(key:string,max=4000)=>typeof sheet[key]==='string'?(sheet[key] as string).slice(0,max):'';
-                if (member&&field('appearance').trim()) member.sheet={countTag:field('countTag',40),subject:field('subject',200),always:field('always'),appearance:field('appearance'),outfit:field('outfit'),moss:field('moss',1500)};
+                if (!member||!field('appearance').trim()) continue;
+                const full={countTag:field('countTag',40),subject:field('subject',200),always:field('always'),appearance:field('appearance'),outfit:field('outfit'),anatomy:field('anatomy'),moss:field('moss',1500)};
+                member.sheet={...full,anatomy:''};
+                if (typeof entry.id==='string'&&entry.id) studio.push({member:member.name,sheet:full,name:typeof entry.name==='string'?entry.name.slice(0,80):member.name,sentAt:Number(entry.sentAt)||0,description:member.description,book:'',id:entry.id.slice(0,120),kind:entry.kind==='persona'?'persona':'character'});
               }
             }
           } catch {/* looks are written from the descriptions */}
           const style=await studioStyle(story.chatId,format==='nai');
           const group:GroupInput={members,format,title:input.titled===true?text(input.title ?? '','title',40):'',card:story.card,recent:story.recent,notes:settings.notes,
-            feedback:text(input.feedback ?? '','feedback (maximum 1,000 characters)',1000),current:input.current,earlier:(Array.isArray(input.earlier)?input.earlier:[]).slice(-4).map(v=>text(v,'earlier take',600))};
-          progress(group.feedback?'The model is restaging the picture…':'The model is staging the picture…');
-          const raw=await caller(connection,()=>'the cast picture')(GROUP,groupRequest(group),controller.signal);
+            feedback:rebuild?'':text(input.feedback ?? '','feedback (maximum 1,000 characters)',1000),current:input.current,earlier:(Array.isArray(input.earlier)?input.earlier:[]).slice(-4).map(v=>text(v,'earlier take',600))};
+          let raw:string;
+          if (rebuild) {
+            // The same staging with today's looks: no model call.
+            if (!Array.isArray(record(input.current).people)) throw new Error('Make a cast picture first.');
+            raw=JSON.stringify(input.current).slice(0,40_000);
+          } else {
+            progress(group.feedback?'The model is restaging the picture…':'The model is staging the picture…');
+            raw=await caller(connection,()=>'the cast picture')(GROUP,groupRequest(group),controller.signal);
+          }
           const built=buildGroup(raw,group,style.style);
           if (style.note) built.notices.push(style.note);
-          return {...built,styleFrom:style.from,fromStudio:members.filter(m=>m.sheet).map(m=>m.name)};
+          return {...built,styleFrom:style.from,fromStudio:members.filter(m=>m.sheet).map(m=>m.name),studio};
         }
         if (r.action==='mossify') {
           progress('The model is writing the MOSS description…');
@@ -439,7 +450,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
     })().then(result=>reply(result)).catch(error=> {
       // Provider errors may embed URLs, headers or keys. Never forward raw upstream errors.
       const message=error instanceof Error ? error.message : '';
-      const trusted=/^(Grant LumiCast|Tick at |Give the character a name|Make the Studio character first|Open a chat with the card|This chat has no single|No character looks|There is no MOSS|Save this character in Lumi Studio|This Lumi Studio cannot|Lumi Studio did not save|Nothing sent from|Lumi Studio sent|The character sent|Open your story|Your latest|No \[ooc\]|No character descriptions|The connection for|Give the character|Wait for|This connection|Gelbooru user|Unknown LumiCast|An operation|Use at most|Use a tag|This Lumiverse|Select a saved|The model |Invalid |Use a plain|Paste a |No explicit|Too many|Conflicting|Tag service|Tag lookup|Cyclic tag|Tag alias|Oversized|Unexpected)/.test(message);
+      const trusted=/^(Grant LumiCast|Make a cast picture first|Tick at |Give the character a name|Make the Studio character first|Open a chat with the card|This chat has no single|No character looks|There is no MOSS|Save this character in Lumi Studio|This Lumi Studio cannot|Lumi Studio did not save|Nothing sent from|Lumi Studio sent|The character sent|Open your story|Your latest|No \[ooc\]|No character descriptions|The connection for|Give the character|Wait for|This connection|Gelbooru user|Unknown LumiCast|An operation|Use at most|Use a tag|This Lumiverse|Select a saved|The model |Invalid |Use a plain|Paste a |No explicit|Too many|Conflicting|Tag service|Tag lookup|Cyclic tag|Tag alias|Oversized|Unexpected)/.test(message);
       reply(undefined,error instanceof Error && error.name==='AbortError' ? 'Operation cancelled or timed out. Your edits are preserved.' : error instanceof ModelRequestError || trusted ? message : 'The operation failed. Check your connection, provider status and tag-service access. Your edits are preserved.');
     });
   });
