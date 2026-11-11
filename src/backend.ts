@@ -2,6 +2,7 @@ import type { SpindleAPI, GenerationRequestDTO } from 'lumiverse-spindle-types';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { BooruDictionary, testGelbooru } from './dictionary';
 import { Translator } from './engine';
+import { buildIntro, INTRO, introRequest, type IntroInput } from './intro';
 import { answersOoc, CARD, CAST, entryComment, entryContent, lastOocExchange, parseCast, type CardRead, type CastRead, type CastSaved, type ChatLine } from './cast';
 import { gelCredentials, isGenerative, nameFrom, record, text, THINKING, type Settings, type Thinking, type SharedSheet, type Snapshot, type StudioCharacter } from './contracts';
 import { generationError, ModelRequestError } from './generation-errors';
@@ -24,7 +25,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
     await s.load;
   };
   const dictionaryFor=(s:UserState)=>s.dictionary ??= new BooruDictionary(async url=> {
-    const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.19.1 (tag metadata client)'}}));
+    const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.20.0 (tag metadata client)'}}));
     if(typeof response.status!=='number'||typeof response.body!=='string')throw new Error('Invalid proxy response.');
     return {status:response.status,body:response.body};
   },{user:s.settings!.gelUser,key:s.settings!.gelKey});
@@ -234,7 +235,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
         const entered=gelCredentials(text(v.gelUser ?? '','Gelbooru user',300),v.gelKey ? text(v.gelKey,'Gelbooru key',300) : '');
         const credentials={user:entered.user||settings.gelUser,key:entered.key||settings.gelKey};
         const outcome=await testGelbooru(async url=> {
-          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.19.1 (tag metadata client)'}}));
+          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.20.0 (tag metadata client)'}}));
           return {status:Number(response.status),body:typeof response.body==='string'?response.body:''};
         },credentials);
         const unsaved=credentials.user!==settings.gelUser||credentials.key!==settings.gelKey;
@@ -242,7 +243,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
         if (outcome.ok&&!unsaved) s.dictionary=undefined;
         return {ok:outcome.ok,message:outcome.ok&&unsaved?`${outcome.message} Save settings to start using them.`:outcome.message};
       }
-      if (!['translate','refine','refineMoss','search','verify','castRead','cardRead','mossify'].includes(String(r.action))) throw new Error('Unknown LumiCast action.');
+      if (!['translate','refine','refineMoss','search','verify','castRead','cardRead','mossify','introCard'].includes(String(r.action))) throw new Error('Unknown LumiCast action.');
       if (s.jobs.size) throw new Error('An operation is already running. Wait or cancel it first.');
       const controller=new AbortController();s.jobs.set(session,controller);
       const timer=setTimeout(()=>controller.abort(),240_000);
@@ -317,6 +318,42 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
           progress('The model is thinking about your feedback…');
           return await new Translator(caller(connection,()=>'refinement for MOSS'),dictionary()).refineMoss({moss:text(input.moss ?? '','MOSS description',1500),outfit:Array.isArray(input.outfit)?input.outfit.map(v=>text(v,'outfit item',200)):[],feedback:text(input.feedback,'feedback (maximum 2,000 characters)',2000),description:text(input.description ?? '','description',12_000),stated:text(input.stated ?? '','known facts',300),notes:settings.notes,history:Array.isArray(input.history)?input.history:[]},controller.signal,`${connection.provider} / ${connection.model}`);
         }
+        if (r.action==='introCard') {
+          const sheet=record(input.sheet);const field=(key:string,max=4000)=>text(sheet[key] ?? '',key,max);
+          const name=text(input.name ?? '','name',80).replace(/\s+/g,' ');
+          if (!name) throw new Error('Give the character a name first, so there is something to letter.');
+          const intro:IntroInput={sheet:{countTag:field('countTag',40),subject:field('subject',200),always:field('always'),appearance:field('appearance'),outfit:field('outfit'),anatomy:field('anatomy'),moss:''},
+            name,description:text(input.description ?? '','description',12_000),anatomy:input.anatomy===true,lettered:text(input.lettered ?? '','name on the card',20),
+            earlier:(Array.isArray(input.earlier)?input.earlier:[]).slice(-6).map(record).map(e=>({camera:text(e.camera ?? '','camera',200),pose:text(e.pose ?? '','pose',300),place:text(e.place ?? '','place',200)}))};
+          if (!intro.sheet.appearance.trim()&&!intro.description?.trim()) throw new Error('Make the Studio character first. The intro card needs the character’s look.');
+          // Where they would be in THIS story: the open chat's card and its latest messages. Best effort.
+          progress('Reading the story…');
+          let chatId='';
+          try {
+            if (api.permissions.has('chats' as never)) {
+              const chat=await api.chats.getActive(userId);chatId=chat?.id ?? '';
+              const card=chat?.character_id&&api.permissions.has('characters' as never)?await api.characters.get(chat.character_id,userId):null;
+              if (card) intro.card=[card.name,card.description,card.personality,card.scenario].filter(v=>typeof v==='string'&&v.trim()).join('\n\n').replace(/\{\{char\}\}/gi,card.name).slice(0,8000);
+              if (chat&&api.permissions.has('chat_mutation' as never)) intro.recent=(await chatLines(chat.id)).filter(l=>l.role!=='system'&&l.content.trim()).slice(-6).map(l=>`${l.role==='user'?'Player':'Story'}: ${l.content.slice(0,1500)}`).join('\n\n').slice(-6000);
+            }
+          } catch {/* the description alone still works */}
+          // The style line is Lumi Studio's, for this chat's preset; LumiCast's own quality tags stand in without it.
+          let style=settings.quality;let styleFrom='';
+          try {
+            const pool=(api as unknown as {rpcPool?:{sync?:(e:string,v:unknown,p?:{requires?:string[]})=>string;read?:(e:string)=>Promise<unknown>}}).rpcPool;
+            if (typeof pool?.sync==='function'&&typeof pool.read==='function') {
+              pool.sync('intro.request',{version:1,chatId,userId:userId ?? ''},{requires:[]});
+              const got=record(await pool.read('lumidraw_studio.lumicast.style'));
+              // Lumi Studio keeps Anima-style weights and converts them when it draws; this prompt is pasted straight into NovelAI.
+              if (typeof got.style==='string'&&got.style.trim()) {style=got.style.slice(0,2000).replace(/\(([^():]+):\s*([\d.]+)\)/g,'$2::$1 ::');styleFrom=typeof got.preset==='string'?got.preset.slice(0,80):'Lumi Studio';}
+            }
+          } catch {/* an older Lumi Studio, or none */}
+          progress('The model is directing the picture…');
+          const raw=await caller(connection,()=>'the intro card')(INTRO,introRequest(intro),controller.signal);
+          const built=buildIntro(raw,intro,style);
+          if (!styleFrom) built.notices.push(style.trim()?'The style line is your LumiCast quality tags; this Lumi Studio did not give one for the chat.':'No style line was found. Add your art style at the top of the prompt.');
+          return {...built,styleFrom};
+        }
         if (r.action==='mossify') {
           progress('The model is writing the MOSS description…');
           const sheet=record(input.sheet);const field=(key:string,max=4000)=>text(sheet[key] ?? '',key,max);
@@ -337,7 +374,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
     })().then(result=>reply(result)).catch(error=> {
       // Provider errors may embed URLs, headers or keys. Never forward raw upstream errors.
       const message=error instanceof Error ? error.message : '';
-      const trusted=/^(Grant LumiCast|Open a chat with the card|This chat has no single|No character looks|There is no MOSS|Save this character in Lumi Studio|This Lumi Studio cannot|Lumi Studio did not save|Nothing sent from|Lumi Studio sent|The character sent|Open your story|Your latest|No \[ooc\]|No character descriptions|The connection for|Give the character|Wait for|This connection|Gelbooru user|Unknown LumiCast|An operation|Use at most|Use a tag|This Lumiverse|Select a saved|The model |Invalid |Use a plain|Paste a |No explicit|Too many|Conflicting|Tag service|Tag lookup|Cyclic tag|Tag alias|Oversized|Unexpected)/.test(message);
+      const trusted=/^(Grant LumiCast|Give the character a name|Make the Studio character first|Open a chat with the card|This chat has no single|No character looks|There is no MOSS|Save this character in Lumi Studio|This Lumi Studio cannot|Lumi Studio did not save|Nothing sent from|Lumi Studio sent|The character sent|Open your story|Your latest|No \[ooc\]|No character descriptions|The connection for|Give the character|Wait for|This connection|Gelbooru user|Unknown LumiCast|An operation|Use at most|Use a tag|This Lumiverse|Select a saved|The model |Invalid |Use a plain|Paste a |No explicit|Too many|Conflicting|Tag service|Tag lookup|Cyclic tag|Tag alias|Oversized|Unexpected)/.test(message);
       reply(undefined,error instanceof Error && error.name==='AbortError' ? 'Operation cancelled or timed out. Your edits are preserved.' : error instanceof ModelRequestError || trusted ? message : 'The operation failed. Check your connection, provider status and tag-service access. Your edits are preserved.');
     });
   });

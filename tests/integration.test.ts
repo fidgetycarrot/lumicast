@@ -12,7 +12,7 @@ function harness(provider='openrouter',model='test/generative') {
   let fail=false,block=false;let latestSignal:AbortSignal|undefined;let responses:unknown[]|undefined;
   let gel:{status:number;body:string}|undefined;
   let noPool=false;let studio:unknown;
-  let applyStudio:(()=>unknown)|undefined;
+  let applyStudio:(()=>unknown)|undefined;let styleLine:unknown;
   // A small story: one chat on one character card, its messages, and lorebooks.
   const story={chat:{id:'chat1',character_id:'card1',name:'Harbour story',metadata:{chat_world_book_ids:['mine'],theme:'kept'}} as {id:string;character_id:string;name:string;metadata:Record<string,unknown>}|null,
     card:{id:'card1',name:'Narrator',world_book_ids:['other']},messages:[] as {id:string;role:string;content:string}[],
@@ -44,14 +44,14 @@ function harness(provider='openrouter',model='test/generative') {
       return{content:JSON.stringify(responses ? responses.shift() : input.messages[0].content.includes('one trait per visual fact')?{traits:[{id:'t1',group:'hair',evidence:'Short red hair.',tags:['red_hair'],detail:'Short red hair'}]}:{drop:[],captions:{character:'Short red hair.'},issues:[]}),finish_reason:'stop'};
     }},
     onFrontendMessage:(fn:typeof handler)=>{handler=fn;return()=>{handler=undefined;};},
-    rpcPool:{read:async(endpoint:string)=>{calls.push(['read',endpoint]);if(endpoint==='lumidraw_studio.lumicast.apply'){if(!applyStudio)throw new Error('Shared RPC endpoint "lumidraw_studio.lumicast.apply" is not registered');return applyStudio();}if(endpoint!=='lumidraw_studio.lumicast.tweak'||studio===undefined)throw new Error('no value');return studio;},sync:(endpoint:string,value:unknown,policy:unknown)=>{if(noPool)throw new Error('pool unavailable');calls.push(['sync',endpoint,value,policy]);return `lumicast.${endpoint}`;}},
+    rpcPool:{read:async(endpoint:string)=>{calls.push(['read',endpoint]);if(endpoint==='lumidraw_studio.lumicast.style'){if(!styleLine)throw new Error('Shared RPC endpoint is not registered');return styleLine;}if(endpoint==='lumidraw_studio.lumicast.apply'){if(!applyStudio)throw new Error('Shared RPC endpoint "lumidraw_studio.lumicast.apply" is not registered');return applyStudio();}if(endpoint!=='lumidraw_studio.lumicast.tweak'||studio===undefined)throw new Error('no value');return studio;},sync:(endpoint:string,value:unknown,policy:unknown)=>{if(noPool)throw new Error('pool unavailable');calls.push(['sync',endpoint,value,policy]);return `lumicast.${endpoint}`;}},
     sendToFrontend:(payload:unknown,user?:string,options?:{frontendSessionId?:string})=>{replies.push({payload,user,session:options?.frontendSessionId});// No session means every open panel of that user, as the host does.
       if(user==='u1'&&(options?.frontendSessionId??'s1')==='s1')listeners.forEach(fn=>fn(payload));},
   } as unknown as SpindleAPI;
   const root=document.createElement('div');document.body.append(root);
   const ctx={sendToBackend:(payload:unknown)=>handler?.(payload,'u1','s1'),onBackendMessage:(fn:(payload:unknown)=>void)=>{listeners.add(fn);return()=>{listeners.delete(fn);};},ui:{registerDrawerTab:()=>({root,destroy:()=>root.remove()})},dom:{addStyle:()=>()=>{}}} as unknown as SpindleFrontendContext;
   const stop=setupBackend(api);
-  return{ctx,root,calls,replies,storage,stop,emit:(payload:unknown,user='u1',session='s1')=>handler?.(payload,user,session),setFail:()=>{fail=true;},setBlock:()=>{block=true;},setResponses:(values:unknown[])=>{responses=values;},setGel:(value:{status:number;body:string})=>{gel=value;},setNoPool:()=>{noPool=true;},story,events,setStudio:(v:unknown)=>{studio=v;},setApply:(fn:()=>unknown)=>{applyStudio=fn;},signal:()=>latestSignal};
+  return{ctx,root,calls,replies,storage,stop,emit:(payload:unknown,user='u1',session='s1')=>handler?.(payload,user,session),setFail:()=>{fail=true;},setBlock:()=>{block=true;},setResponses:(values:unknown[])=>{responses=values;},setGel:(value:{status:number;body:string})=>{gel=value;},setNoPool:()=>{noPool=true;},story,events,setStudio:(v:unknown)=>{studio=v;},setApply:(fn:()=>unknown)=>{applyStudio=fn;},setStyle:(v:unknown)=>{styleLine=v;},signal:()=>latestSignal};
 }
 const named=(root:Element,name:string)=>(root.querySelector(`[data-lc="${name}"]`)??root.querySelector(`[data-sheet="${name}"]`)) as HTMLTextAreaElement;
 /** [description, tags, caption, appearance, outfit, prompt] */
@@ -536,4 +536,35 @@ test('reading a card explains what is missing',async()=> {
   h.story.chat!.character_id='';expect(await ask()).toBe('This chat has no single character card to read.');
   h.story.chat=null;expect(await ask()).toContain('Open a chat with the card first');
   h.story.denied.push('world_books');expect(await ask()).toBe('Grant LumiCast these permissions in Extensions: world_books.');
+});
+test('the intro card is built per character from the sheet and the story, with Lumi Studio’s style line, and Try another differs',async()=> {
+  dom();const h=harness();cleanups.push(h.stop);const dispose=setup(h.ctx);cleanups.push(dispose);
+  const b=(name:string)=>Array.from(h.root.querySelectorAll('button')).find(x=>x.textContent===name)!;
+  await until(()=>!b('Translate').disabled);h.root.querySelector('select')!.value='c1';
+  const box=(key:string)=>h.root.querySelector(`[data-sheet="${key}"]`) as HTMLTextAreaElement;
+  named(h.root,'source').value='Lauren Vance is a 20-year-old student with blonde hair.';
+  box('countTag').value='1girl';box('appearance').value='blue eyes, (blonde hair:1.3), tan_skin';box('outfit').value='blue polo shirt, white pleated tennis skirt';box('anatomy').value='pussy';
+  Object.assign(h.story.card,{name:'Beach town',description:'A beach town school.',personality:'',scenario:'{{user}} teaches at the school.'});
+  h.story.messages.push({id:'m1',role:'assistant',content:'Lauren waits by the aquarium in the science hall.'});
+  h.setStyle({style:'digital painting, manhwa, rim lighting',preset:'NovelAI story'});
+  h.setResponses([{letters:'Lauren',camera:'close-up, from below, looking at viewer',lettering:'pink painted lettering',outfit:'blue polo shirt, white pleated tennis skirt, visible nipples',
+    pose:'confident pose, leaning on aquarium glass, bratty smirk',place:'high school science hallway, large aquarium',lighting:'golden hour, warm sunlight. Text: HACKED'}]);
+  b('Make the intro card').click();await until(()=>named(h.root,'introPrompt').value!=='');
+  expect(named(h.root,'introPrompt').value).toBe(['digital painting, manhwa, rim lighting,','1girl, solo, from below, looking at viewer,',
+    'in front of giant block letters, background text, character name, letters partially hidden behind character,','pink painted lettering,',
+    'blue eyes, 1.3::blonde hair ::, tan skin, blue polo shirt, white pleated tennis skirt,','leaning on aquarium glass, bratty smirk,','high school science hallway, large aquarium,','golden hour, warm sunlight,','Text: LAUREN'].join('\n'));
+  expect((named(h.root,'introUndesired') as unknown as HTMLInputElement).value).toBe('blush, speech bubble, multiple views, watermark, signature, border');
+  const sent=()=>JSON.parse(((h.calls.filter(c=>(c as unknown[])[0]==='generation').at(-1) as unknown[])[1] as {messages:{content:string}[]}).messages[1].content);
+  expect(sent()).toMatchObject({name:'Lauren Vance',outfit:'blue polo shirt, white pleated tennis skirt',card:'Beach town\n\nA beach town school.\n\n{{user}} teaches at the school.'});
+  expect(sent().recent).toContain('aquarium in the science hall');expect(sent().anatomy).toBeUndefined();expect(sent().earlier).toBeUndefined();
+  expect(h.root.textContent).toContain('Style line from the Lumi Studio preset “NovelAI story”.');
+  // Try another names the earlier take; the anatomy box sends the field only when ticked; a typed name wins.
+  const anatomy=Array.from(h.root.querySelectorAll('label')).find(l=>l.textContent!.includes('Let anatomy show'))!.querySelector('input')!;anatomy.checked=true;
+  (named(h.root,'introName') as unknown as HTMLInputElement).value='Laur';
+  h.setResponses([{letters:'x',camera:'cowboy shot, from side',lettering:'neon sign lettering',outfit:'tight running shorts, visible bulge in tight shorts',pose:'sitting on bleachers, phone in hand, bored look',place:'school gym',lighting:'overcast'}]);
+  b('Try another').click();await until(()=>named(h.root,'introPrompt').value.includes('bleachers'));
+  expect(sent().earlier).toEqual([{camera:'from below, looking at viewer',pose:'leaning on aquarium glass, bratty smirk',place:'high school science hallway, large aquarium'}]);
+  expect(sent().anatomy).toBe('pussy');
+  expect(named(h.root,'introPrompt').value).toContain('visible bulge in tight shorts');expect(named(h.root,'introPrompt').value.endsWith('Text: LAUR')).toBe(true);
+  expect(box('outfit').value).toBe('blue polo shirt, white pleated tennis skirt');
 });

@@ -1,7 +1,8 @@
 import type { SpindleFrontendContext } from 'lumiverse-spindle-types';
-import { assemble, editList, formatWeighted, parseWeighted, splitTags, withQuality, type GelbooruTest, type Proposal, type RefineRound, type Refinement, type Scope, type Snapshot, type StudioCharacter, type Translation, type VerifiedTag } from './contracts';
+import { assemble, editList, nameFrom, formatWeighted, parseWeighted, splitTags, withQuality, type GelbooruTest, type Proposal, type RefineRound, type Refinement, type Scope, type Snapshot, type StudioCharacter, type Translation, type VerifiedTag } from './contracts';
 import { removeConflicts } from './engine';
 import type { CardRead, CastMember, CastRead, CastSaved } from './cast';
+import type { IntroCard } from './intro';
 import { uuid } from './safe-id';
 
 export function createRpc(ctx: Pick<SpindleFrontendContext,'sendToBackend'|'onBackendMessage'>, timeout=250_000) {
@@ -438,6 +439,41 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
     editBox);
 
   // ── Tag lookup ──
+  // ── 05 Intro card: the character in front of their own name, for NovelAI ──
+  const introCard=remembered(el('details'),'intro');introCard.className='lc-card';introCard.append(el('summary','05 / Intro card'));
+  const introName=el('input');introName.maxLength=20;introName.autocomplete='off';introName.placeholder='First name, or a short nickname';introName.dataset.lc='introName';
+  const introAnatomy=el('input');introAnatomy.type='checkbox';
+  try{introAnatomy.checked=localStorage.getItem('lumicast.introAnatomy')==='1';}catch{/* not kept */}
+  introAnatomy.addEventListener('change',()=>{try{localStorage.setItem('lumicast.introAnatomy',introAnatomy.checked?'1':'0');}catch{/* not kept */}});
+  const introAnatomyLabel=el('label');introAnatomyLabel.className='lc-check';introAnatomyLabel.append(introAnatomy,document.createTextNode(' Let anatomy show through clothes (NSFW)'));
+  const introPrompt=el('textarea');introPrompt.rows=10;introPrompt.dataset.lc='introPrompt';
+  const introUndesired=el('input');introUndesired.readOnly=true;introUndesired.dataset.lc='introUndesired';
+  const introState=el('small');introState.className='lc-muted';
+  // Takes already made for this character, so Try another changes the camera and the pose.
+  let introTakes:{camera:string;pose:string;place:string}[]=[];let introFor='';
+  // "Hope Shepard is a 23-year-old…": descriptions from a card start with the name and a verb.
+  const characterName=()=>studioRef?.name||nameFrom(source.value)||/^([A-Z][\p{L}'’-]+(?:\s[A-Z][\p{L}'’-]+){0,2})\s+(?:is|has|stands|was|wears)\b/u.exec(source.value.trim())?.[1]||'';
+  const makeIntro=async()=> {
+    const who=characterName()||introName.value.trim();
+    if(!who)throw new Error('Give the character a name first, so there is something to letter.');
+    if(who!==introFor){introTakes=[];introFor=who;}
+    const values=Object.fromEntries((Object.keys(sheet) as (keyof typeof sheet)[]).map(k=>[k,sheet[k].box.value]));
+    const got=await clocked<IntroCard&{styleFrom:string}>('introCard',{connectionId:connection.value,sheet:values,name:who,description:source.value,anatomy:introAnatomy.checked,lettered:introName.value,earlier:introTakes});
+    introTakes=[...introTakes,{camera:got.camera,pose:got.pose,place:got.place}].slice(-6);
+    introPrompt.value=got.prompt;introUndesired.value=got.undesired;another.hidden=false;
+    introState.textContent=`Take ${introTakes.length} for ${who}: ${got.camera}; ${got.place||'no place given'}.${got.styleFrom?` Style line from the Lumi Studio preset “${got.styleFrom}”.`:''}`;
+    notify([`Intro card ready for ${who}, lettered ${got.name}. Copy it into NovelAI.`,...got.notices].join('\n'));
+  };
+  const introMake=button('Make the intro card',makeIntro,true);
+  const another=button('Try another',makeIntro);another.hidden=true;
+  const introCopy=button('Copy prompt',()=>copyText(introPrompt.value,'intro card prompt'));
+  const introCopyUndesired=button('Copy',()=>copyText(introUndesired.value,'undesired content'));introCopyUndesired.className='lc-mini';
+  introCard.append(el('p','A picture that introduces the character: posed in front of their own name in giant letters, in a place from their story, showing who they are. Each character gets their own pose, place and camera. Made for NovelAI from the character sheet above and the open chat; it changes nothing in the sheet.'),
+    field('Name on the card',introName,'Leave empty to use the first name. Four to seven letters spell most reliably.'),introAnatomyLabel,
+    row(introMake,another),introState,
+    field('Prompt',introPrompt,'Paste into NovelAI. “Text: NAME” has to stay last: NovelAI letters everything after it. Edit anything else.'),row(introCopy),
+    field('Add to Undesired Content',introUndesired),row(introCopyUndesired));
+
   const searchCard=el('details');searchCard.className='lc-card';searchCard.append(el('summary','Find a real tag'));
   const query=el('input');query.maxLength=100;const found=el('div');
   const search=button('Search Danbooru',async()=> {
@@ -448,8 +484,8 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   });
   searchCard.append(field('Tag name or the start of one',query,'Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched.'),search,found);
 
-  app.append(intro,settings,status,studioNews,castCard,input,gapsCard,output,refine,sheetCard,searchCard,el('p','LumiCast 0.19.1 · Draft stays in this tab until reload.'));
-  const controls=[readOoc,readCard,translate,studio,sendBack,writeMoss,again,save,refreshButton,testGel,saveNotes,saveQuality,startOver,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
+  app.append(intro,settings,status,studioNews,castCard,input,gapsCard,output,refine,sheetCard,introCard,searchCard,el('p','LumiCast 0.20.0 · Draft stays in this tab until reload.'));
+  const controls=[readOoc,readCard,introMake,another,introCopy,introCopyUndesired,translate,studio,sendBack,writeMoss,again,save,refreshButton,testGel,saveNotes,saveQuality,startOver,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
 
   // Every change to the sheet is offered to Lumi Studio, a moment after typing stops.
   let shareTimer:ReturnType<typeof setTimeout>|undefined;

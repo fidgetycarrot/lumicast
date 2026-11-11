@@ -1,4 +1,10 @@
 // src/contracts.ts
+function nameFrom(description) {
+  const first = (description.split(`
+`).find((l) => l.trim()) ?? "").trim();
+  const head = first.split(/\s+[—–-]\s+|:/)[0].replace(/[*_#"“”]/g, "").trim();
+  return /^[A-Z][\p{L}\d'’.-]*(?:\s+[A-Z][\p{L}\d'’.-]*){0,3}$/u.test(head) && head.length <= 40 ? head : "";
+}
 function text(v, label, max) {
   if (typeof v !== "string" || v.length > max || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(v))
     throw new Error(`Invalid ${label}.`);
@@ -1041,6 +1047,63 @@ ${text}`;
   editBox.className = "lc-sub";
   editBox.append(el("summary", "Edit tags and caption"), field("Booru tags — comma separated", tags, "Underscores here; the prompt uses spaces. Add emphasis as (tag:1.4)."), tagState, row(verify, copyTags), field("Caption", prose, "Edit freely; nothing the text leaves out is filled in."), copyProse);
   output.append(el("p", "Your quality tags, then booru tags, then a short caption: ready to paste into SwarmUI or any Anima setup."), qualityField, field("Include", scope, "What this prompt covers. Switching needs no new translation. For a full-body picture, also pick a tall image size in SwarmUI, such as 832×1216."), field("Caption", captionMode, "Turn the caption off if its wording fights your tags. The tags stay the same."), field("Prompt", prompt, "Rebuild applies edits from below and replaces this field. Copy copies exactly what is shown."), row(copy, rebuild), editBox);
+  const introCard = remembered(el("details"), "intro");
+  introCard.className = "lc-card";
+  introCard.append(el("summary", "05 / Intro card"));
+  const introName = el("input");
+  introName.maxLength = 20;
+  introName.autocomplete = "off";
+  introName.placeholder = "First name, or a short nickname";
+  introName.dataset.lc = "introName";
+  const introAnatomy = el("input");
+  introAnatomy.type = "checkbox";
+  try {
+    introAnatomy.checked = localStorage.getItem("lumicast.introAnatomy") === "1";
+  } catch {}
+  introAnatomy.addEventListener("change", () => {
+    try {
+      localStorage.setItem("lumicast.introAnatomy", introAnatomy.checked ? "1" : "0");
+    } catch {}
+  });
+  const introAnatomyLabel = el("label");
+  introAnatomyLabel.className = "lc-check";
+  introAnatomyLabel.append(introAnatomy, document.createTextNode(" Let anatomy show through clothes (NSFW)"));
+  const introPrompt = el("textarea");
+  introPrompt.rows = 10;
+  introPrompt.dataset.lc = "introPrompt";
+  const introUndesired = el("input");
+  introUndesired.readOnly = true;
+  introUndesired.dataset.lc = "introUndesired";
+  const introState = el("small");
+  introState.className = "lc-muted";
+  let introTakes = [];
+  let introFor = "";
+  const characterName = () => studioRef?.name || nameFrom(source.value) || /^([A-Z][\p{L}'’-]+(?:\s[A-Z][\p{L}'’-]+){0,2})\s+(?:is|has|stands|was|wears)\b/u.exec(source.value.trim())?.[1] || "";
+  const makeIntro = async () => {
+    const who = characterName() || introName.value.trim();
+    if (!who)
+      throw new Error("Give the character a name first, so there is something to letter.");
+    if (who !== introFor) {
+      introTakes = [];
+      introFor = who;
+    }
+    const values = Object.fromEntries(Object.keys(sheet).map((k) => [k, sheet[k].box.value]));
+    const got = await clocked("introCard", { connectionId: connection.value, sheet: values, name: who, description: source.value, anatomy: introAnatomy.checked, lettered: introName.value, earlier: introTakes });
+    introTakes = [...introTakes, { camera: got.camera, pose: got.pose, place: got.place }].slice(-6);
+    introPrompt.value = got.prompt;
+    introUndesired.value = got.undesired;
+    another.hidden = false;
+    introState.textContent = `Take ${introTakes.length} for ${who}: ${got.camera}; ${got.place || "no place given"}.${got.styleFrom ? ` Style line from the Lumi Studio preset “${got.styleFrom}”.` : ""}`;
+    notify([`Intro card ready for ${who}, lettered ${got.name}. Copy it into NovelAI.`, ...got.notices].join(`
+`));
+  };
+  const introMake = button("Make the intro card", makeIntro, true);
+  const another = button("Try another", makeIntro);
+  another.hidden = true;
+  const introCopy = button("Copy prompt", () => copyText(introPrompt.value, "intro card prompt"));
+  const introCopyUndesired = button("Copy", () => copyText(introUndesired.value, "undesired content"));
+  introCopyUndesired.className = "lc-mini";
+  introCard.append(el("p", "A picture that introduces the character: posed in front of their own name in giant letters, in a place from their story, showing who they are. Each character gets their own pose, place and camera. Made for NovelAI from the character sheet above and the open chat; it changes nothing in the sheet."), field("Name on the card", introName, "Leave empty to use the first name. Four to seven letters spell most reliably."), introAnatomyLabel, row(introMake, another), introState, field("Prompt", introPrompt, "Paste into NovelAI. “Text: NAME” has to stay last: NovelAI letters everything after it. Edit anything else."), row(introCopy), field("Add to Undesired Content", introUndesired), row(introCopyUndesired));
   const searchCard = el("details");
   searchCard.className = "lc-card";
   searchCard.append(el("summary", "Find a real tag"));
@@ -1064,8 +1127,8 @@ ${text}`;
     notify("Search complete. Popularity is not an Anima quality score.");
   });
   searchCard.append(field("Tag name or the start of one", query, "Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched."), search, found);
-  app.append(intro, settings, status, studioNews, castCard, input, gapsCard, output, refine, sheetCard, searchCard, el("p", "LumiCast 0.19.1 · Draft stays in this tab until reload."));
-  const controls = [readOoc, readCard, translate, studio, sendBack, writeMoss, again, save, refreshButton, testGel, saveNotes, saveQuality, startOver, verify, rebuild, copy, copyTags, copyProse, suggest, apply, search, ...Object.values(sheet).map((f) => f.copyField)];
+  app.append(intro, settings, status, studioNews, castCard, input, gapsCard, output, refine, sheetCard, introCard, searchCard, el("p", "LumiCast 0.20.0 · Draft stays in this tab until reload."));
+  const controls = [readOoc, readCard, introMake, another, introCopy, introCopyUndesired, translate, studio, sendBack, writeMoss, again, save, refreshButton, testGel, saveNotes, saveQuality, startOver, verify, rebuild, copy, copyTags, copyProse, suggest, apply, search, ...Object.values(sheet).map((f) => f.copyField)];
   let shareTimer;
   function share() {
     clearTimeout(shareTimer);

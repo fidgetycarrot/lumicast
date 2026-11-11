@@ -29,7 +29,7 @@ export const OUTFIT_RULES = `- The image tool writes "He wears a [first], a [sec
 /** Lumi Studio's own test for a helmet that is on (1.17.0, mossHelmetOn), so both sides agree. */
 export const helmetOn = (outfit: string[]) => outfit.some(item => /\bhelmet\b/i.test(item) && !/\b(?:no|removed?|off|holding|under (?:his|her|their|one) arm|tucked|carried|carrying|in hand)\b/i.test(item));
 
-const EXPLICIT = /\b(?:penis|cock|dick|testicles?|scrotum|vagina|pussy|vulva|labia|clit\w*|nipples?|areolae?|genital\w*|erect\w*|precum|cum|semen|anus|anal|nude|naked|aroused|arousal|sexual\w*|smallclothes|underwear)\b/i;
+export const EXPLICIT = /\b(?:penis|cock|dick|testicles?|scrotum|vagina|pussy|vulva|labia|clit\w*|nipples?|areolae?|genital\w*|erect\w*|precum|cum|semen|anus|anal|nude|naked|aroused|arousal|sexual\w*|smallclothes|underwear)\b/i;
 const EXPRESSION = /\b(?:smirk\w*|grin\w*|smil\w*|frown\w*|sneer\w*|pout\w*|scowl\w*|laugh\w*)\b/i;
 const DEAD_SKIN = /\b(?:porcelain(?:-pale| pale)?|alabaster(?:-pale| pale)?|chalk-white|chalky|pallid|ashen|deathly pale|bone-white|paper-white)\b/gi;
 
