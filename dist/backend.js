@@ -1724,7 +1724,7 @@ function setupBackend(api, options = {}) {
     await s.load;
   };
   const dictionaryFor = (s) => s.dictionary ??= new BooruDictionary(async (url) => {
-    const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.21.0 (tag metadata client)" } }));
+    const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.21.1 (tag metadata client)" } }));
     if (typeof response.status !== "number" || typeof response.body !== "string")
       throw new Error("Invalid proxy response.");
     return { status: response.status, body: response.body };
@@ -2047,7 +2047,7 @@ function setupBackend(api, options = {}) {
         const entered = gelCredentials(text(v.gelUser ?? "", "Gelbooru user", 300), v.gelKey ? text(v.gelKey, "Gelbooru key", 300) : "");
         const credentials = { user: entered.user || settings.gelUser, key: entered.key || settings.gelKey };
         const outcome = await testGelbooru(async (url) => {
-          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.21.0 (tag metadata client)" } }));
+          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.21.1 (tag metadata client)" } }));
           return { status: Number(response.status), body: typeof response.body === "string" ? response.body : "" };
         }, credentials);
         const unsaved = credentials.user !== settings.gelUser || credentials.key !== settings.gelKey;

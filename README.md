@@ -1,4 +1,6 @@
-# LumiCast 0.21.0
+# LumiCast 0.21.1
+
+**v0.21.1 adds Copy all to the cast picture.** It copies the base prompt and every character as one text split by `|`, which NovelAI reads in its main prompt box when no character box is open. Edits you made in the boxes are included; the Undesired Content line keeps its own Copy.
 
 **v0.21.0 adds the cast picture and feedback on a take.**
 - **06 / Cast picture.** One picture of up to four of a story's people together, in a place from the card, each doing something of their own. **Find the cast** lists the card's characters (it reads the card if you haven't), this chat's Cast lorebook, the character loaded in LumiCast and your persona; tick who's in. Anyone Lumi Studio (1.27.7 or newer) already has keeps their look from there; everyone else gets a short look from their description. An optional title goes in giant letters behind the group. Two formats: **NovelAI** (a base prompt and one block per character, for its character boxes) or **Plain English** (one prompt for MOSS and similar, kept safe for work).

@@ -609,6 +609,9 @@ test('the cast picture: tick up to four, looks from Lumi Studio where it has the
   expect(piece('Character: Bran')).toBe('boy, male focus,\nhuge build, red beard, long red hair,\nfur mantle, leather kilt,\nlaughing with head thrown back, great axe on shoulder,\nfar left');
   expect(piece('Add to Undesired Content')).toContain('extra people');
   expect(h.root.textContent).toContain('Looks from Lumi Studio: Lyraen.');
+  let copied='';Object.defineProperty(navigator,'clipboard',{value:{writeText:async(v:string)=>{copied=v;}},configurable:true});
+  b('Copy all').click();await until(()=>copied!=='');
+  expect(copied.split('\n|\n').length).toBe(4);expect(copied.startsWith('digital painting,\n3boys, group shot,')).toBe(true);expect(copied).not.toContain('extra people');
   // Plain English with a title, revised: the current staging and the feedback go back.
   const format=Array.from(h.root.querySelectorAll('select')).find(s=>Array.from(s.options).some(o=>o.value==='plain'))!;format.value='plain';
   Array.from(h.root.querySelectorAll('label')).find(l=>l.textContent!.includes('Put a title'))!.querySelector('input')!.checked=true;

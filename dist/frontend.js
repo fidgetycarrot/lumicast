@@ -1243,16 +1243,25 @@ ${text}`;
     }
     groupAnother.hidden = false;
     groupRevise.hidden = false;
+    groupCopyAll.hidden = false;
     groupState.textContent = `${got.summary}.${got.fromStudio.length ? ` Looks from Lumi Studio: ${got.fromStudio.join(", ")}.` : ""}${got.styleFrom ? ` Style line from the Lumi Studio preset “${got.styleFrom}”.` : ""}`;
     notify([`Cast picture ready. ${groupFormat.value === "nai" ? "Paste the base prompt, then each character into its own character box in NovelAI." : "Copy the prompt into your image model."}`, ...got.notices].join(`
 `));
   };
+  const groupCopyAll = plain("Copy all", () => {
+    const areas = Array.from(groupOut.querySelectorAll("textarea")).filter((a) => a.dataset.piece !== "Add to Undesired Content");
+    copyText(areas.map((a) => a.value.trim()).filter(Boolean).join(`
+|
+`), "cast picture prompt").catch((e) => notify(e instanceof Error ? e.message : "Nothing to copy.", true));
+  });
+  groupCopyAll.hidden = true;
+  groupCopyAll.dataset.lc = "groupCopyAll";
   const groupMake = button("Make the cast picture", () => makeGroup(), true);
   const groupAnother = button("Try another", () => makeGroup());
   groupAnother.hidden = true;
   const groupRevise = button("Revise", () => makeGroup(true));
   groupRevise.hidden = true;
-  groupCard.append(el("p", `One picture of the story’s people together, in a place from the card, each doing something of their own. Up to ${MAX_CAST} people; more than that and image models mix them up. It changes nothing in any character.`), row(findCast), groupList, field("Made for", groupFormat, "NovelAI wants each person in their own character box. Plain English is one prompt, and stays safe for work."), groupTitledLabel, field("Title", groupTitle, "Only used when the box above is ticked. Short titles spell most reliably."), row(groupMake, groupAnother), groupState, groupOut, field("What to keep or change", groupFeedback, "Revise keeps the rest of this staging as it is."), row(groupRevise));
+  groupCard.append(el("p", `One picture of the story’s people together, in a place from the card, each doing something of their own. Up to ${MAX_CAST} people; more than that and image models mix them up. It changes nothing in any character.`), row(findCast), groupList, field("Made for", groupFormat, "NovelAI wants each person in their own character box. Plain English is one prompt, and stays safe for work."), groupTitledLabel, field("Title", groupTitle, "Only used when the box above is ticked. Short titles spell most reliably."), row(groupMake, groupAnother, groupCopyAll), groupState, el("small", "Copy all puts the base prompt and every character in one text, split by “|”. Paste it into NovelAI’s main prompt box with no character boxes open; NovelAI splits it itself."), groupOut, field("What to keep or change", groupFeedback, "Revise keeps the rest of this staging as it is."), row(groupRevise));
   const searchCard = el("details");
   searchCard.className = "lc-card";
   searchCard.append(el("summary", "Find a real tag"));
@@ -1276,7 +1285,7 @@ ${text}`;
     notify("Search complete. Popularity is not an Anima quality score.");
   });
   searchCard.append(field("Tag name or the start of one", query, "Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched."), search, found);
-  app.append(intro, settings, status, studioNews, castCard, input, gapsCard, output, refine, sheetCard, introCard, groupCard, searchCard, el("p", "LumiCast 0.21.0 · Draft stays in this tab until reload."));
+  app.append(intro, settings, status, studioNews, castCard, input, gapsCard, output, refine, sheetCard, introCard, groupCard, searchCard, el("p", "LumiCast 0.21.1 · Draft stays in this tab until reload."));
   const controls = [readOoc, readCard, introMake, another, introRevise, findCast, groupMake, groupAnother, groupRevise, introCopy, introCopyUndesired, translate, studio, sendBack, writeMoss, again, save, refreshButton, testGel, saveNotes, saveQuality, startOver, verify, rebuild, copy, copyTags, copyProse, suggest, apply, search, ...Object.values(sheet).map((f) => f.copyField)];
   let shareTimer;
   function share() {
