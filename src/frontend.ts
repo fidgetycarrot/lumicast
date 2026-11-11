@@ -3,6 +3,7 @@ import { assemble, editList, nameFrom, formatWeighted, parseWeighted, splitTags,
 import { removeConflicts } from './engine';
 import type { CardRead, CastMember, CastRead, CastSaved } from './cast';
 import type { IntroCard } from './intro';
+import type { GroupPicture } from './group';
 import { uuid } from './safe-id';
 
 export function createRpc(ctx: Pick<SpindleFrontendContext,'sendToBackend'|'onBackendMessage'>, timeout=250_000) {
@@ -102,26 +103,30 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
     const read=await clocked<CastRead>('castRead',{connectionId:connection.value});
     castNews.hidden=true;readOoc.className='';
     castList.replaceChildren(el('p',`From your [ooc] message “${read.question.length>120?`${read.question.slice(0,120)}…`:read.question}”. Check each description, then save it.`));
-    castButtons.splice(0);
+    castButtons.splice(0);listed=[];
     for(const member of read.characters)castList.append(castEntry(member));
     update();
     notify(`${read.characters.length===1?'1 character':`${read.characters.length} characters`} found: ${read.characters.map(c=>c.name).join(', ')}.`);
   });
   // A character card often describes several people; each becomes an entry here, ready for a prompt.
-  const readCard=button('Get the characters from this card',async()=> {
+  const readCardNow=async()=> {
     const read=await clocked<CardRead>('cardRead',{connectionId:connection.value});
     castList.replaceChildren(el('p',`From the card “${read.card}”. Check each description, then make its prompt.${read.cut?' The card’s lorebooks were too long to read in full, so some entries were left out.':''}`));
-    castButtons.splice(0);
+    castButtons.splice(0);listed=[];
     for(const member of read.characters)castList.append(castEntry(member,true));
     update();
     notify(`${read.characters.length===1?'1 character':`${read.characters.length} characters`} found: ${read.characters.map(c=>c.main?`${c.name} (main)`:c.name).join(', ')}.`);
-  });
+  };
+  const readCard=button('Get the characters from this card',readCardNow);
+  // Everyone listed in From your story, as they now read (names and descriptions can be edited), for the cast picture.
+  let listed:{name:()=>string;description:()=>string;main:boolean}[]=[];
   function castEntry(member:CastMember,fromCard=false){
     const box=el('div');box.className='lc-sub';box.dataset.cast=member.name;
     const name=el('input');name.value=member.name;name.maxLength=80;name.autocomplete='off';
     const aliases=el('input');aliases.value=member.aliases.join(', ');aliases.maxLength=300;aliases.autocomplete='off';aliases.placeholder='e.g. the dockmaster, Mare';
     const description=el('textarea');description.value=member.description;description.rows=6;description.maxLength=3000;
     const state=el('small');state.className='lc-muted';
+    listed.push({name:()=>name.value.trim(),description:()=>description.value.trim(),main:member.main===true});
     const saveEntry=button('Save to Cast lorebook',async()=> {
       const saved=await rpc.request<CastSaved>('castSave',{name:name.value,aliases:splitTags(aliases.value),description:description.value});
       state.textContent=`${saved.updated?'Updated':'Saved'} in “${saved.book}”${saved.createdBook?', a new lorebook for this chat only':''}.${saved.moved?' The Cast lorebook was taken off the character card and attached to this chat, so it stays with this story.':''} You can delete the [ooc] exchange from the chat now.`;
@@ -453,26 +458,91 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   let introTakes:{camera:string;pose:string;place:string}[]=[];let introFor='';
   // "Hope Shepard is a 23-year-old…": descriptions from a card start with the name and a verb.
   const characterName=()=>studioRef?.name||nameFrom(source.value)||/^([A-Z][\p{L}'’-]+(?:\s[A-Z][\p{L}'’-]+){0,2})\s+(?:is|has|stands|was|wears)\b/u.exec(source.value.trim())?.[1]||'';
-  const makeIntro=async()=> {
+  let introSlots:Record<string,string>={};
+  const introFeedback=el('textarea');introFeedback.rows=2;introFeedback.maxLength=1000;introFeedback.dataset.lc='introFeedback';introFeedback.placeholder='“love the aquarium, lose the smirk, make it night”';
+  const makeIntro=async(revise=false)=> {
+    if(revise&&!introFeedback.value.trim())throw new Error('Say what to keep or change first.');
+    if(revise&&!Object.keys(introSlots).length)throw new Error('Make an intro card first, then revise it.');
     const who=characterName()||introName.value.trim();
     if(!who)throw new Error('Give the character a name first, so there is something to letter.');
     if(who!==introFor){introTakes=[];introFor=who;}
     const values=Object.fromEntries((Object.keys(sheet) as (keyof typeof sheet)[]).map(k=>[k,sheet[k].box.value]));
-    const got=await clocked<IntroCard&{styleFrom:string}>('introCard',{connectionId:connection.value,sheet:values,name:who,description:source.value,anatomy:introAnatomy.checked,lettered:introName.value,earlier:introTakes});
+    const got=await clocked<IntroCard&{styleFrom:string}>('introCard',{connectionId:connection.value,sheet:values,name:who,description:source.value,anatomy:introAnatomy.checked,lettered:introName.value,earlier:introTakes,...(revise?{feedback:introFeedback.value,current:introSlots}:{})});
+    introSlots=got.slots;if(revise)introFeedback.value='';
     introTakes=[...introTakes,{camera:got.camera,pose:got.pose,place:got.place}].slice(-6);
-    introPrompt.value=got.prompt;introUndesired.value=got.undesired;another.hidden=false;
+    introPrompt.value=got.prompt;introUndesired.value=got.undesired;another.hidden=false;introRevise.hidden=false;
     introState.textContent=`Take ${introTakes.length} for ${who}: ${got.camera}; ${got.place||'no place given'}.${got.styleFrom?` Style line from the Lumi Studio preset “${got.styleFrom}”.`:''}`;
     notify([`Intro card ready for ${who}, lettered ${got.name}. Copy it into NovelAI.`,...got.notices].join('\n'));
   };
-  const introMake=button('Make the intro card',makeIntro,true);
-  const another=button('Try another',makeIntro);another.hidden=true;
+  const introMake=button('Make the intro card',()=>makeIntro(),true);
+  const another=button('Try another',()=>makeIntro());another.hidden=true;
+  const introRevise=button('Revise',()=>makeIntro(true));introRevise.hidden=true;
   const introCopy=button('Copy prompt',()=>copyText(introPrompt.value,'intro card prompt'));
   const introCopyUndesired=button('Copy',()=>copyText(introUndesired.value,'undesired content'));introCopyUndesired.className='lc-mini';
   introCard.append(el('p','A picture that introduces the character: posed in front of their own name in giant letters, in a place from their story, showing who they are. Each character gets their own pose, place and camera. Made for NovelAI from the character sheet above and the open chat; it changes nothing in the sheet.'),
     field('Name on the card',introName,'Leave empty to use the first name. Four to seven letters spell most reliably.'),introAnatomyLabel,
     row(introMake,another),introState,
     field('Prompt',introPrompt,'Paste into NovelAI. “Text: NAME” has to stay last: NovelAI letters everything after it. Edit anything else.'),row(introCopy),
-    field('Add to Undesired Content',introUndesired),row(introCopyUndesired));
+    field('Add to Undesired Content',introUndesired),row(introCopyUndesired),
+    field('What to keep or change',introFeedback,'Say what you liked and what you did not. Revise keeps the rest of this take as it is. For a taste that always applies, add a note that starts with “Intro:” to Your notes.'),row(introRevise));
+
+  // ── 06 Cast picture: up to four of the story's people in one image ──
+  const groupCard=remembered(el('details'),'group');groupCard.className='lc-card';groupCard.append(el('summary','06 / Cast picture'));
+  const groupList=el('div');groupList.dataset.lc='groupList';
+  const groupFormat=el('select');groupFormat.setAttribute('aria-label','Made for');groupFormat.append(option('NovelAI (a base prompt and one box per character)','nai'),option('Plain English (MOSS and similar)','plain'));
+  try{groupFormat.value=localStorage.getItem('lumicast.groupFormat')==='plain'?'plain':'nai';}catch{/* not kept */}
+  groupFormat.addEventListener('change',()=>{try{localStorage.setItem('lumicast.groupFormat',groupFormat.value);}catch{/* not kept */}});
+  const groupTitled=el('input');groupTitled.type='checkbox';const groupTitle=el('input');groupTitle.maxLength=40;groupTitle.autocomplete='off';groupTitle.placeholder='The story’s name';groupTitle.dataset.lc='groupTitle';
+  const groupTitledLabel=el('label');groupTitledLabel.className='lc-check';groupTitledLabel.append(groupTitled,document.createTextNode(' Put a title in giant letters behind them'));
+  const groupOut=el('div');groupOut.dataset.lc='groupOut';const groupState=el('small');groupState.className='lc-muted';
+  const groupFeedback=el('textarea');groupFeedback.rows=2;groupFeedback.maxLength=1000;groupFeedback.dataset.lc='groupFeedback';groupFeedback.placeholder='“move the knight to the left, make it daytime”';
+  type Candidate={name:string;description:string;main:boolean;persona:boolean;from:string;box:HTMLInputElement};
+  let candidates:Candidate[]=[];let groupTake:unknown=null;let groupEarlier:string[]=[];
+  const MAX_CAST=4;
+  const findCast=button('Find the cast',async()=> {
+    // The card's characters come from Get the characters from this card; it is run here if it has not been.
+    if(!listed.length){try{await readCardNow();}catch{/* no card to read: the Cast lorebook and the persona still count */}}
+    const roster=await rpc.request<{chat:string;card:string;lore:{name:string;description:string}[];persona:{name:string;description:string}|null}>('castRoster');
+    const seen=new Set<string>();const next:Omit<Candidate,'box'>[]=[];
+    const add=(name:string,description:string,main:boolean,persona:boolean,from:string)=>{const key=name.toLowerCase();if(!name||seen.has(key))return;seen.add(key);next.push({name,description,main,persona,from});};
+    for(const l of listed)add(l.name(),l.description(),l.main,false,l.main?'main character':'from the card');
+    for(const l of roster.lore)add(l.name,l.description,false,false,'Cast lorebook');
+    if(source.value.trim()&&characterName())add(characterName(),source.value.trim(),false,false,'loaded in LumiCast');
+    if(roster.persona)add(roster.persona.name,roster.persona.description,false,true,'my persona');
+    groupList.replaceChildren();
+    candidates=next.map((c,i)=>{const box=el('input');box.type='checkbox';box.checked=!c.persona&&i<MAX_CAST;const label=el('label');label.className='lc-check';label.append(box,document.createTextNode(` ${c.name} (${c.from})`));groupList.append(label);return {...c,box};});
+    if(!groupTitle.value)groupTitle.value=roster.card||roster.chat;
+    groupTake=null;groupEarlier=[];
+    notify(candidates.length?`${candidates.length} ${candidates.length===1?'person':'people'} found. Tick up to ${MAX_CAST}, then make the picture.`:'Nobody found yet. Open the story’s chat and press Get the characters from this card, then Find the cast again.');
+  });
+  const makeGroup=async(revise=false)=> {
+    const chosen=candidates.filter(c=>c.box.checked);
+    if(!chosen.length)throw new Error('Tick at least one person for the cast picture. Press Find the cast first.');
+    if(chosen.length>MAX_CAST)throw new Error(`Tick at most ${MAX_CAST} people. More than that and image models mix them up.`);
+    if(revise&&!groupFeedback.value.trim())throw new Error('Say what to keep or change first.');
+    if(revise&&!groupTake)throw new Error('Make a cast picture first, then revise it.');
+    const got=await clocked<GroupPicture&{styleFrom:string;fromStudio:string[]}>('castPicture',{connectionId:connection.value,format:groupFormat.value,titled:groupTitled.checked,title:groupTitle.value,
+      members:chosen.map(c=>({name:c.name,description:c.description,main:c.main,persona:c.persona})),...(revise?{feedback:groupFeedback.value,current:groupTake}:{earlier:groupEarlier})});
+    groupTake=got.take;groupEarlier=[...groupEarlier,JSON.stringify(got.take).slice(0,600)].slice(-4);if(revise)groupFeedback.value='';
+    groupOut.replaceChildren();
+    const pieces=[...got.pieces,...(got.undesired?[{label:'Add to Undesired Content',text:got.undesired}]:[])];
+    for(const piece of pieces){
+      const area=el('textarea');area.value=piece.text;area.rows=Math.min(10,Math.max(2,piece.text.split('\n').length+1));area.dataset.piece=piece.label;
+      const copyPiece=plain('Copy',()=>{void copyText(area.value,piece.label.toLowerCase()).catch(e=>notify(e instanceof Error?e.message:'Nothing to copy.',true));});copyPiece.className='lc-mini';
+      groupOut.append(field(piece.label,area),row(copyPiece));
+    }
+    groupAnother.hidden=false;groupRevise.hidden=false;
+    groupState.textContent=`${got.summary}.${got.fromStudio.length?` Looks from Lumi Studio: ${got.fromStudio.join(', ')}.`:''}${got.styleFrom?` Style line from the Lumi Studio preset “${got.styleFrom}”.`:''}`;
+    notify([`Cast picture ready. ${groupFormat.value==='nai'?'Paste the base prompt, then each character into its own character box in NovelAI.':'Copy the prompt into your image model.'}`,...got.notices].join('\n'));
+  };
+  const groupMake=button('Make the cast picture',()=>makeGroup(),true);
+  const groupAnother=button('Try another',()=>makeGroup());groupAnother.hidden=true;
+  const groupRevise=button('Revise',()=>makeGroup(true));groupRevise.hidden=true;
+  groupCard.append(el('p',`One picture of the story’s people together, in a place from the card, each doing something of their own. Up to ${MAX_CAST} people; more than that and image models mix them up. It changes nothing in any character.`),
+    row(findCast),groupList,field('Made for',groupFormat,'NovelAI wants each person in their own character box. Plain English is one prompt, and stays safe for work.'),
+    groupTitledLabel,field('Title',groupTitle,'Only used when the box above is ticked. Short titles spell most reliably.'),
+    row(groupMake,groupAnother),groupState,groupOut,
+    field('What to keep or change',groupFeedback,'Revise keeps the rest of this staging as it is.'),row(groupRevise));
 
   const searchCard=el('details');searchCard.className='lc-card';searchCard.append(el('summary','Find a real tag'));
   const query=el('input');query.maxLength=100;const found=el('div');
@@ -484,8 +554,8 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   });
   searchCard.append(field('Tag name or the start of one',query,'Lists Danbooru tags that begin with what you type, most used first, so you can check a tag exists before adding it to a field. No images are fetched.'),search,found);
 
-  app.append(intro,settings,status,studioNews,castCard,input,gapsCard,output,refine,sheetCard,introCard,searchCard,el('p','LumiCast 0.20.0 · Draft stays in this tab until reload.'));
-  const controls=[readOoc,readCard,introMake,another,introCopy,introCopyUndesired,translate,studio,sendBack,writeMoss,again,save,refreshButton,testGel,saveNotes,saveQuality,startOver,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
+  app.append(intro,settings,status,studioNews,castCard,input,gapsCard,output,refine,sheetCard,introCard,groupCard,searchCard,el('p','LumiCast 0.21.0 · Draft stays in this tab until reload.'));
+  const controls=[readOoc,readCard,introMake,another,introRevise,findCast,groupMake,groupAnother,groupRevise,introCopy,introCopyUndesired,translate,studio,sendBack,writeMoss,again,save,refreshButton,testGel,saveNotes,saveQuality,startOver,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
 
   // Every change to the sheet is offered to Lumi Studio, a moment after typing stops.
   let shareTimer:ReturnType<typeof setTimeout>|undefined;

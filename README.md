@@ -1,4 +1,10 @@
-# LumiCast 0.20.0
+# LumiCast 0.21.0
+
+**v0.21.0 adds the cast picture and feedback on a take.**
+- **06 / Cast picture.** One picture of up to four of a story's people together, in a place from the card, each doing something of their own. **Find the cast** lists the card's characters (it reads the card if you haven't), this chat's Cast lorebook, the character loaded in LumiCast and your persona; tick who's in. Anyone Lumi Studio (1.27.7 or newer) already has keeps their look from there; everyone else gets a short look from their description. An optional title goes in giant letters behind the group. Two formats: **NovelAI** (a base prompt and one block per character, for its character boxes) or **Plain English** (one prompt for MOSS and similar, kept safe for work).
+- **What to keep or change.** Under the intro card and the cast picture: say what you liked and what you didn't, press **Revise**, and the rest of that take stays as it is. A note that starts with "Intro:" in Your notes applies every time.
+- **Intro card tweaks.** A feminine man (a sheet with trap or otoko no ko) gets a front or three-quarter camera, `flat chest`, and, with the anatomy switch on, `bulge` added by rule. Names of six letters or more are framed off to one side so more of the name shows.
+- Needs one more permission, `personas`, to offer your persona for the cast picture.
 
 **v0.20.0 adds the intro card.** **05 / Intro card** writes a NovelAI V5 prompt for a character introduction picture: the character posed in front of their own name in giant letters, in a place from their story, showing who they are. One model call reads the character sheet, the description, the open chat's card and its latest messages, and picks this character's own camera angle, pose and prop, expression, place, lighting and lettering style; generic poses and close-ups are refused. **Try another** makes a take with a different camera and pose. The style line comes from the Lumi Studio preset the chat uses (Lumi Studio 1.27.6 or newer; otherwise your LumiCast quality tags). Weights are written NovelAI's way, `Text: NAME` is always last, and the Undesired Content additions have their own Copy. **Let anatomy show through clothes (NSFW)** is off by default; off, the sheet's anatomy field is never sent. It changes nothing in the sheet.
 

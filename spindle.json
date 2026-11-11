@@ -1,7 +1,7 @@
 {
   "name": "LumiCast",
   "identifier": "lumicast",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "author": "fidgetycarrot",
   "github": "https://github.com/fidgetycarrot/lumicast",
   "homepage": "https://github.com/fidgetycarrot/lumicast#readme",
@@ -12,7 +12,8 @@
     "chats",
     "chat_mutation",
     "characters",
-    "world_books"
+    "world_books",
+    "personas"
   ],
   "entry_backend": "dist/backend.js",
   "entry_frontend": "dist/frontend.js",

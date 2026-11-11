@@ -12,7 +12,7 @@ function harness(provider='openrouter',model='test/generative') {
   let fail=false,block=false;let latestSignal:AbortSignal|undefined;let responses:unknown[]|undefined;
   let gel:{status:number;body:string}|undefined;
   let noPool=false;let studio:unknown;
-  let applyStudio:(()=>unknown)|undefined;let styleLine:unknown;
+  let applyStudio:(()=>unknown)|undefined;let styleLine:unknown;let library:unknown;let persona:unknown=null;
   // A small story: one chat on one character card, its messages, and lorebooks.
   const story={chat:{id:'chat1',character_id:'card1',name:'Harbour story',metadata:{chat_world_book_ids:['mine'],theme:'kept'}} as {id:string;character_id:string;name:string;metadata:Record<string,unknown>}|null,
     card:{id:'card1',name:'Narrator',world_book_ids:['other']},messages:[] as {id:string;role:string;content:string}[],
@@ -22,6 +22,7 @@ function harness(provider='openrouter',model='test/generative') {
   const api={
     permissions:{has:(p:string)=>!story.denied.includes(p)},
     on:(event:string,fn:(payload:unknown,user?:string)=>void)=>{events.set(event,fn);return()=>events.delete(event);},
+    personas:{getActive:async()=>persona},
     chats:{getActive:async()=>story.chat&&structuredClone(story.chat),get:async(id:string)=>story.chat?.id===id?structuredClone(story.chat):null,update:async(id:string,v:{metadata:Record<string,unknown>})=>{calls.push(['chatUpdate',id,v.metadata]);story.chat!.metadata=v.metadata;return story.chat;}},
     chat:{getMessages:async(id:string)=>id==='chat1'?story.messages.map(m=>({...m,is_user:m.role==='user'})):[]},
     characters:{get:async(id:string)=>id===story.card.id?{...story.card}:null,update:async(id:string,v:{world_book_ids:string[]})=>{calls.push(['attach',id,v.world_book_ids]);story.card.world_book_ids=v.world_book_ids;return story.card;}},
@@ -44,14 +45,14 @@ function harness(provider='openrouter',model='test/generative') {
       return{content:JSON.stringify(responses ? responses.shift() : input.messages[0].content.includes('one trait per visual fact')?{traits:[{id:'t1',group:'hair',evidence:'Short red hair.',tags:['red_hair'],detail:'Short red hair'}]}:{drop:[],captions:{character:'Short red hair.'},issues:[]}),finish_reason:'stop'};
     }},
     onFrontendMessage:(fn:typeof handler)=>{handler=fn;return()=>{handler=undefined;};},
-    rpcPool:{read:async(endpoint:string)=>{calls.push(['read',endpoint]);if(endpoint==='lumidraw_studio.lumicast.style'){if(!styleLine)throw new Error('Shared RPC endpoint is not registered');return styleLine;}if(endpoint==='lumidraw_studio.lumicast.apply'){if(!applyStudio)throw new Error('Shared RPC endpoint "lumidraw_studio.lumicast.apply" is not registered');return applyStudio();}if(endpoint!=='lumidraw_studio.lumicast.tweak'||studio===undefined)throw new Error('no value');return studio;},sync:(endpoint:string,value:unknown,policy:unknown)=>{if(noPool)throw new Error('pool unavailable');calls.push(['sync',endpoint,value,policy]);return `lumicast.${endpoint}`;}},
+    rpcPool:{read:async(endpoint:string)=>{calls.push(['read',endpoint]);if(endpoint==='lumidraw_studio.lumicast.library')return library??{entries:[]};if(endpoint==='lumidraw_studio.lumicast.style'){if(!styleLine)throw new Error('Shared RPC endpoint is not registered');return styleLine;}if(endpoint==='lumidraw_studio.lumicast.apply'){if(!applyStudio)throw new Error('Shared RPC endpoint "lumidraw_studio.lumicast.apply" is not registered');return applyStudio();}if(endpoint!=='lumidraw_studio.lumicast.tweak'||studio===undefined)throw new Error('no value');return studio;},sync:(endpoint:string,value:unknown,policy:unknown)=>{if(noPool)throw new Error('pool unavailable');calls.push(['sync',endpoint,value,policy]);return `lumicast.${endpoint}`;}},
     sendToFrontend:(payload:unknown,user?:string,options?:{frontendSessionId?:string})=>{replies.push({payload,user,session:options?.frontendSessionId});// No session means every open panel of that user, as the host does.
       if(user==='u1'&&(options?.frontendSessionId??'s1')==='s1')listeners.forEach(fn=>fn(payload));},
   } as unknown as SpindleAPI;
   const root=document.createElement('div');document.body.append(root);
   const ctx={sendToBackend:(payload:unknown)=>handler?.(payload,'u1','s1'),onBackendMessage:(fn:(payload:unknown)=>void)=>{listeners.add(fn);return()=>{listeners.delete(fn);};},ui:{registerDrawerTab:()=>({root,destroy:()=>root.remove()})},dom:{addStyle:()=>()=>{}}} as unknown as SpindleFrontendContext;
   const stop=setupBackend(api);
-  return{ctx,root,calls,replies,storage,stop,emit:(payload:unknown,user='u1',session='s1')=>handler?.(payload,user,session),setFail:()=>{fail=true;},setBlock:()=>{block=true;},setResponses:(values:unknown[])=>{responses=values;},setGel:(value:{status:number;body:string})=>{gel=value;},setNoPool:()=>{noPool=true;},story,events,setStudio:(v:unknown)=>{studio=v;},setApply:(fn:()=>unknown)=>{applyStudio=fn;},setStyle:(v:unknown)=>{styleLine=v;},signal:()=>latestSignal};
+  return{ctx,root,calls,replies,storage,stop,emit:(payload:unknown,user='u1',session='s1')=>handler?.(payload,user,session),setFail:()=>{fail=true;},setBlock:()=>{block=true;},setResponses:(values:unknown[])=>{responses=values;},setGel:(value:{status:number;body:string})=>{gel=value;},setNoPool:()=>{noPool=true;},story,events,setStudio:(v:unknown)=>{studio=v;},setApply:(fn:()=>unknown)=>{applyStudio=fn;},setStyle:(v:unknown)=>{styleLine=v;},setLibrary:(v:unknown)=>{library=v;},setPersona:(v:unknown)=>{persona=v;},signal:()=>latestSignal};
 }
 const named=(root:Element,name:string)=>(root.querySelector(`[data-lc="${name}"]`)??root.querySelector(`[data-sheet="${name}"]`)) as HTMLTextAreaElement;
 /** [description, tags, caption, appearance, outfit, prompt] */
@@ -550,7 +551,7 @@ test('the intro card is built per character from the sheet and the story, with L
   h.setResponses([{letters:'Lauren',camera:'close-up, from below, looking at viewer',lettering:'pink painted lettering',outfit:'blue polo shirt, white pleated tennis skirt, visible nipples',
     pose:'confident pose, leaning on aquarium glass, bratty smirk',place:'high school science hallway, large aquarium',lighting:'golden hour, warm sunlight. Text: HACKED'}]);
   b('Make the intro card').click();await until(()=>named(h.root,'introPrompt').value!=='');
-  expect(named(h.root,'introPrompt').value).toBe(['digital painting, manhwa, rim lighting,','1girl, solo, from below, looking at viewer,',
+  expect(named(h.root,'introPrompt').value).toBe(['digital painting, manhwa, rim lighting,','1girl, solo, from below, looking at viewer, off-center, character on right side,',
     'in front of giant block letters, background text, character name, letters partially hidden behind character,','pink painted lettering,',
     'blue eyes, 1.3::blonde hair ::, tan skin, blue polo shirt, white pleated tennis skirt,','leaning on aquarium glass, bratty smirk,','high school science hallway, large aquarium,','golden hour, warm sunlight,','Text: LAUREN'].join('\n'));
   expect((named(h.root,'introUndesired') as unknown as HTMLInputElement).value).toBe('blush, speech bubble, multiple views, watermark, signature, border');
@@ -563,8 +564,62 @@ test('the intro card is built per character from the sheet and the story, with L
   (named(h.root,'introName') as unknown as HTMLInputElement).value='Laur';
   h.setResponses([{letters:'x',camera:'cowboy shot, from side',lettering:'neon sign lettering',outfit:'tight running shorts, visible bulge in tight shorts',pose:'sitting on bleachers, phone in hand, bored look',place:'school gym',lighting:'overcast'}]);
   b('Try another').click();await until(()=>named(h.root,'introPrompt').value.includes('bleachers'));
-  expect(sent().earlier).toEqual([{camera:'from below, looking at viewer',pose:'leaning on aquarium glass, bratty smirk',place:'high school science hallway, large aquarium'}]);
+  expect(sent().earlier).toEqual([{camera:'from below, looking at viewer, off-center, character on right side',pose:'leaning on aquarium glass, bratty smirk',place:'high school science hallway, large aquarium'}]);
   expect(sent().anatomy).toBe('pussy');
   expect(named(h.root,'introPrompt').value).toContain('visible bulge in tight shorts');expect(named(h.root,'introPrompt').value.endsWith('Text: LAUR')).toBe(true);
   expect(box('outfit').value).toBe('blue polo shirt, white pleated tennis skirt');
+  // Revise: the feedback and the current take go to the model; the box clears.
+  named(h.root,'introFeedback').value='love the bleachers, make it night';
+  h.setResponses([{letters:'x',camera:'cowboy shot, from side',lettering:'neon sign lettering',outfit:'tight running shorts',pose:'sitting on bleachers, phone in hand, bored look',place:'school gym',lighting:'night, gym lights'}]);
+  b('Revise').click();await until(()=>named(h.root,'introPrompt').value.includes('gym lights'));
+  expect(sent().feedback).toBe('love the bleachers, make it night');expect(sent().current.place).toBe('school gym');expect(sent().earlier).toBeUndefined();
+  expect(named(h.root,'introFeedback').value).toBe('');
+});
+test('the cast picture: tick up to four, looks from Lumi Studio where it has them, a NovelAI base and a box per character, or plain English',async()=> {
+  dom();const h=harness();cleanups.push(h.stop);const dispose=setup(h.ctx);cleanups.push(dispose);
+  const b=(name:string)=>Array.from(h.root.querySelectorAll('button')).find(x=>x.textContent===name)!;
+  await until(()=>!b('Translate').disabled);h.root.querySelector('select')!.value='c1';
+  Object.assign(h.story.card,{name:'The Broken Helm',description:'Bran is a huge red-bearded barbarian. Lyraen is a slim blonde elf scholar. Tobin is a curly-haired halfling.',scenario:'A tavern in a castle town.',personality:'',first_mes:'',mes_example:'',alternate_greetings:[],system_prompt:''});
+  h.story.books.set('cast',{id:'cast',name:'Cast · x',metadata:{lumicast:'cast'}});h.story.chat!.metadata.chat_world_book_ids=['cast'];
+  h.story.entries.push({id:'e1',world_book_id:'cast',key:['Mera'],content:"[Mera's appearance]\nMera is a stout barkeep.",comment:'LumiCast: Mera'});
+  h.setPersona({name:'Jason',description:'Jason is a massive man with dark hair.'});
+  h.setLibrary({entries:[{asked:'lyraen',name:'Lyraen',kind:'character',sheet:{countTag:'1boy',always:'(trap:1.4)',appearance:'blonde hair, pointy ears',outfit:'navy scholar robes',moss:'a slim elf with long blonde hair.'}}]});
+  h.setStyle({style:'digital painting',preset:'NAI'});
+  h.setResponses([{characters:[{name:'Bran',main:true,description:'Bran is a huge red-bearded barbarian.'},{name:'Lyraen',description:'Lyraen is a slim blonde elf scholar.'},{name:'Tobin',description:'Tobin is a curly-haired halfling.'}]}]);
+  b('Find the cast').click();await until(()=>named(h.root,'groupList').querySelectorAll('input').length===5);await until(()=>!b('Translate').disabled);
+  const labels=Array.from(named(h.root,'groupList').querySelectorAll('label'));
+  expect(labels.map(l=>l.textContent!.trim())).toEqual(['Bran (main character)','Lyraen (from the card)','Tobin (from the card)','Mera (Cast lorebook)','Jason (my persona)']);
+  const ticks=labels.map(l=>l.querySelector('input')!);expect(ticks.map(t=>t.checked)).toEqual([true,true,true,true,false]);
+  expect((named(h.root,'groupTitle') as unknown as HTMLInputElement).value).toBe('The Broken Helm');
+  ticks[4].checked=true;b('Make the cast picture').click();await until(()=>!b('Translate').disabled);
+  expect(h.root.querySelector('.lc-status')!.textContent).toContain('Tick at most 4 people');
+  ticks[3].checked=false;ticks[2].checked=false;
+  const staged={place:'muddy castle-town street, tavern front',lighting:'dusk, lantern light',camera:'group shot, close-up',lettering:'',people:[
+    {name:'Bran',gender:'boy',look:'huge build, red beard, long red hair',outfit:'fur mantle, leather kilt',doing:'laughing with head thrown back, great axe on shoulder',position:'far left'},
+    {name:'Lyraen',gender:'girl',look:'ignored because saved',outfit:'navy scholar robes',doing:'looking up at jason, clutching a leather book',position:'centre'},
+    {name:'Jason',gender:'boy',look:'massive build, dark hair',outfit:'dark leather coat',doing:'standing with arms crossed, stern look',position:'right'},
+    {name:'Ghost',gender:'girl',look:'x',outfit:'x',doing:'x',position:'x'}]};
+  h.setResponses([staged]);
+  b('Make the cast picture').click();await until(()=>named(h.root,'groupOut').querySelectorAll('textarea').length>0);await until(()=>!b('Translate').disabled);
+  const sent=()=>JSON.parse(((h.calls.filter(c=>(c as unknown[])[0]==='generation').at(-1) as unknown[])[1] as {messages:{content:string}[]}).messages[1].content);
+  expect(sent().people.map((p:{name:string})=>p.name)).toEqual(['Bran','Lyraen','Jason']);expect(sent().people[1].look).toContain('blonde hair');expect(sent().people[2].persona).toBe(true);expect(sent().title).toBeUndefined();
+  const piece=(label:string)=>(named(h.root,'groupOut').querySelector(`[data-piece="${label}"]`) as HTMLTextAreaElement).value;
+  expect(piece('Base prompt')).toBe('digital painting,\n3boys, group shot,\nmuddy castle-town street, tavern front,\ndusk, lantern light');
+  expect(piece('Character: Lyraen')).toBe('boy, male focus,\n1.4::trap ::, blonde hair, pointy ears, flat chest,\nnavy scholar robes,\nlooking up at jason, clutching a leather book,\ncentre');
+  expect(piece('Character: Bran')).toBe('boy, male focus,\nhuge build, red beard, long red hair,\nfur mantle, leather kilt,\nlaughing with head thrown back, great axe on shoulder,\nfar left');
+  expect(piece('Add to Undesired Content')).toContain('extra people');
+  expect(h.root.textContent).toContain('Looks from Lumi Studio: Lyraen.');
+  // Plain English with a title, revised: the current staging and the feedback go back.
+  const format=Array.from(h.root.querySelectorAll('select')).find(s=>Array.from(s.options).some(o=>o.value==='plain'))!;format.value='plain';
+  Array.from(h.root.querySelectorAll('label')).find(l=>l.textContent!.includes('Put a title'))!.querySelector('input')!.checked=true;
+  named(h.root,'groupFeedback').value='make it daytime';
+  h.setResponses([{...staged,lighting:'bright noon sun',lettering:'carved stone lettering'}]);
+  Array.from(h.root.querySelectorAll('button')).filter(x=>x.textContent==='Revise').at(-1)!.click();await until(()=>!!named(h.root,'groupOut').querySelector('[data-piece="Prompt"]'));await until(()=>!b('Translate').disabled);
+  expect(sent().feedback).toBe('make it daytime');expect(sent().current.place).toBe('muddy castle-town street, tavern front');expect(sent().title).toBe('The Broken Helm');
+  expect(piece('Prompt')).toBe(['Digital painting. Group shot of 3 people at a muddy castle-town street, with tavern front. Bright noon sun.',
+    'Bran, far left, huge build, red beard and long red hair. He wears a fur mantle and a leather kilt. He is laughing with head thrown back and great axe on shoulder.',
+    'Lyraen, centre, a slim elf with long blonde hair. He wears navy scholar robes. He is looking up at jason and clutching a leather book.',
+    'Jason, right, massive build and dark hair. He wears a dark leather coat. He is standing with arms crossed and stern look.',
+    'Behind them, the words "THE BROKEN HELM" in giant carved stone lettering, partly hidden by the group.'].join('\n\n'));
+  expect(named(h.root,'groupOut').querySelector('[data-piece="Add to Undesired Content"]')).toBeNull();
 });
