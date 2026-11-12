@@ -267,3 +267,9 @@ The user reported about five minutes per translation. Two causes were found in t
 
 Translations became slow once Gelbooru credentials started working: every tag also queried Gelbooru, and all requests for both sites waited in one serialized queue, one tag at a time. Now each site has its own queue and pause, candidates are resolved concurrently and used in prompt order, and Gelbooru is consulted only when Danbooru has no live tag of that name or resolves it through an alias (the cases where the spellings can differ). Each translation reports its model time, lookup time and total. Whether the model or the lookups dominated the user's slow run is not known; the new timing line will show it. Typecheck, tests and the build passed.
 
+
+## v0.22.1: cast picture in Lumi Studio's tested NovelAI form
+
+- Tested (fake host): people sorted left to right by their place; base prompt gains the "From left to right" sentence; a feminine man opens `1boy, femboy` with no `male focus`; bare place tags are dropped from blocks when the sentence carries them; names of other people in a block become "another".
+- The four-person notice now recommends Copy all.
+- Not tested: live NovelAI results. The form is copied from Lumi Studio 1.28.0, which was tested live in the other chat.

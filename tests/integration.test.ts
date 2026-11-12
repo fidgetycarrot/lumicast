@@ -606,9 +606,9 @@ test('the cast picture: tick up to four, looks from Lumi Studio where it has the
   const sent=()=>JSON.parse(((h.calls.filter(c=>(c as unknown[])[0]==='generation').at(-1) as unknown[])[1] as {messages:{content:string}[]}).messages[1].content);
   expect(sent().people.map((p:{name:string})=>p.name)).toEqual(['Bran','Lyraen','Jason']);expect(sent().people[1].look).toContain('blonde hair');expect(sent().people[2].persona).toBe(true);expect(sent().title).toBeUndefined();
   const piece=(label:string)=>(named(h.root,'groupOut').querySelector(`[data-piece="${label}"]`) as HTMLTextAreaElement).value;
-  expect(piece('Base prompt')).toBe('digital painting,\n3boys, group shot,\nmuddy castle-town street, tavern front,\ndusk, lantern light');
-  expect(piece('Character: Lyraen')).toBe('boy, male focus,\n1.4::trap ::, blonde hair, pointy ears, flat chest,\nnavy scholar robes,\nlooking up at jason, clutching a leather book,\ncentre');
-  expect(piece('Character: Bran')).toBe('boy, male focus,\nhuge build, red beard, long red hair,\nfur mantle, leather kilt,\nlaughing with head thrown back, great axe on shoulder,\nfar left');
+  expect(piece('Base prompt')).toBe('digital painting,\n3boys, group shot,\nmuddy castle-town street, tavern front,\ndusk, lantern light,\nFrom left to right: the man with red hair, the femboy with blonde hair, the man with dark hair');
+  expect(piece('Character: Lyraen')).toBe('1boy, femboy,\n1.4::trap ::, blonde hair, pointy ears, flat chest,\nnavy scholar robes,\nlooking up at another, clutching a leather book');
+  expect(piece('Character: Bran')).toBe('1boy, male focus,\nhuge build, red beard, long red hair,\nfur mantle, leather kilt,\nlaughing with head thrown back, great axe on shoulder');
   expect(piece('Add to Undesired Content')).toContain('extra people');
   expect(h.root.textContent).toContain('Looks from Lumi Studio: Lyraen.');
   // Refine a cast member: loaded from Lumi Studio's sheet with no model call; the cast is kept; the looks rebuild without a model call.

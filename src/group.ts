@@ -125,19 +125,41 @@ export function buildGroup(raw: string, input: GroupInput, style: string): Group
     const lettered = title ? `Behind them, the words "${title}" in giant ${list(lettering)}, partly hidden by the group.` : '';
     pieces.push({label:'Prompt', text:[scene, ...blocks, lettered].filter(Boolean).join('\n\n')});
   } else {
+    // What worked in Lumi Studio's NovelAI tests (1.28.0): people listed left to right, one plain sentence in the
+    // base prompt saying that order (by what they are and their hair, since names mean nothing to the model),
+    // their places nowhere else, and other people called "another" inside a block.
+    const rank = (p: {position: string[]}) => { const v = p.position.join(' '); return /\bfar left\b/.test(v) ? 0 : /\bleft\b/.test(v) ? 1 : /\bfar right\b/.test(v) ? 5 : /\bright\b/.test(v) ? 4 : 2.5; };
+    const ordered = people.map((p, index) => ({p, index})).sort((a, b) => rank(a.p) - rank(b.p) || a.index - b.index).map(v => v.p);
+    const placed = people.length >= 2 && people.every(p => p.position.length);
+    const PLACE_ONLY = /^(?:far |centre-|center-)?(?:left|right|centre|center|middle|front|back|foreground|background)(?: (?:side|of frame|of the frame))?$/;
+    const word = (p: typeof people[number]) => p.femboy ? 'femboy' : p.gender === 'girl' ? 'woman' : p.gender === 'boy' ? 'man' : 'person';
+    const hair = (p: typeof people[number]) => (p.look.find(v => /\bhair\b/.test(v) && !/\b(?:hair over|hair between|hair ornament|hairband|hairclip|hair ribbon|hair bun)\b/.test(v)) ?? '')
+      .replace(/\(([^():]+):\s*[\d.]+\)/g, '$1').replace(/_/g, ' ').replace(/\b(?:very long|long|short|medium|shoulder-length|messy|curly|wavy|straight|spiky|silky)\b\s*/g, '').trim();
+    const orderLine = placed ? `From left to right: ${ordered.map(p => `the ${word(p)}${hair(p) ? ` with ${hair(p)}` : ''}${/\bback(?:ground)?\b/.test(p.position.join(' ')) ? ' (further back)' : ''}`).join(', ')}.` : '';
+    const escape = (v: string) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const names = (p: typeof people[number]) => [p.name, p.name.split(/\s+/)[0]].filter(v => v.length >= 3);
+    const unnamed = (items: string[], self: typeof people[number]) => items.map(item => {
+      let v = item;
+      for (const other of people) for (const form of names(other)) v = v.replace(new RegExp(`\\b${escape(form)}\\b`, 'gi'), other === self ? '' : 'another');
+      return v.replace(/\banother another\b/g, 'another').replace(/\s+/g, ' ').trim();
+    }).filter(Boolean);
     const counts = (['girl', 'boy', 'other'] as const).map(g => { const n = people.filter(p => p.gender === g).length; return n ? `${n}${g}${n > 1 ? 's' : ''}` : ''; }).filter(Boolean);
     const base = [
       style.trim().replace(/[,\s]+$/, ''),
       [...counts, ...camera].join(', '),
       place.join(', '), lighting.join(', '),
+      ...(orderLine ? [orderLine.replace(/\.$/, '')] : []),
       ...(title ? ['in front of giant block letters, background text, letters partially hidden behind characters', lettering.join(', ')] : []),
     ].filter(Boolean).join(',\n');
     pieces.push({label:'Base prompt', text:title ? `${base},\nText: ${title}` : base});
-    for (const p of people) {
+    for (const p of ordered) {
       const look = naiWeights([...p.look, p.femboy && !p.look.some(v => /flat[ _]chest/i.test(v)) ? 'flat chest' : ''].filter(Boolean).join(', '));
-      pieces.push({label:`Character: ${p.name}`, text:[[p.gender, p.gender === 'boy' ? 'male focus' : ''].filter(Boolean).join(', '), look, p.outfit.join(', '), p.doing.join(', '), p.position.join(', ')].filter(Boolean).join(',\n')});
+      // A feminine man opens "1boy, femboy": "male focus" pushed him masculine.
+      const opener = p.femboy ? '1boy, femboy' : p.gender === 'boy' ? '1boy, male focus' : p.gender === 'girl' ? '1girl' : '1other';
+      const where = placed ? p.position.filter(v => !PLACE_ONLY.test(v)) : p.position;
+      pieces.push({label:`Character: ${p.name}`, text:[opener, look, p.outfit.join(', '), unnamed(p.doing, p).join(', '), unnamed(where, p).join(', ')].filter(Boolean).join(',\n')});
     }
-    if (people.length > 3) notices.push('With four people NovelAI sometimes swaps hair or clothes between them. If it does, try three, or the plain-English format.');
+    if (people.length > 3) notices.push('With four people, use Copy all: one prompt with “|” between people keeps each person’s hair and clothes on them better than separate character boxes.');
   }
   return {pieces, undesired:input.format === 'plain' ? '' : GROUP_UNDESIRED, summary, notices, take};
 }

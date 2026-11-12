@@ -1557,6 +1557,25 @@ function buildGroup(raw, input, style) {
 
 `) });
   } else {
+    const rank = (p) => {
+      const v = p.position.join(" ");
+      return /\bfar left\b/.test(v) ? 0 : /\bleft\b/.test(v) ? 1 : /\bfar right\b/.test(v) ? 5 : /\bright\b/.test(v) ? 4 : 2.5;
+    };
+    const ordered = people.map((p, index) => ({ p, index })).sort((a, b) => rank(a.p) - rank(b.p) || a.index - b.index).map((v) => v.p);
+    const placed = people.length >= 2 && people.every((p) => p.position.length);
+    const PLACE_ONLY = /^(?:far |centre-|center-)?(?:left|right|centre|center|middle|front|back|foreground|background)(?: (?:side|of frame|of the frame))?$/;
+    const word = (p) => p.femboy ? "femboy" : p.gender === "girl" ? "woman" : p.gender === "boy" ? "man" : "person";
+    const hair = (p) => (p.look.find((v) => /\bhair\b/.test(v) && !/\b(?:hair over|hair between|hair ornament|hairband|hairclip|hair ribbon|hair bun)\b/.test(v)) ?? "").replace(/\(([^():]+):\s*[\d.]+\)/g, "$1").replace(/_/g, " ").replace(/\b(?:very long|long|short|medium|shoulder-length|messy|curly|wavy|straight|spiky|silky)\b\s*/g, "").trim();
+    const orderLine = placed ? `From left to right: ${ordered.map((p) => `the ${word(p)}${hair(p) ? ` with ${hair(p)}` : ""}${/\bback(?:ground)?\b/.test(p.position.join(" ")) ? " (further back)" : ""}`).join(", ")}.` : "";
+    const escape = (v) => v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const names = (p) => [p.name, p.name.split(/\s+/)[0]].filter((v) => v.length >= 3);
+    const unnamed = (items, self) => items.map((item) => {
+      let v = item;
+      for (const other of people)
+        for (const form of names(other))
+          v = v.replace(new RegExp(`\\b${escape(form)}\\b`, "gi"), other === self ? "" : "another");
+      return v.replace(/\banother another\b/g, "another").replace(/\s+/g, " ").trim();
+    }).filter(Boolean);
     const counts = ["girl", "boy", "other"].map((g) => {
       const n = people.filter((p) => p.gender === g).length;
       return n ? `${n}${g}${n > 1 ? "s" : ""}` : "";
@@ -1566,18 +1585,21 @@ function buildGroup(raw, input, style) {
       [...counts, ...camera].join(", "),
       place.join(", "),
       lighting.join(", "),
+      ...orderLine ? [orderLine.replace(/\.$/, "")] : [],
       ...title ? ["in front of giant block letters, background text, letters partially hidden behind characters", lettering.join(", ")] : []
     ].filter(Boolean).join(`,
 `);
     pieces.push({ label: "Base prompt", text: title ? `${base},
 Text: ${title}` : base });
-    for (const p of people) {
+    for (const p of ordered) {
       const look = naiWeights([...p.look, p.femboy && !p.look.some((v) => /flat[ _]chest/i.test(v)) ? "flat chest" : ""].filter(Boolean).join(", "));
-      pieces.push({ label: `Character: ${p.name}`, text: [[p.gender, p.gender === "boy" ? "male focus" : ""].filter(Boolean).join(", "), look, p.outfit.join(", "), p.doing.join(", "), p.position.join(", ")].filter(Boolean).join(`,
+      const opener = p.femboy ? "1boy, femboy" : p.gender === "boy" ? "1boy, male focus" : p.gender === "girl" ? "1girl" : "1other";
+      const where = placed ? p.position.filter((v) => !PLACE_ONLY.test(v)) : p.position;
+      pieces.push({ label: `Character: ${p.name}`, text: [opener, look, p.outfit.join(", "), unnamed(p.doing, p).join(", "), unnamed(where, p).join(", ")].filter(Boolean).join(`,
 `) });
     }
     if (people.length > 3)
-      notices.push("With four people NovelAI sometimes swaps hair or clothes between them. If it does, try three, or the plain-English format.");
+      notices.push("With four people, use Copy all: one prompt with \u201C|\u201D between people keeps each person\u2019s hair and clothes on them better than separate character boxes.");
   }
   return { pieces, undesired: input.format === "plain" ? "" : GROUP_UNDESIRED, summary, notices, take };
 }
@@ -1724,7 +1746,7 @@ function setupBackend(api, options = {}) {
     await s.load;
   };
   const dictionaryFor = (s) => s.dictionary ??= new BooruDictionary(async (url) => {
-    const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.22.0 (tag metadata client)" } }));
+    const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.22.1 (tag metadata client)" } }));
     if (typeof response.status !== "number" || typeof response.body !== "string")
       throw new Error("Invalid proxy response.");
     return { status: response.status, body: response.body };
@@ -2047,7 +2069,7 @@ function setupBackend(api, options = {}) {
         const entered = gelCredentials(text(v.gelUser ?? "", "Gelbooru user", 300), v.gelKey ? text(v.gelKey, "Gelbooru key", 300) : "");
         const credentials = { user: entered.user || settings.gelUser, key: entered.key || settings.gelKey };
         const outcome = await testGelbooru(async (url) => {
-          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.22.0 (tag metadata client)" } }));
+          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.22.1 (tag metadata client)" } }));
           return { status: Number(response.status), body: typeof response.body === "string" ? response.body : "" };
         }, credentials);
         const unsaved = credentials.user !== settings.gelUser || credentials.key !== settings.gelKey;

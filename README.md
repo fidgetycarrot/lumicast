@@ -1,4 +1,6 @@
-# LumiCast 0.22.0
+# LumiCast 0.22.1
+
+**v0.22.1 makes the NovelAI cast picture keep people apart better.** People are now listed left to right, the base prompt says that order in one sentence ("From left to right: the femboy with blonde hair, the man with dark hair"), a feminine man opens with `1boy, femboy` instead of `boy, male focus`, and other people are called "another" inside a character's block. Copy all is now the suggested way to use it. This is the form Lumi Studio 1.28.0 tested.
 
 **v0.22.0 is a tidier panel, and you can fix a character from the cast picture.**
 - **Four tabs, left to right.** **1 · Get a character** (from your story, or paste a description), **2 · Character** (the sheet, Refine, and sending it to Lumi Studio), **3 · Pictures** (intro card and cast picture) and **Setup** (connection, tag services, and two extras: the prompt for other apps and the tag finder). Each tab starts with one line saying what it's for, a "Working on" line always shows who is loaded, and LumiCast moves you to the Character tab when a character arrives there. The section numbers are gone.

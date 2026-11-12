@@ -493,7 +493,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   // ── 06 Cast picture: up to four of the story's people in one image ──
   const groupCard=remembered(Object.assign(el('details'),{open:true}),'group');groupCard.className='lc-card';groupCard.append(el('summary','Cast picture'));
   const groupList=el('div');groupList.dataset.lc='groupList';
-  const groupFormat=el('select');groupFormat.setAttribute('aria-label','Made for');groupFormat.append(option('NovelAI (a base prompt and one box per character)','nai'),option('Plain English (MOSS and similar)','plain'));
+  const groupFormat=el('select');groupFormat.setAttribute('aria-label','Made for');groupFormat.append(option('NovelAI','nai'),option('Plain English (MOSS and similar)','plain'));
   try{groupFormat.value=localStorage.getItem('lumicast.groupFormat')==='plain'?'plain':'nai';}catch{/* not kept */}
   groupFormat.addEventListener('change',()=>{try{localStorage.setItem('lumicast.groupFormat',groupFormat.value);}catch{/* not kept */}});
   const groupTitled=el('input');groupTitled.type='checkbox';const groupTitle=el('input');groupTitle.maxLength=40;groupTitle.autocomplete='off';groupTitle.placeholder='The story’s name';groupTitle.dataset.lc='groupTitle';
@@ -549,7 +549,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
     }
     groupAnother.hidden=false;groupRevise.hidden=false;groupCopyAll.hidden=false;
     groupState.textContent=`${got.summary}.${got.fromStudio.length?` Looks from Lumi Studio: ${got.fromStudio.join(', ')}.`:''}${got.styleFrom?` Style line from the Lumi Studio preset “${got.styleFrom}”.`:''}`;
-    notify([rebuild?'Cast picture rebuilt with the looks Lumi Studio has now. Same place, poses and positions; no model call.':`Cast picture ready. ${groupFormat.value==='nai'?'Paste the base prompt, then each character into its own character box in NovelAI.':'Copy the prompt into your image model.'}`,...got.notices].join('\n'));
+    notify([rebuild?'Cast picture rebuilt with the looks Lumi Studio has now. Same place, poses and positions; no model call.':`Cast picture ready. ${groupFormat.value==='nai'?'Press Copy all and paste it into NovelAI’s main prompt box.':'Copy the prompt into your image model.'}`,...got.notices].join('\n'));
 
   };
   // The whole prompt in one copy. NovelAI reads "base | character | character" in its main prompt box, as long as
@@ -563,9 +563,9 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   const groupRevise=button('Revise',()=>makeGroup(true));groupRevise.hidden=true;
   const groupLooks=button('Use the updated looks',()=>makeGroup('looks'));groupLooks.hidden=true;
   groupCard.append(el('p',`One picture of the story’s people together, in a place from the card, each doing something of their own. Up to ${MAX_CAST} people; more than that and image models mix them up. It changes nothing in any character.`),
-    row(findCast),groupList,field('Made for',groupFormat,'NovelAI wants each person in their own character box. Plain English is one prompt, and stays safe for work.'),
+    row(findCast),groupList,field('Made for',groupFormat,'NovelAI gets tags, with each person in their own block. Plain English is one prompt, and stays safe for work.'),
     groupTitledLabel,field('Title',groupTitle,'Only used when the box above is ticked. Short titles spell most reliably.'),
-    row(groupMake,groupAnother,groupLooks,groupCopyAll),groupState,groupRefineRow,el('small','Your cast and this staging are kept while you fix a character in the Character tab. Use the updated looks then puts the new tags into the same staging, with no model call.'),el('small','Copy all puts the base prompt and every character in one text, split by “|”. Paste it into NovelAI’s main prompt box with no character boxes open; NovelAI splits it itself.'),groupOut,
+    row(groupMake,groupAnother,groupLooks,groupCopyAll),groupState,groupRefineRow,el('small','Your cast and this staging are kept while you fix a character in the Character tab. Use the updated looks then puts the new tags into the same staging, with no model call.'),el('small','Copy all is the way to go: it puts the base prompt and everyone, left to right, in one text split by “|”. Paste it into NovelAI’s main prompt box with no character boxes open. The separate boxes below are for editing, or for NovelAI’s own character boxes if you prefer them.'),groupOut,
     field('What to keep or change',groupFeedback,'Revise keeps the rest of this staging as it is.'),row(groupRevise));
 
   const searchCard=el('details');searchCard.className='lc-card';searchCard.append(el('summary','Find a real tag'));
@@ -594,7 +594,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   panel('pictures','3 · Pictures','Prompts for show-off pictures: an intro card for the loaded character, or a cast picture of several people from the story. Neither changes a character.',introCard,groupCard);
   panel('setup','Setup','Set once: which model LumiCast uses and your tag services. The last two are extras most people will not need.',settings,output,searchCard);
   intro.style.order='1';tabBar.style.order='2';working.style.order='3';status.style.order='4';
-  const footer=el('p','LumiCast 0.22.0 · Draft stays in this tab until reload.');footer.style.order='99';
+  const footer=el('p','LumiCast 0.22.1 · Draft stays in this tab until reload.');footer.style.order='99';
   app.append(intro,settings,status,studioNews,castCard,input,gapsCard,output,refine,sheetCard,introCard,groupCard,searchCard,tabBar,working,...leads,footer);
   try{showTab(localStorage.getItem('lumicast.tab')||'start',false);}catch{showTab('start',false);}
   const controls=[readOoc,readCard,introMake,another,introRevise,findCast,groupMake,groupAnother,groupRevise,groupLooks,introCopy,introCopyUndesired,translate,studio,sendBack,writeMoss,again,save,refreshButton,testGel,saveNotes,saveQuality,startOver,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
