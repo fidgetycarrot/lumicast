@@ -1,7 +1,7 @@
 import type { SpindleAPI, GenerationRequestDTO } from 'lumiverse-spindle-types';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { BooruDictionary, testGelbooru } from './dictionary';
-import { Translator } from './engine';
+import { Translator, unhide } from './engine';
 import { buildIntro, INTRO, introRequest, type IntroInput } from './intro';
 import { buildGroup, CAST_MAX, GROUP, groupRequest, type GroupInput, type GroupMember } from './group';
 import { answersOoc, CARD, CAST, entryComment, entryContent, lastOocExchange, parseCast, type CardRead, type CastRead, type CastSaved, type ChatLine } from './cast';
@@ -26,7 +26,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
     await s.load;
   };
   const dictionaryFor=(s:UserState)=>s.dictionary ??= new BooruDictionary(async url=> {
-    const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.22.1 (tag metadata client)'}}));
+    const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.22.2 (tag metadata client)'}}));
     if(typeof response.status!=='number'||typeof response.body!=='string')throw new Error('Invalid proxy response.');
     return {status:response.status,body:response.body};
   },{user:s.settings!.gelUser,key:s.settings!.gelKey});
@@ -70,7 +70,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
       const settings=s.settings!;
       /** Fails with the missing permissions named, in the words of the Extensions page. */
       const need=(list:string[])=>{const missing=list.filter(p=>!api.permissions.has(p as never));if(missing.length)throw new Error(`Grant LumiCast these permissions in Extensions: ${missing.join(', ')}.`);};
-      const chatLines=async(chatId:string):Promise<ChatLine[]>=>(await api.chat.getMessages(chatId)).map(m=>({id:m.id,role:m.role,content:typeof m.content==='string'?m.content:''}));
+      const chatLines=async(chatId:string):Promise<ChatLine[]>=>(await api.chat.getMessages(chatId)).map(m=>({id:m.id,role:m.role,content:typeof m.content==='string'?unhide(m.content):''}));
       /**
        * The Cast lorebook belongs to the chat, so a character met in one story never turns up in a replay of
        * the same card. One entry per character, found again by its comment, so saving twice updates instead of
@@ -258,7 +258,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
         const entered=gelCredentials(text(v.gelUser ?? '','Gelbooru user',300),v.gelKey ? text(v.gelKey,'Gelbooru key',300) : '');
         const credentials={user:entered.user||settings.gelUser,key:entered.key||settings.gelKey};
         const outcome=await testGelbooru(async url=> {
-          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.22.1 (tag metadata client)'}}));
+          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.22.2 (tag metadata client)'}}));
           return {status:Number(response.status),body:typeof response.body==='string'?response.body:''};
         },credentials);
         const unsaved=credentials.user!==settings.gelUser||credentials.key!==settings.gelKey;
@@ -570,7 +570,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
       if (closed||!payload?.chatId||!payload.messageId||payload.error) return;
       if (!api.permissions.has('chat_mutation' as never)) return;
       void api.chat.getMessages(payload.chatId).then(messages=>{
-        const lines=messages.map(m=>({id:m.id,role:m.role,content:typeof m.content==='string'?m.content:''}));
+        const lines=messages.map(m=>({id:m.id,role:m.role,content:typeof m.content==='string'?unhide(m.content):''}));
         if (!closed&&answersOoc(lines,payload.messageId!)) api.sendToFrontend({type:'lumicast:ooc',chatId:payload.chatId},userId);
       }).catch(()=>{/* best effort */});
     });

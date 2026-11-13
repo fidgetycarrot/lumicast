@@ -155,7 +155,12 @@ export function json(raw: string): Record<string, unknown> {
   throw new OutputError('The model did not return valid translator JSON. Select a generative model that follows JSON instructions and try again.');
 }
 // Small models retype quotes and dashes when copying a passage; that is not fabrication.
-export const fold = (s: string) => s.normalize('NFKC').replace(/[‘’‚′]/g, "'").replace(/[“”″]/g, '"').replace(/…/g, '...').replace(/\s*[‐-―−-]+\s*/g, '-').replace(/\s+/g, ' ').trim().toLowerCase();
+/**
+ * Some presets write with invisible look-alike spaces (the blank Braille cell ⠀, Hangul fillers) to slip past
+ * filters, and zero-width characters inside words. Read them as a space, or as nothing.
+ */
+export const unhide = (s: string) => s.replace(/[\u2800\u3164\u115F\u1160\uFFA0\u2000-\u200A\u202F\u205F\u3000]/g, ' ').replace(/[\u200B-\u200D\u2060\uFEFF\u00AD]/g, '');
+export const fold = (s: string) => unhide(s).normalize('NFKC').replace(/[‘’‚′]/g, "'").replace(/[“”″]/g, '"').replace(/…/g, '...').replace(/\s*[‐-―−-]+\s*/g, '-').replace(/\s+/g, ' ').trim().toLowerCase();
 const optional = <T>(read: () => T, fallback: T): T => { try { return read(); } catch { return fallback; } };
 
 /** Ungrounded traits and malformed tags are skipped singly; one slip does not void the rest. */

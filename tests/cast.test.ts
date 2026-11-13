@@ -25,3 +25,16 @@ test('cleaned descriptions keep only characters and other names the reply actual
   expect(()=>parseCast('{"nope":1}',answer)).toThrow('character list');
   expect(entryContent('Maren',' Maren is tall. ')).toBe("[Maren's appearance]\nMaren is tall.");
 });
+
+test('a reply written with blank Braille cells for spaces still finds its characters', () => {
+  const b = (s: string) => s.replace(/ /g, '⠀');
+  const ex = lastOocExchange([
+    {id:'1', role:'user', content:b('[ooc] what does Dina look like?')},
+    {id:'2', role:'assistant', content:b('[OOC // RP PAUSED] Dina Placeholder has shoulder-length straight black hair and thin metallic glasses.')},
+  ])!;
+  expect(ex.answer).toContain('Dina Placeholder has');
+  const raw = JSON.stringify({characters:[{name:'Dina Placeholder', aliases:['Dina'], description:'Dina Placeholder has shoulder-length straight black hair.'}]});
+  expect(parseCast(raw, ex.answer).map(c => c.name)).toEqual(['Dina Placeholder']);
+  expect(parseCast(raw, b('Dina Placeholder has black hair')).map(c => c.aliases)).toEqual([['Dina']]);
+  expect(answersOoc([{id:'1', role:'user', content:b('[ooc] hi')}, {id:'2', role:'assistant', content:'x'}], '2')).toBe(true);
+});

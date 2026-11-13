@@ -1,4 +1,6 @@
-# LumiCast 0.22.1
+# LumiCast 0.22.2
+
+**v0.22.2 reads [ooc] replies written with invisible look-alike spaces.** Some presets put a blank Braille cell (⠀) or similar where every space should be. LumiCast now reads those as normal spaces, so the names it gets back match the reply instead of being thrown out.
 
 **v0.22.1 makes the NovelAI cast picture keep people apart better.** People are now listed left to right, the base prompt says that order in one sentence ("From left to right: the femboy with blonde hair, the man with dark hair"), a feminine man opens with `1boy, femboy` instead of `boy, male focus`, and other people are called "another" inside a character's block. Copy all is now the suggested way to use it. This is the form Lumi Studio 1.28.0 tested.
 
