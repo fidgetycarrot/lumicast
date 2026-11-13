@@ -365,6 +365,13 @@ test('an [ooc] reply becomes clean descriptions, saved once to a Cast lorebook o
   h.setResponses([{traits:[{id:'t1',group:'hair',evidence:'shaved head',tags:['very_short_hair'],detail:'A shaved head'}]},{drop:[],captions:{character:'A shaved head.'},issues:[]}]);
   Array.from(entries[1].querySelectorAll('button')).find(x=>x.textContent==='Make the Studio character')!.click();await until(()=>named(h.root,'tags').value!=='');
   expect(named(h.root,'source').value).toBe('Tobin is a wiry boy with a shaved head.');
+  // The translated character can go to the lorebook from its sheet, with no model call.
+  const calls=h.calls.filter(c=>(c as unknown[])[0]==='generation').length;
+  const loaded=Array.from(h.root.querySelectorAll('button')).filter(x=>x.textContent==='Save to Cast lorebook').at(-1)!;
+  expect(entries.some(e=>e.contains(loaded))).toBe(false);
+  loaded.click();await until(()=>h.root.textContent!.includes('Saved Tobin in'));
+  expect(h.story.entries.find(e=>e.comment==='LumiCast: Tobin')!.content).toBe("[Tobin's appearance]\nTobin is a wiry boy with a shaved head.");
+  expect(h.calls.filter(c=>(c as unknown[])[0]==='generation').length).toBe(calls);
 });
 test('[ooc] replies explain what is missing: no chat, no question, no reply yet, permissions',async()=> {
   dom();const h=harness();cleanups.push(h.stop);const rpc=createRpc(h.ctx);cleanups.push(()=>rpc.destroy());

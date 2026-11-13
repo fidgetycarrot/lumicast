@@ -1,4 +1,6 @@
-# LumiCast 0.22.2
+# LumiCast 0.22.3
+
+**v0.22.3 adds Save to Cast lorebook on the character sheet.** It saves the description you translated to this chat's Cast lorebook as it is, with no model call, so you don't need the [ooc] list to still be open.
 
 **v0.22.2 reads [ooc] replies written with invisible look-alike spaces.** Some presets put a blank Braille cell (⠀) or similar where every space should be. LumiCast now reads those as normal spaces, so the names it gets back match the reply instead of being thrown out.
 

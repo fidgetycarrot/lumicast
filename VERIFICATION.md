@@ -279,3 +279,7 @@ Translations became slow once Gelbooru credentials started working: every tag al
 - Cause confirmed: with U+2800 between words, "Dina Placeholder" from the model did not match "Dina⠀Placeholder" in the reply, so the name check dropped every character and the panel said none were found.
 - Fix: chat text is read with blank Braille cells, Hangul fillers and odd-width spaces turned into spaces and zero-width characters removed; the same happens inside every name and tag check.
 - Tested (unit): a fully Braille-spaced [ooc] question and reply is found, its character is kept, and aliases match.
+
+## v0.22.3: Save to Cast lorebook from the sheet
+
+- Tested (fake host): after Make the Studio character, the sheet's Save to Cast lorebook writes the description under the character's name with no generation call; a repeated name line at the top is dropped.

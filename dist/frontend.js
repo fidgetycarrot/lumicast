@@ -761,6 +761,28 @@ ${text}`;
   evidence.className = "lc-sub";
   evidence.append(el("summary", "Where each tag came from"), provenance, issues, sourceQuotes);
   sheetCard.append(evidence);
+  const loreState = el("small");
+  loreState.className = "lc-muted";
+  const saveLoaded = button("Save to Cast lorebook", async () => {
+    const who = characterName();
+    let text = source.value.trim();
+    if (!text)
+      throw new Error("There is no description to save. Put one in “Describe a character” first.");
+    if (!who)
+      throw new Error("LumiCast could not tell the character’s name. Start the description with it, then try again.");
+    if (text.split(`
+`)[0].trim().toLowerCase() === who.toLowerCase())
+      text = text.split(`
+`).slice(1).join(`
+`).trim();
+    const saved = await rpc.request("castSave", { name: who, aliases: [], description: text });
+    loreState.textContent = `${saved.updated ? "Updated" : "Saved"} ${who} in “${saved.book}”${saved.createdBook ? ", a new lorebook for this chat only" : ""}. No model call.`;
+    notify(`${who} ${saved.updated ? "updated" : "saved"} in the Cast lorebook.`);
+  });
+  const loreBox = el("div");
+  loreBox.className = "lc-sub";
+  loreBox.append(el("h2", "Cast lorebook"), el("p", "Saves the description from “Describe a character” to this chat’s Cast lorebook, so the story model keeps the character’s looks. No model call."), row(saveLoaded), loreState);
+  sheetCard.append(loreBox);
   const refine = card("Refine: fix what the pictures get wrong");
   const feedback = named(el("textarea"), "feedback");
   feedback.rows = 3;
@@ -1345,7 +1367,7 @@ ${text}`;
   tabBar.style.order = "2";
   working.style.order = "3";
   status.style.order = "4";
-  const footer = el("p", "LumiCast 0.22.2 · Draft stays in this tab until reload.");
+  const footer = el("p", "LumiCast 0.22.3 · Draft stays in this tab until reload.");
   footer.style.order = "99";
   app.append(intro, settings, status, studioNews, castCard, input, gapsCard, output, refine, sheetCard, introCard, groupCard, searchCard, tabBar, working, ...leads, footer);
   try {
@@ -1353,7 +1375,7 @@ ${text}`;
   } catch {
     showTab("start", false);
   }
-  const controls = [readOoc, readCard, introMake, another, introRevise, findCast, groupMake, groupAnother, groupRevise, groupLooks, introCopy, introCopyUndesired, translate, studio, sendBack, writeMoss, again, save, refreshButton, testGel, saveNotes, saveQuality, startOver, verify, rebuild, copy, copyTags, copyProse, suggest, apply, search, ...Object.values(sheet).map((f) => f.copyField)];
+  const controls = [readOoc, readCard, saveLoaded, introMake, another, introRevise, findCast, groupMake, groupAnother, groupRevise, groupLooks, introCopy, introCopyUndesired, translate, studio, sendBack, writeMoss, again, save, refreshButton, testGel, saveNotes, saveQuality, startOver, verify, rebuild, copy, copyTags, copyProse, suggest, apply, search, ...Object.values(sheet).map((f) => f.copyField)];
   let shareTimer;
   function share() {
     clearTimeout(shareTimer);

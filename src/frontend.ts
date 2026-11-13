@@ -295,6 +295,20 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   const provenance=el('div');const issues=el('div');const sourceQuotes=el('div');
   const evidence=named(el('details'),'sources');evidence.className='lc-sub';evidence.append(el('summary','Where each tag came from'),provenance,issues,sourceQuotes);
   sheetCard.append(evidence);
+  // The description already translated goes to the Cast lorebook as it is: no model call.
+  const loreState=el('small');loreState.className='lc-muted';
+  const saveLoaded=button('Save to Cast lorebook',async()=> {
+    const who=characterName();let text=source.value.trim();
+    if(!text)throw new Error('There is no description to save. Put one in “Describe a character” first.');
+    if(!who)throw new Error('LumiCast could not tell the character’s name. Start the description with it, then try again.');
+    if(text.split('\n')[0].trim().toLowerCase()===who.toLowerCase())text=text.split('\n').slice(1).join('\n').trim();
+    const saved=await rpc.request<CastSaved>('castSave',{name:who,aliases:[],description:text});
+    loreState.textContent=`${saved.updated?'Updated':'Saved'} ${who} in “${saved.book}”${saved.createdBook?', a new lorebook for this chat only':''}. No model call.`;
+    notify(`${who} ${saved.updated?'updated':'saved'} in the Cast lorebook.`);
+  });
+  const loreBox=el('div');loreBox.className='lc-sub';
+  loreBox.append(el('h2','Cast lorebook'),el('p','Saves the description from “Describe a character” to this chat’s Cast lorebook, so the story model keeps the character’s looks. No model call.'),row(saveLoaded),loreState);
+  sheetCard.append(loreBox);
 
   // ── 03 Refine, with the notes it learns from ──
   const refine=card('Refine: fix what the pictures get wrong');
@@ -594,10 +608,10 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   panel('pictures','3 · Pictures','Prompts for show-off pictures: an intro card for the loaded character, or a cast picture of several people from the story. Neither changes a character.',introCard,groupCard);
   panel('setup','Setup','Set once: which model LumiCast uses and your tag services. The last two are extras most people will not need.',settings,output,searchCard);
   intro.style.order='1';tabBar.style.order='2';working.style.order='3';status.style.order='4';
-  const footer=el('p','LumiCast 0.22.2 · Draft stays in this tab until reload.');footer.style.order='99';
+  const footer=el('p','LumiCast 0.22.3 · Draft stays in this tab until reload.');footer.style.order='99';
   app.append(intro,settings,status,studioNews,castCard,input,gapsCard,output,refine,sheetCard,introCard,groupCard,searchCard,tabBar,working,...leads,footer);
   try{showTab(localStorage.getItem('lumicast.tab')||'start',false);}catch{showTab('start',false);}
-  const controls=[readOoc,readCard,introMake,another,introRevise,findCast,groupMake,groupAnother,groupRevise,groupLooks,introCopy,introCopyUndesired,translate,studio,sendBack,writeMoss,again,save,refreshButton,testGel,saveNotes,saveQuality,startOver,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
+  const controls=[readOoc,readCard,saveLoaded,introMake,another,introRevise,findCast,groupMake,groupAnother,groupRevise,groupLooks,introCopy,introCopyUndesired,translate,studio,sendBack,writeMoss,again,save,refreshButton,testGel,saveNotes,saveQuality,startOver,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
 
   // Every change to the sheet is offered to Lumi Studio, a moment after typing stops.
   let shareTimer:ReturnType<typeof setTimeout>|undefined;
