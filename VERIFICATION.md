@@ -283,3 +283,9 @@ Translations became slow once Gelbooru credentials started working: every tag al
 ## v0.22.3: Save to Cast lorebook from the sheet
 
 - Tested (fake host): after Make the Studio character, the sheet's Save to Cast lorebook writes the description under the character's name with no generation call; a repeated name line at the top is dropped.
+
+## v0.22.4: no bare removal from a same-words swap
+
+- Cause confirmed from the code: a phrase identical to an existing sheet item is dropped as a duplicate, so a "swap bright_hazel_eyes for 'bright hazel eyes'" reached the panel as a removal only.
+- Fix: a removal whose tag matches a suggested phrase word for word is withdrawn with a notice; the Refine prompt also says tags are saved with spaces and must not be swapped for the same words.
+- Tested (unit): that case gives no proposals and the notice; an already-present phrase with no removal is still dropped quietly.

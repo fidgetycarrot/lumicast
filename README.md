@@ -1,4 +1,6 @@
-# LumiCast 0.22.3
+# LumiCast 0.22.4
+
+**v0.22.4 fixes a Refine suggestion that could delete a trait.** Refine sometimes swaps a tag that isn't a real tag for a phrase in the same words. Lumi Studio saves tags with spaces, so that swap changes nothing, and LumiCast was offering only the removal half. Now the tag stays and a note says why.
 
 **v0.22.3 adds Save to Cast lorebook on the character sheet.** It saves the description you translated to this chat's Cast lorebook as it is, with no model call, so you don't need the [ooc] list to still be open.
 

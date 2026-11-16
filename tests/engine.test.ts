@@ -193,7 +193,7 @@ test('refine proposes only grounded changes: known tags to remove or weight, ver
     remove:[{tag:'blue_eyes',why:'pulls the wrong colour'},{tag:'green_eyes',why:'not in the prompt'}],
     weight:[{tag:'trap',weight:1.8,why:'still ignored'},{tag:'1boy',weight:44,why:'bad number'},{tag:'not_here',weight:1.5}],
     add:[{tag:'violet_eyes',weight:1.3,why:'asked colour'},{tag:'purple_eyes',why:'duplicate after alias'},{tag:'very_feminine_boy',why:'guess'},{tag:'1boy',why:'already there'},{tag:'androgynous',weight:null,why:'softens the read'}],
-    phrases:[{phrase:'Soft_Feminine (face).',why:'no tag says it'},{phrase:'blue eyes',why:'already a tag'},{phrase:'x',why:'too short'}],caption:'ignored now'},{description:'desc',stated:'femboy',notes:'my notes'},dict);
+    phrases:[{phrase:'Soft_Feminine (face).',why:'no tag says it'},{phrase:'x',why:'too short'}],caption:'ignored now'},{description:'desc',stated:'femboy',notes:'my notes'},dict);
   // The caption is no longer sent or suggested: it only ever fed LumiCast's own prompt.
   expect(JSON.parse(inputs[0])).toEqual({tags:['1boy','(trap:1.4)','blue_eyes'],feedback:'Reads too masculine and the eyes should be purple.',description:'desc',stated:'femboy',notes:'my notes'});
   expect(result.reply).toBe('The type tag is being outweighed.');
@@ -391,4 +391,10 @@ test('the MOSS description is plain, starts in lower case for “Name, …”, a
   // A number the description never gave means the model invented something; nothing is better than that.
   expect((await ask('A 25-year-old young man with brown curls.')).sheet.moss).toBe('');
   expect((await ask('')).sheet.moss).toBe('');
+});
+test('refine never offers a tag-for-same-words swap as a bare removal',async()=> {
+  const {result}=await refineWith({reply:'Swapped for a phrase.',remove:[{tag:'bright_hazel_eyes',why:'not a real tag'}],add:[],weight:[],phrases:[{phrase:'bright hazel eyes',why:'states eye colour'},{phrase:'long hair',why:'already a tag'}]},
+    {tags:['1girl','bright_hazel_eyes','long_hair'],feedback:'Not a lot of face tags.'});
+  expect(result.proposals).toEqual([]);
+  expect(result.notices.join(' ')).toContain('“bright hazel eyes” stays as it is');
 });

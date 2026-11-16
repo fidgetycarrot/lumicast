@@ -740,6 +740,7 @@ Return only JSON: {"reply":"","remove":[{"tag":"","why":""}],"add":[{"tag":"","w
 - reply: two or three plain sentences to the user saying what probably went wrong and the idea behind the changes. If the feedback is too vague to act on, ask one question and propose nothing.
 - remove and weight name only tags from the current list. A weight of 1 clears a weight.
 - add holds real Danbooru tags, lowercase with underscores, at most 8. Each is checked against the live tag list and dropped if it does not exist, so offer the two or three likeliest names for a trait instead of one long shot. Give a weight only when the trait was already being ignored.
+- Lumi Studio saves every tag with spaces instead of underscores, so a tag that is not a real tag is already read as a plain phrase. Never swap a tag for a phrase in the same words.
 - phrases holds at most 3 short plain phrases (2 to 8 lowercase words, spaces not underscores, no weights, no commas) saved beside the tags, such as "thin string-bikini tan lines". Use one when no real tag says a trait, or to pin down what the tags leave loose (shape, placement, size, how much). Nothing about pose, expression or setting. remove can also name a current phrase that pulls the wrong way.
 - why is a few words the user can judge the change by.
 Make the smallest set of changes that answers the feedback. Do not restyle the character, and do not add traits that neither the feedback nor the description mentions.
@@ -1301,6 +1302,15 @@ class Translator {
         continue;
       proposals.push({ kind: "phrase", text: phrase, why: optional(() => text(r.why, "reason", 300), "") });
     }
+    const said = new Set((Array.isArray(data.phrases) ? data.phrases : []).map(record).map((r) => optional(() => text(r.phrase, "phrase", 120), "").toLowerCase().replace(/[\s_]+/g, " ").replace(/[.!?]+$/, "").trim()).filter(Boolean));
+    for (let i = proposals.length - 1;i >= 0; i--) {
+      const p = proposals[i];
+      const plain = (p.tag ?? "").toLowerCase().replace(/[\s_]+/g, " ");
+      if (p.kind === "remove" && said.has(plain)) {
+        proposals.splice(i, 1);
+        notices.add(`\u201C${plain}\u201D stays as it is: the suggested phrase uses the same words, and Lumi Studio saves tags with spaces, so the swap would change nothing.`);
+      }
+    }
     const reply = optional(() => text(data.reply, "reply", 1200), "") || (proposals.length ? "Suggested changes are below." : "The model suggested no changes. Try describing what the image got wrong more specifically.");
     return { reply, proposals, notices: [...notices], model };
   }
@@ -1747,7 +1757,7 @@ function setupBackend(api, options = {}) {
     await s.load;
   };
   const dictionaryFor = (s) => s.dictionary ??= new BooruDictionary(async (url) => {
-    const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.22.3 (tag metadata client)" } }));
+    const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.22.4 (tag metadata client)" } }));
     if (typeof response.status !== "number" || typeof response.body !== "string")
       throw new Error("Invalid proxy response.");
     return { status: response.status, body: response.body };
@@ -2070,7 +2080,7 @@ function setupBackend(api, options = {}) {
         const entered = gelCredentials(text(v.gelUser ?? "", "Gelbooru user", 300), v.gelKey ? text(v.gelKey, "Gelbooru key", 300) : "");
         const credentials = { user: entered.user || settings.gelUser, key: entered.key || settings.gelKey };
         const outcome = await testGelbooru(async (url) => {
-          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.22.3 (tag metadata client)" } }));
+          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.22.4 (tag metadata client)" } }));
           return { status: Number(response.status), body: typeof response.body === "string" ? response.body : "" };
         }, credentials);
         const unsaved = credentials.user !== settings.gelUser || credentials.key !== settings.gelKey;
