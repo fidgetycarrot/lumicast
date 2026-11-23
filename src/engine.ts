@@ -263,19 +263,32 @@ const FIGURE_WORDS = /\b(?:curves?|curvy|frame|build|figure|physique|proportions
  * exaggerated), plain large breasts become medium at 1.3 (V5 draws "large" far past real life), and only the
  * first four figure tags stay. Tags from the user's notes are never touched.
  */
-export function leanBody<T extends {name: string; weight?: number}>(rows: T[], mine: (row: T) => boolean): {rows: T[]; removed: string[]; resized: boolean} {
-  const removed: string[] = []; let resized = false; let figure = 0;
+/**
+ * NovelAI V5 draws size and strength tags past real life, so each is written one step down and weighted 1.3,
+ * which lands between the two steps. Tested on large breasts; the rest follow the same ladder. A lower step is
+ * only used once the tag service confirms it exists.
+ */
+export const STEP_DOWN: Record<string, string> = {
+  gigantic_breasts:'huge_breasts', huge_breasts:'large_breasts', large_breasts:'medium_breasts', big_breasts:'medium_breasts',
+  large_pectorals:'pectorals', huge_ass:'large_ass', muscular:'toned', muscular_male:'toned_male', muscular_female:'toned',
+};
+/** Steps known to exist without a lookup; tests and the engine start from these. */
+export const KNOWN_STEPS = new Map([['large_breasts','medium_breasts'],['big_breasts','medium_breasts']]);
+export function leanBody<T extends {name: string; weight?: number}>(rows: T[], mine: (row: T) => boolean, steps: Map<string, string> = KNOWN_STEPS): {rows: T[]; removed: string[]; resized: boolean; stepped: [string, string][]} {
+  const removed: string[] = []; const stepped: [string, string][] = []; let figure = 0;
   const full = rows.some(r => FULL.test(r.name));
   const out: T[] = [];
   for (const row of rows) {
     if (mine(row)) { out.push(row); continue; }
     if (full && SLIM.test(row.name)) { removed.push(row.name); continue; }
     let r = row;
-    if (/^(?:large|big)_breasts$/.test(r.name) && !r.weight && !rows.some(o => o !== row && /^medium_breasts$/.test(o.name))) { r = {...r, name:'medium_breasts', weight:1.3}; resized = true; }
+    // A weight the user gave stays as it is, and a lower step already on the sheet is not written twice.
+    const lower = steps.get(r.name);
+    if (lower && !r.weight && !rows.some(o => o !== row && o.name === lower)) { stepped.push([r.name, lower]); r = {...r, name:lower, weight:1.3}; }
     if (FIGURE.test(r.name) && ++figure > 4) { removed.push(r.name); continue; }
     out.push(r);
   }
-  return {rows:out, removed, resized};
+  return {rows:out, removed, resized:stepped.length > 0, stepped};
 }
 /** The model's face picks, as plain sentences; anything about the body, a mood or a loud look is left out. */
 export function cleanAdded(value: unknown): string {
@@ -390,6 +403,12 @@ export class Translator {
         candidates.push({...resolved, evidence:trait.evidence, traitId:trait.id, ...weighted});
       }
     });
+    // Lower size steps for the tags on this sheet, confirmed live; a step the boorus lack leaves the tag as it is.
+    const steps = new Map(KNOWN_STEPS);
+    for (const from of [...new Set(candidates.map(r => r.name))].filter(n => STEP_DOWN[n] && !steps.has(n))) {
+      try { const lower = await this.dictionary.resolve(STEP_DOWN[from], signal); if (lower && lower.name !== from) steps.set(from, lower.name); }
+      catch { signal.throwIfAborted(); }
+    }
     const fixed = size?.tag ?? '';
     let review: Record<string, unknown> = {}; let reviewed = true;
     try {
@@ -424,10 +443,10 @@ export class Translator {
       const free = kept.filter(r => !mine(r));
       const tidied = [...tidy(removeConflicts(free)), ...kept.filter(mine)].sort((a, b) => order(a) - order(b));
       if (tidied.length < kept.length) own.add('Conflicting tags (two hair colours, lengths, eye colours or sizes) were removed together; the caption keeps the wording.');
-      const lean = leanBody(tidied, mine);
+      const lean = leanBody(tidied, mine, steps);
       const tags = lean.rows;
       if (lean.removed.length) own.add(`Left out to keep the body lean: ${lean.removed.map(n => n.replace(/_/g, ' ')).join(', ')}. NovelAI V5 exaggerates a figure described too many ways, and forces poses to show it.`);
-      if (lean.resized) own.add('Large breasts is written as medium breasts at 1.3: NovelAI V5 draws plain “large” much bigger than real life.');
+      if (lean.stepped.length) own.add(`Written one step smaller at 1.3, because NovelAI V5 draws these bigger than real life: ${lean.stepped.map(([a, b]) => `${a.replace(/_/g, ' ')} → ${b.replace(/_/g, ' ')}`).join(', ')}.`);
       const prose = SCOPES.filter(segment => shown.some(t => segmentOf(t.group) === segment)).map(segment => {
         const composed = caption(captions[segment], grounded);
         if (reviewed && !composed) own.add('The model wrote no usable caption for part of this, so that part uses the first-pass wording.');

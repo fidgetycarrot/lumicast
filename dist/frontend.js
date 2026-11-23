@@ -176,6 +176,7 @@ function removeConflicts(rows) {
   }
   return rows.filter((r) => !excluded.has(r.name));
 }
+var KNOWN_STEPS = new Map([["large_breasts", "medium_breasts"], ["big_breasts", "medium_breasts"]]);
 
 // src/safe-id.ts
 var HEX = "0123456789abcdef";
@@ -1382,7 +1383,7 @@ ${picked}`;
   tabBar.style.order = "2";
   working.style.order = "3";
   status.style.order = "4";
-  const footer = el("p", "LumiCast 0.23.0 · Draft stays in this tab until reload.");
+  const footer = el("p", "LumiCast 0.23.1 · Draft stays in this tab until reload.");
   footer.style.order = "99";
   app.append(intro, settings, status, studioNews, castCard, input, gapsCard, output, refine, sheetCard, introCard, groupCard, searchCard, tabBar, working, ...leads, footer);
   try {

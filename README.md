@@ -1,4 +1,6 @@
-# LumiCast 0.23.0
+# LumiCast 0.23.1
+
+**v0.23.1 applies the large-breasts finding to every size ladder.** NovelAI V5 draws size and strength tags bigger than real life, so each is written one step smaller at 1.3: gigantic → huge and huge → large breasts, large → medium breasts, large pectorals → pectorals, huge ass → large ass, muscular → toned (and the male and female forms). A lower step is used only when the tag service confirms it exists; otherwise the tag stays as written. A weight you gave is never changed, and the notices list every step.
 
 **v0.23.0 keeps faces steady and bodies lean, for NovelAI V5.**
 - **A face when the description has none.** When a description leaves the face open, LumiCast picks one during the translation you already run: bangs, eye shape, eyebrows, nose and jaw, and at most one mark or makeup detail. The picks are plain everyday features, never loud, and chosen to differ from the other people in this chat's Cast lorebook. They are written into the end of the description as "Added by LumiCast: …", so you can change them, the next translation reads the same face, and Save to Cast lorebook gives the story model the same face. A description that already has LumiCast's picks never gets a second set. The Paige batch does not pick faces; Paige should write them into its cards.

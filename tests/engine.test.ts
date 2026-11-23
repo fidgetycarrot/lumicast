@@ -298,7 +298,7 @@ test('an unusual height becomes a tall tag; ordinary, mixed and absent heights a
   const man=[{id:'s',group:'subject',evidence:'Jason Slatz',tags:['1boy'],detail:'A 24-year-old man'},{id:'b',group:'body',evidence:'Broad chest',tags:['broad_shoulders','muscular_male'],detail:'A broad chest'}];
   const source='Jason Slatz, 6\'8" (203 cm). Broad chest.';
   const {result}=await run(source,{traits:man},{});
-  expect(result.sheet.appearance).toBe('broad shoulders, muscular male, tall male, very tall');expect(result.tags.map(t=>t.name)).toContain('tall_male');
+  expect(result.sheet.appearance).toBe('broad shoulders, (toned male:1.3), tall male, very tall');expect(result.tags.map(t=>t.name)).toContain('tall_male');
   expect(result.notices).toContain('A height of 203 cm was converted to tall_male and “very tall”.');
   const woman=await run('She is 5\'11".',{traits:[{id:'s',group:'subject',evidence:'She',tags:['1girl'],detail:'A woman'}]},{});
   expect(woman.result.tags.map(t=>t.name)).toEqual(['1girl','tall_female']);expect(woman.result.sheet.appearance).toBe('');
@@ -430,4 +430,15 @@ test('the body stays lean: slim words go beside a full figure, large becomes med
   // The user's own tags are never touched, and a weight they gave stays.
   const mine=leanBody([{name:'slim'},{name:'curvy'},{name:'large_breasts',weight:1.2}],r=>r.name==='slim');
   expect(mine.rows.map(r=>r.name)).toEqual(['slim','curvy','large_breasts']);
+});
+test('every size ladder steps down once at 1.3, but only to a step the tag service confirms',async()=> {
+  const body={id:'b',group:'body',evidence:'huge chest, big rear, heavy muscle',tags:['huge_breasts','huge_ass','muscular_female'],detail:'x'};
+  const known=new Set(['huge_breasts','large_breasts','huge_ass','muscular_female','toned']);
+  const dict={...dictionary,resolve:async(name:string)=>known.has(name)?dictionary.resolve(name,signal()):null};
+  const {result}=await run('A huge chest, big rear, heavy muscle.',{traits:[body]},{drop:[],captions:{}},{},dict);
+  // large_ass is not a live tag here, so huge_ass stays as written.
+  expect(result.sheet.appearance).toBe('(large breasts:1.3), huge ass, (toned:1.3)');
+  expect(result.notices.join(' ')).toContain('huge breasts → large breasts, muscular female → toned');
+  // Without a lookup, only the step that was tested on real pictures is known.
+  expect(leanBody([{name:'huge_breasts'},{name:'large_breasts'}],()=>false).rows.map(r=>r.name)).toEqual(['huge_breasts','medium_breasts']);
 });

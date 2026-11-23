@@ -880,9 +880,21 @@ var SLIM = /^(?:skinny|slim|slender|narrow_waist)$/;
 var COLOURS = /\b(?:black|white|gr[ae]y|silver|brown|blonde?|red|ginger|auburn|copper|blue|green|purple|violet|lavender|pink|magenta|orange|gold(?:en)?|yellow|amber|hazel|teal|turquoise|platinum|crimson|scarlet)\b/;
 var FULL = /^(?:curvy|voluptuous|wide_hips|thick_thighs|plump|chubby|(?:large|big|huge|gigantic)_breasts|(?:large|big|huge)_ass|hourglass_figure)$/;
 var FIGURE_WORDS = /\b(?:curves?|curvy|frame|build|figure|physique|proportions?|posture|hips?|waist|thighs?|breasts?|bust|chest|rear|ass|butt|buttocks|body|hourglass|voluptuous|muscles?|muscular|shoulders?|silhouette|legs?|arms?)\b/;
-function leanBody(rows, mine) {
+var STEP_DOWN = {
+  gigantic_breasts: "huge_breasts",
+  huge_breasts: "large_breasts",
+  large_breasts: "medium_breasts",
+  big_breasts: "medium_breasts",
+  large_pectorals: "pectorals",
+  huge_ass: "large_ass",
+  muscular: "toned",
+  muscular_male: "toned_male",
+  muscular_female: "toned"
+};
+var KNOWN_STEPS = new Map([["large_breasts", "medium_breasts"], ["big_breasts", "medium_breasts"]]);
+function leanBody(rows, mine, steps = KNOWN_STEPS) {
   const removed = [];
-  let resized = false;
+  const stepped = [];
   let figure = 0;
   const full = rows.some((r) => FULL.test(r.name));
   const out = [];
@@ -896,9 +908,10 @@ function leanBody(rows, mine) {
       continue;
     }
     let r = row;
-    if (/^(?:large|big)_breasts$/.test(r.name) && !r.weight && !rows.some((o) => o !== row && /^medium_breasts$/.test(o.name))) {
-      r = { ...r, name: "medium_breasts", weight: 1.3 };
-      resized = true;
+    const lower = steps.get(r.name);
+    if (lower && !r.weight && !rows.some((o) => o !== row && o.name === lower)) {
+      stepped.push([r.name, lower]);
+      r = { ...r, name: lower, weight: 1.3 };
     }
     if (FIGURE.test(r.name) && ++figure > 4) {
       removed.push(r.name);
@@ -906,7 +919,7 @@ function leanBody(rows, mine) {
     }
     out.push(r);
   }
-  return { rows: out, removed, resized };
+  return { rows: out, removed, resized: stepped.length > 0, stepped };
 }
 function cleanAdded(value) {
   if (typeof value !== "string")
@@ -1049,6 +1062,16 @@ class Translator {
         candidates.push({ ...resolved, evidence: trait.evidence, traitId: trait.id, ...weighted });
       }
     });
+    const steps = new Map(KNOWN_STEPS);
+    for (const from of [...new Set(candidates.map((r) => r.name))].filter((n) => STEP_DOWN[n] && !steps.has(n))) {
+      try {
+        const lower = await this.dictionary.resolve(STEP_DOWN[from], signal);
+        if (lower && lower.name !== from)
+          steps.set(from, lower.name);
+      } catch {
+        signal.throwIfAborted();
+      }
+    }
     const fixed = size?.tag ?? "";
     let review = {};
     let reviewed = true;
@@ -1086,12 +1109,12 @@ class Translator {
       const tidied = [...tidy(removeConflicts(free)), ...kept.filter(mine)].sort((a, b) => order(a) - order(b));
       if (tidied.length < kept.length)
         own.add("Conflicting tags (two hair colours, lengths, eye colours or sizes) were removed together; the caption keeps the wording.");
-      const lean = leanBody(tidied, mine);
+      const lean = leanBody(tidied, mine, steps);
       const tags = lean.rows;
       if (lean.removed.length)
         own.add(`Left out to keep the body lean: ${lean.removed.map((n) => n.replace(/_/g, " ")).join(", ")}. NovelAI V5 exaggerates a figure described too many ways, and forces poses to show it.`);
-      if (lean.resized)
-        own.add("Large breasts is written as medium breasts at 1.3: NovelAI V5 draws plain \u201Clarge\u201D much bigger than real life.");
+      if (lean.stepped.length)
+        own.add(`Written one step smaller at 1.3, because NovelAI V5 draws these bigger than real life: ${lean.stepped.map(([a, b]) => `${a.replace(/_/g, " ")} \u2192 ${b.replace(/_/g, " ")}`).join(", ")}.`);
       const prose = SCOPES.filter((segment) => shown.some((t) => segmentOf(t.group) === segment)).map((segment) => {
         const composed = caption(captions[segment], grounded);
         if (reviewed && !composed)
@@ -1833,7 +1856,7 @@ function setupBackend(api, options = {}) {
     await s.load;
   };
   const dictionaryFor = (s) => s.dictionary ??= new BooruDictionary(async (url) => {
-    const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.23.0 (tag metadata client)" } }));
+    const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.23.1 (tag metadata client)" } }));
     if (typeof response.status !== "number" || typeof response.body !== "string")
       throw new Error("Invalid proxy response.");
     return { status: response.status, body: response.body };
@@ -2161,7 +2184,7 @@ function setupBackend(api, options = {}) {
         const entered = gelCredentials(text(v.gelUser ?? "", "Gelbooru user", 300), v.gelKey ? text(v.gelKey, "Gelbooru key", 300) : "");
         const credentials = { user: entered.user || settings.gelUser, key: entered.key || settings.gelKey };
         const outcome = await testGelbooru(async (url) => {
-          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.23.0 (tag metadata client)" } }));
+          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.23.1 (tag metadata client)" } }));
           return { status: Number(response.status), body: typeof response.body === "string" ? response.body : "" };
         }, credentials);
         const unsaved = credentials.user !== settings.gelUser || credentials.key !== settings.gelKey;

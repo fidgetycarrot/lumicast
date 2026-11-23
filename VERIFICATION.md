@@ -296,3 +296,8 @@ Translations became slow once Gelbooru credentials started working: every tag al
 - Tested (unit): slim words go beside a full figure; large or big breasts become medium at 1.3 unless the user weighted them; a fifth figure tag and later are left out; the user's notes tags are untouched; sheet phrases skip figure words, keep two at most, and drop a repeat of a tagged item unless it adds a colour.
 - Tested (fake host): the panel writes the picks into the description, shows Attitude, and a second Translate asks for no new picks; attitude goes to Lumi Studio with the sheet.
 - Not tested: live model picks and live NovelAI pictures. Suggested check: Dina on a known seed, before and after.
+
+## v0.23.1: one step down on every size ladder
+
+- Tested (unit): huge breasts → large at 1.3 and muscular female → toned at 1.3 when those tags exist; huge ass stays when large ass is not a live tag; muscular male → toned male at 1.3 on the height fixture; without lookups only large → medium is applied.
+- Not tested on real pictures except large breasts; the others follow the same pattern.
