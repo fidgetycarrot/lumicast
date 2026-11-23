@@ -137,6 +137,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
     const toPrompt=button('Make the Studio character',async()=> {
       const who=name.value.trim();const text=description.value.trim();
       source.value=text.toLowerCase().startsWith(who.toLowerCase())?text:`${who}\n${text}`;revision++;
+      pendingEntry=description;
       await runTranslate();input.scrollIntoView?.({block:'start'});
     });
     // A card already tells the story model what its characters look like, so its entries need no lorebook.
@@ -156,11 +157,17 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   const input=card('Describe a character');
   const source=named(el('textarea'),'source');source.rows=7;source.maxLength=12_000;source.placeholder='Paste the character’s appearance. Narrator voice and scene detail are fine; they are filtered out.';
   const stated=named(el('input'),'stated');stated.maxLength=300;stated.autocomplete='off';stated.placeholder='e.g. femboy, android, green eyes, rose-pink gradient lips';
+  // The [ooc] or card entry a translation came from, so a picked face is written back into its description too.
+  let pendingEntry:HTMLTextAreaElement|null=null;
   const runTranslate=async()=> {
     if(!source.value.trim())throw new Error('Paste a character description first.');
-    const currentRevision=revision;
-    const next=await clocked<Translation>('translate',{description:source.value,stated:stated.value,connectionId:connection.value});
+    const currentRevision=revision;const entry=pendingEntry;pendingEntry=null;
+    const next=await clocked<Translation>('translate',{description:source.value,stated:stated.value,connectionId:connection.value,pick:true});
     if(revision!==currentRevision) {notify('The description changed during translation. Translate again to use the new wording.');return;}
+    // A face picked for what the description left open becomes part of the description, so it is the same face
+    // every time: the next translation reads it as written, and Save to Cast lorebook gives it to the story model.
+    const picked=next.added?`Added by LumiCast: ${next.added}`:'';
+    if(picked){source.value=`${source.value.trimEnd()}\n\n${picked}`;if(entry&&entry.isConnected&&!/added by lumicast:/i.test(entry.value))entry.value=`${entry.value.trimEnd()}\n\n${picked}`;}
     // Say what a re-run settled, so answering a gap never looks like nothing happened.
     const before=result?result.gaps.map(g=>g.what):[];
     // A new description is a new character, so Refine starts with a clean memory.
@@ -172,7 +179,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
     const outcome=before.length?[closed.length?`Pinned down: ${closed.join(', ')}.`:'',still.length?`Still open: ${still.join(', ')}.`:''].filter(Boolean).join(' '):'';
     const secs=(ms:number)=>`${Math.round(ms/1000)} s`;const took=next.timing?`Took ${secs(next.timing.total)}: model ${secs(next.timing.model)}, tag lookups ${secs(next.timing.lookups)}.`:'';
     showTab('character');
-    notify([before.length?`Translated again. ${outcome}`:'Translation ready.',took,studioRef?`Press ${sendBack.textContent} to send the new sheet there.`:'',!gelUser.value ? 'Gelbooru is not configured; verified tags use Danbooru.' : '',...next.views.scene.notices].filter(Boolean).join('\n'));
+    notify([before.length?`Translated again. ${outcome}`:'Translation ready.',picked?'The description left the face open, so LumiCast picked one and added it to the end of the description. Change any of it there and translate again if you like. Save to Cast lorebook so the story uses the same face.':'',took,studioRef?`Press ${sendBack.textContent} to send the new sheet there.`:'',!gelUser.value ? 'Gelbooru is not configured; verified tags use Danbooru.' : '',...next.views.scene.notices].filter(Boolean).join('\n'));
   };
   const translate=button('Translate',runTranslate,true);
   // A character made earlier comes back from Lumi Studio to be tweaked with Refine, then goes back with Fill from LumiCast.
@@ -273,7 +280,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   const gapsCard=el('section');gapsCard.className='lc-card';gapsCard.hidden=true;gapsCard.append(gapsBox);
   const statedAgain=el('input');statedAgain.maxLength=300;statedAgain.autocomplete='off';statedAgain.placeholder='e.g. short hair, rose-pink gradient lips';statedAgain.setAttribute('aria-label','Known facts');
   const again=button('Translate again',runTranslate);
-  const sheetField=(label:string,key:'countTag'|'subject'|'always'|'appearance'|'outfit'|'anatomy'|'moss',hint:string,long=false)=> {
+  const sheetField=(label:string,key:'countTag'|'subject'|'always'|'appearance'|'outfit'|'anatomy'|'moss'|'attitude',hint:string,long=false)=> {
     const box=long?el('textarea'):el('input');if(long)(box as HTMLTextAreaElement).rows=3;box.dataset.sheet=key;
     // The copy button sits on the label's line, so five fields do not become ten rows.
     box.addEventListener('input',()=>share());
@@ -291,6 +298,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
     outfit:sheetField('Default outfit tags','outfit','Clothing from the description, one whole garment per item, which suits both Anima and MOSS. Leave it out for a character whose clothes change with the story.',true),
     anatomy:sheetField('Conditional visible anatomy','anatomy','Explicit anatomy, kept out of the permanent tags so it never appears in scenes that do not show it. Set its rule in Lumi Studio.',true),
     moss:sheetField('Description for MOSS (plain English)','moss','Face and body only, in plain words, with nothing explicit, since NanoGPT refuses NSFW. MOSS presets in Lumi Studio use it word for word; Anima ignores it.',true),
+    attitude:sheetField('Attitude','attitude','A few plain words for how the character comes across, like “teasing, confident”. For Lumi Studio, to choose expressions and poses; it is not pasted into the prompt.'),
   };
   const provenance=el('div');const issues=el('div');const sourceQuotes=el('div');
   const evidence=named(el('details'),'sources');evidence.className='lc-sub';evidence.append(el('summary','Where each tag came from'),provenance,issues,sourceQuotes);
@@ -608,7 +616,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   panel('pictures','3 · Pictures','Prompts for show-off pictures: an intro card for the loaded character, or a cast picture of several people from the story. Neither changes a character.',introCard,groupCard);
   panel('setup','Setup','Set once: which model LumiCast uses and your tag services. The last two are extras most people will not need.',settings,output,searchCard);
   intro.style.order='1';tabBar.style.order='2';working.style.order='3';status.style.order='4';
-  const footer=el('p','LumiCast 0.22.4 · Draft stays in this tab until reload.');footer.style.order='99';
+  const footer=el('p','LumiCast 0.23.0 · Draft stays in this tab until reload.');footer.style.order='99';
   app.append(intro,settings,status,studioNews,castCard,input,gapsCard,output,refine,sheetCard,introCard,groupCard,searchCard,tabBar,working,...leads,footer);
   try{showTab(localStorage.getItem('lumicast.tab')||'start',false);}catch{showTab('start',false);}
   const controls=[readOoc,readCard,saveLoaded,introMake,another,introRevise,findCast,groupMake,groupAnother,groupRevise,groupLooks,introCopy,introCopyUndesired,translate,studio,sendBack,writeMoss,again,save,refreshButton,testGel,saveNotes,saveQuality,startOver,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
@@ -627,7 +635,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   }
   function showSheet(){
     if(!result)return;
-    for(const key of Object.keys(sheet) as (keyof typeof sheet)[])sheet[key].box.value=result.sheet[key];
+    for(const key of Object.keys(sheet) as (keyof typeof sheet)[])sheet[key].box.value=result.sheet[key]??'';
     gapsBox.replaceChildren();gapsCard.hidden=!result.gaps.length;
     if(result.gaps.length) {
       gapsBox.append(el('strong','Worth pinning down'));

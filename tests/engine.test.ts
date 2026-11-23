@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { Translator, parseExtraction, removeConflicts } from '../src/engine';
+import { Translator, parseExtraction, removeConflicts, leanBody, cleanAdded, cleanAttitude } from '../src/engine';
 import { assemble, cupSize, editList, heightCm, nameFrom, withQuality, formatWeighted, inScope, isGenerative, parseWeighted, type TagDictionary, type TagRow, type TranslateOptions } from '../src/contracts';
 import { cases, narratedFiller } from './fixtures';
 const dictionary:TagDictionary={resolve:async name=>({name,source:'Danbooru',count:10,wiki:`Definition of ${name}`,url:'https://danbooru.donmai.us/wiki_pages/'+name}),search:async()=>[]};
@@ -53,7 +53,7 @@ test('stated character type is quotable evidence, reaches the model, and is abse
   expect(withType.result.prompt).toBe('trap, silver hair\n\nA feminine-presenting young man with silver hair.');
   expect(JSON.parse(withType.inputs[0]).stated).toBe('femboy, android');expect(withType.result.notices.join(' ')).not.toContain('left out');
   await expect(run('x',{traits},{},{stated:'y'.repeat(301)})).rejects.toThrow('Invalid known facts');
-  expect((await run('Silver hair.',{traits:[traits[1]]},{},{stated:'she is a D cup'})).result.tags.map(t=>t.name)).toEqual(['silver_hair','large_breasts']);
+  expect((await run('Silver hair.',{traits:[traits[1]]},{},{stated:'she is a D cup'})).result.tags.map(t=>[t.name,t.weight])).toEqual([['silver_hair',undefined],['medium_breasts',1.3]]);
 });
 test('tags follow identity order however the model ordered its traits',async()=> {
   const traits=[{id:'a',group:'outfit',evidence:'a coat',tags:['coat']},{id:'b',group:'hair',evidence:'red hair',tags:['red_hair']},{id:'c',group:'subject',evidence:'She',tags:['1girl']}];
@@ -221,12 +221,13 @@ test('Lumi Studio sheet: fields the character editor takes, with phrases only fo
   }},{scope:'character',notes:'Weight trap at 1.4.'});
   expect(result.sheet).toEqual({
     countTag:'1boy',subject:'adult male android',always:'android, trap',
-    appearance:'narrow waist, wide hips, silver hair, short hair, engineered hourglass silhouette, narrow shoulders, pale polymer skin, choppy silver-white hair, a, b',
+    // Only two phrases, for the face and head; figure words stay out.
+    appearance:'wide hips, silver hair, short hair, pale polymer skin, choppy silver-white hair',
     // Whole-garment phrases replace the bare tags they cover.
-    outfit:'sheer black thigh-high stockings, no shoes',anatomy:'',moss:'',
+    outfit:'sheer black thigh-high stockings, no shoes',anatomy:'',moss:'',attitude:'',
   });
   // The sheet does not depend on the Include choice, and never carries solo or scene detail.
-  expect((await run(fixture.source,{traits:fixture.traits},{},{scope:'scene'})).result.sheet).toEqual({countTag:'1boy',subject:'',always:'android, trap',appearance:'narrow waist, wide hips, silver hair, short hair',outfit:'thighhighs, black thighhighs, no shoes',anatomy:'',moss:''});
+  expect((await run(fixture.source,{traits:fixture.traits},{},{scope:'scene'})).result.sheet).toEqual({countTag:'1boy',subject:'',always:'android, trap',appearance:'wide hips, silver hair, short hair',outfit:'thighhighs, black thighhighs, no shoes',anatomy:'',moss:'',attitude:''});
   const weighted=await run('He is a femboy with silver hair.',{traits:[{id:'1',group:'subject',evidence:'femboy',tags:['1boy','(trap:1.4)'],detail:'A feminine young man'}]},{},{notes:'Weight trap at 1.4.'});
   expect(weighted.result.sheet.always).toBe('(trap:1.4)');expect(weighted.result.sheet.countTag).toBe('1boy');
 });
@@ -346,8 +347,8 @@ test('a sheet keeps near-duplicates down and never carries layout tags',async()=
   const tags=result.views.outfit.tags.map(r=>r.name);
   expect(tags).not.toContain('glasses');expect(tags).not.toContain('piercing');expect(tags).not.toContain('multiple_views');
   expect(tags).toEqual(expect.arrayContaining(['round_eyewear','black-framed_eyewear','ear_piercing','colored_tips']));
-  // Two entries per item at most: the glasses phrase goes, one phrase each for the tips and piercings stays.
-  expect(result.sheet.appearance).toBe('black hair, colored tips, round eyewear, black-framed eyewear, ear piercing, pink hair tips, multiple small ear piercings, dark roots');
+  // A tagged item keeps a phrase only for a colour its tags lack: pink tips stay, the glasses and piercings phrases go.
+  expect(result.sheet.appearance).toBe('black hair, colored tips, round eyewear, black-framed eyewear, ear piercing, pink hair tips, dark roots');
 });
 test('Refine never offers a layout tag',async()=> {
   const engine=new Translator(async()=>JSON.stringify({reply:'Try a sheet.',add:[{tag:'multiple_views',why:'x'},{tag:'freckles',why:'missing'}],remove:[],weight:[],caption:null}),dictionary);
@@ -397,4 +398,36 @@ test('refine never offers a tag-for-same-words swap as a bare removal',async()=>
     {tags:['1girl','bright_hazel_eyes','long_hair'],feedback:'Not a lot of face tags.'});
   expect(result.proposals).toEqual([]);
   expect(result.notices.join(' ')).toContain('“bright hazel eyes” stays as it is');
+});
+test('a face the description leaves open is picked once, grounded in the picks, and attitude comes along',async()=> {
+  const added='She has blunt bangs that stop at her eyebrows. Her eyes turn up at the outer corners. She has a wide smile.';
+  const {result,inputs}=await run('Dina has black hair. She is teasing and loves being looked at.',{added,attitude:'Teasing, Confident; hand on hip!',traits:[
+    {id:'1',group:'hair',evidence:'black hair',tags:['black_hair'],detail:'Black hair'},
+    {id:'2',group:'hair',evidence:'blunt bangs that stop at her eyebrows',tags:['blunt_bangs'],detail:'Blunt bangs'},
+    {id:'3',group:'face',evidence:'eyes turn up at the outer corners',tags:['tsurime'],detail:'Upturned eyes'}]},{drop:[],captions:{}},
+    {pick:true,others:[{name:'Katy',description:'Katy has side-swept bangs.'}]});
+  const sent=JSON.parse(inputs[0]);expect(sent.pick).toBe(true);expect(sent.others).toEqual([{name:'Katy',description:'Katy has side-swept bangs.'}]);
+  // An expression is never part of a lasting face.
+  expect(result.added).toBe('She has blunt bangs that stop at her eyebrows. Her eyes turn up at the outer corners.');
+  expect(result.sheet.appearance).toBe('black hair, blunt bangs, tsurime');
+  expect(result.sheet.attitude).toBe('teasing, confident, hand on hip');
+  // No picks unless asked, and never a second set for a description that already carries them.
+  const off=await run('Dina has black hair.',{added,traits:[{id:'1',group:'hair',evidence:'black hair',tags:['black_hair'],detail:'Black hair'}]},{drop:[],captions:{}});
+  expect(JSON.parse(off.inputs[0]).pick).toBeUndefined();expect(off.result.added).toBe('');
+  const again=await run(`Dina has black hair.\n\nAdded by LumiCast: ${added}`,{added:'She has freckles.',traits:[{id:'1',group:'hair',evidence:'black hair',tags:['black_hair'],detail:'Black hair'}]},{drop:[],captions:{}},{pick:true});
+  expect(JSON.parse(again.inputs[0]).pick).toBeUndefined();expect(again.result.added).toBe('');
+});
+test('picked faces stay natural: nothing loud, nothing about the body, no numbers',()=> {
+  expect(cleanAdded('Added by LumiCast: She has a straight, narrow nose. She wears clown face paint. Her hips are wide. Her eyes glow red. She has 3 freckles. He has heavy, low eyebrows.'))
+    .toBe('She has a straight, narrow nose. He has heavy, low eyebrows.');
+  expect(cleanAdded(42)).toBe('');expect(cleanAttitude('Gruff, watchful,, gruff, protective')).toBe('gruff, watchful, protective');
+});
+test('the body stays lean: slim words go beside a full figure, large becomes medium at 1.3, four figure tags at most',()=> {
+  const rows=['1girl','slim','curvy','narrow_waist','large_breasts','wide_hips','thick_thighs','huge_ass','black_hair','pale_skin'].map(name=>({name} as {name:string;weight?:number}));
+  const lean=leanBody(rows,()=>false);
+  expect(lean.rows.map(r=>r.weight?`${r.name}:${r.weight}`:r.name)).toEqual(['1girl','curvy','medium_breasts:1.3','wide_hips','thick_thighs','black_hair','pale_skin']);
+  expect(lean.removed).toEqual(['slim','narrow_waist','huge_ass']);expect(lean.resized).toBe(true);
+  // The user's own tags are never touched, and a weight they gave stays.
+  const mine=leanBody([{name:'slim'},{name:'curvy'},{name:'large_breasts',weight:1.2}],r=>r.name==='slim');
+  expect(mine.rows.map(r=>r.name)).toEqual(['slim','curvy','large_breasts']);
 });

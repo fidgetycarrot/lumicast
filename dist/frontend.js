@@ -96,7 +96,7 @@ var REVIEW = `You finish an Anima image prompt for one character. The input JSON
 
 Return only JSON: {"drop":[],"captions":{"character":"","outfit":"","scene":""},"sheet":{"subject":"","character":[],"outfit":[],"anatomy":[]},"moss":"","vague":[],"issues":[]}
 
-drop lists the candidate tag names that must not be used. A tag stays when a tagger looking at a faithful picture of this character would apply it. Drop one only when its wiki meaning differs from what the text describes even though the words look alike (wide-eyed is a startled expression, not wide-set eyes), when it comes from a metaphor, joke, negation or comparison instead of something visible, when it names clothing the text says is no longer worn, when it exaggerates the text (large_breasts for modest curves), when it contradicts another trait or a better candidate (abs or toned beside a soft belly), or when it would hand one character's trait to another. A plain tag whose nuance is carried in a caption stays: black_hair is right for near-black hair. A type tag such as android or trap stays when the traits together state what its definition requires, even though no single quote uses the word. Also drop near-duplicates: when several candidates name the same item (glasses, round_eyewear and black-framed_eyewear), keep the one or two that say the most and drop the rest. The result is reused in scenes with several characters, so every tag has to earn its place. Apart from that, when unsure, keep the tag.
+drop lists the candidate tag names that must not be used. A tag stays when a tagger looking at a faithful picture of this character would apply it. Drop one only when its wiki meaning differs from what the text describes even though the words look alike (wide-eyed is a startled expression, not wide-set eyes), when it comes from a metaphor, joke, negation or comparison instead of something visible, when it names clothing the text says is no longer worn, when it exaggerates the text (large_breasts for modest curves), when it contradicts another trait or a better candidate (abs or toned beside a soft belly), or when it would hand one character's trait to another. A plain tag whose nuance is carried in a caption stays: black_hair is right for near-black hair. A type tag such as android or trap stays when the traits together state what its definition requires, even though no single quote uses the word. Keep the body lean: at most four tags for the figure (build, chest, waist, hips, thighs, muscle), the ones that say the most, with no two meaning the same thing and none pulling against another (slim or narrow_waist beside curvy or wide_hips); drop the rest. Skin, height and marks do not count toward the four. Also drop near-duplicates: when several candidates name the same item (glasses, round_eyewear and black-framed_eyewear), keep the one or two that say the most and drop the rest. The result is reused in scenes with several characters, so every tag has to earn its place. Apart from that, when unsure, keep the tag.
 
 captions holds three short pieces of plain caption text. The app shows the first alone, the first two together, or all three, so each must read correctly on its own and must stay inside its own traits:
 - "character": one or two short sentences, under 35 words, from the traits whose group is subject, body, hair or face, in that order: what they are (every subject trait, including the kind of character), their build, then hair, then face. This piece is reused in every scene, so it must not mention clothing, accessories, pose, expression, setting or anything from an outfit or moment trait.
@@ -111,7 +111,7 @@ Use "" for a piece that has no traits. Write from the trait details alone; a quo
 
 sheet is the same character laid out for an image tool that saves characters as comma-separated fields and reuses them in every scene. That tool splits on commas and writes its own sentences, so nothing here may be a sentence.
 - "subject": the plainest noun phrase for who this is, two to five lowercase words, with an age word first when the text gives an age: "adult woman", "young adult man", "adult male android". No name, no build, no hair.
-- "character": up to 6 short phrases for the lasting look (body, hair, face) that the kept tags do not already say. This sheet is pasted into prompts that may hold several characters, so every phrase has to earn its place by changing what gets drawn. Each is two to seven lowercase words with no comma, no pronoun and no full stop, and stands alone: "choppy silver-white hair", "violet-pink gradient eyes", "pale porcelain skin". Skip a fact a kept tag fully covers (no "short hair" beside short_hair), and skip a phrase that only restates a tag more strongly ("pale porcelain skin" beside pale_skin, "disproportionately long legs" beside long_legs, "thick weighted lashes" beside thick_eyelashes). Keep a phrase that adds a colour, texture or placement the tag lacks, but at most one phrase for an item the tags already name (eyewear, piercings, hair tips). Nothing about clothing, pose or setting.
+- "character": at most 2 short phrases for the face and head that the kept tags cannot say: the nose, the jaw or face shape, an exact colour. Never the body or figure, and never an impression ("striking features"). This sheet is pasted into prompts that may hold several characters, so every phrase has to earn its place by changing what gets drawn. Each is two to seven lowercase words with no comma, no pronoun and no full stop, and stands alone: "choppy silver-white hair", "violet-pink gradient eyes", "pale porcelain skin". Skip a fact a kept tag fully covers (no "short hair" beside short_hair), and skip a phrase that only restates a tag more strongly ("pale porcelain skin" beside pale_skin, "disproportionately long legs" beside long_legs, "thick weighted lashes" beside thick_eyelashes). Keep a phrase that adds a colour, texture or placement the tag lacks, but at most one phrase for an item the tags already name (eyewear, piercings, hair tips). Nothing about clothing, pose or setting.
 - "outfit": the outfit traits as the saved outfit, which replaces the outfit tags in that tool and is also read by MOSS Image:
 ${OUTFIT_RULES}
 - "anatomy": the same, for the anatomy traits only, kept plain and short.
@@ -486,6 +486,7 @@ function setup(ctx, options = {}) {
       source.value = text.toLowerCase().startsWith(who.toLowerCase()) ? text : `${who}
 ${text}`;
       revision++;
+      pendingEntry = description;
       await runTranslate();
       input.scrollIntoView?.({ block: "start" });
     });
@@ -510,14 +511,27 @@ ${text}`;
   stated.maxLength = 300;
   stated.autocomplete = "off";
   stated.placeholder = "e.g. femboy, android, green eyes, rose-pink gradient lips";
+  let pendingEntry = null;
   const runTranslate = async () => {
     if (!source.value.trim())
       throw new Error("Paste a character description first.");
     const currentRevision = revision;
-    const next = await clocked("translate", { description: source.value, stated: stated.value, connectionId: connection.value });
+    const entry = pendingEntry;
+    pendingEntry = null;
+    const next = await clocked("translate", { description: source.value, stated: stated.value, connectionId: connection.value, pick: true });
     if (revision !== currentRevision) {
       notify("The description changed during translation. Translate again to use the new wording.");
       return;
+    }
+    const picked = next.added ? `Added by LumiCast: ${next.added}` : "";
+    if (picked) {
+      source.value = `${source.value.trimEnd()}
+
+${picked}`;
+      if (entry && entry.isConnected && !/added by lumicast:/i.test(entry.value))
+        entry.value = `${entry.value.trimEnd()}
+
+${picked}`;
     }
     const before = result ? result.gaps.map((g) => g.what) : [];
     if (source.value !== translatedFrom) {
@@ -540,7 +554,7 @@ ${text}`;
     const secs = (ms) => `${Math.round(ms / 1000)} s`;
     const took = next.timing ? `Took ${secs(next.timing.total)}: model ${secs(next.timing.model)}, tag lookups ${secs(next.timing.lookups)}.` : "";
     showTab("character");
-    notify([before.length ? `Translated again. ${outcome}` : "Translation ready.", took, studioRef ? `Press ${sendBack.textContent} to send the new sheet there.` : "", !gelUser.value ? "Gelbooru is not configured; verified tags use Danbooru." : "", ...next.views.scene.notices].filter(Boolean).join(`
+    notify([before.length ? `Translated again. ${outcome}` : "Translation ready.", picked ? "The description left the face open, so LumiCast picked one and added it to the end of the description. Change any of it there and translate again if you like. Save to Cast lorebook so the story uses the same face." : "", took, studioRef ? `Press ${sendBack.textContent} to send the new sheet there.` : "", !gelUser.value ? "Gelbooru is not configured; verified tags use Danbooru." : "", ...next.views.scene.notices].filter(Boolean).join(`
 `));
   };
   const translate = button("Translate", runTranslate, true);
@@ -752,7 +766,8 @@ ${text}`;
     appearance: sheetField("Permanent appearance tags", "appearance", "Verified tags first, then short phrases for what no tag says.", true),
     outfit: sheetField("Default outfit tags", "outfit", "Clothing from the description, one whole garment per item, which suits both Anima and MOSS. Leave it out for a character whose clothes change with the story.", true),
     anatomy: sheetField("Conditional visible anatomy", "anatomy", "Explicit anatomy, kept out of the permanent tags so it never appears in scenes that do not show it. Set its rule in Lumi Studio.", true),
-    moss: sheetField("Description for MOSS (plain English)", "moss", "Face and body only, in plain words, with nothing explicit, since NanoGPT refuses NSFW. MOSS presets in Lumi Studio use it word for word; Anima ignores it.", true)
+    moss: sheetField("Description for MOSS (plain English)", "moss", "Face and body only, in plain words, with nothing explicit, since NanoGPT refuses NSFW. MOSS presets in Lumi Studio use it word for word; Anima ignores it.", true),
+    attitude: sheetField("Attitude", "attitude", "A few plain words for how the character comes across, like “teasing, confident”. For Lumi Studio, to choose expressions and poses; it is not pasted into the prompt.")
   };
   const provenance = el("div");
   const issues = el("div");
@@ -1367,7 +1382,7 @@ ${text}`;
   tabBar.style.order = "2";
   working.style.order = "3";
   status.style.order = "4";
-  const footer = el("p", "LumiCast 0.22.4 · Draft stays in this tab until reload.");
+  const footer = el("p", "LumiCast 0.23.0 · Draft stays in this tab until reload.");
   footer.style.order = "99";
   app.append(intro, settings, status, studioNews, castCard, input, gapsCard, output, refine, sheetCard, introCard, groupCard, searchCard, tabBar, working, ...leads, footer);
   try {
@@ -1396,7 +1411,7 @@ ${text}`;
     if (!result)
       return;
     for (const key of Object.keys(sheet))
-      sheet[key].box.value = result.sheet[key];
+      sheet[key].box.value = result.sheet[key] ?? "";
     gapsBox.replaceChildren();
     gapsCard.hidden = !result.gaps.length;
     if (result.gaps.length) {

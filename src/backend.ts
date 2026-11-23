@@ -1,7 +1,7 @@
 import type { SpindleAPI, GenerationRequestDTO } from 'lumiverse-spindle-types';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { BooruDictionary, testGelbooru } from './dictionary';
-import { Translator, unhide } from './engine';
+import { fold, Translator, unhide } from './engine';
 import { buildIntro, INTRO, introRequest, type IntroInput } from './intro';
 import { buildGroup, CAST_MAX, GROUP, groupRequest, type GroupInput, type GroupMember } from './group';
 import { answersOoc, CARD, CAST, entryComment, entryContent, lastOocExchange, parseCast, type CardRead, type CastRead, type CastSaved, type ChatLine } from './cast';
@@ -26,7 +26,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
     await s.load;
   };
   const dictionaryFor=(s:UserState)=>s.dictionary ??= new BooruDictionary(async url=> {
-    const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.22.4 (tag metadata client)'}}));
+    const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.23.0 (tag metadata client)'}}));
     if(typeof response.status!=='number'||typeof response.body!=='string')throw new Error('Invalid proxy response.');
     return {status:response.status,body:response.body};
   },{user:s.settings!.gelUser,key:s.settings!.gelKey});
@@ -70,6 +70,20 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
       const settings=s.settings!;
       /** Fails with the missing permissions named, in the words of the Extensions page. */
       const need=(list:string[])=>{const missing=list.filter(p=>!api.permissions.has(p as never));if(missing.length)throw new Error(`Grant LumiCast these permissions in Extensions: ${missing.join(', ')}.`);};
+      // This chat's Cast lorebook, as name and description. Best effort: empty when there is none or no permission.
+      const castLore=async(chat:{metadata?:unknown}):Promise<{name:string;description:string}[]>=>{
+        const lore:{name:string;description:string}[]=[];
+        try {
+          const ids=record(chat.metadata).chat_world_book_ids;
+          if (api.permissions.has('world_books' as never)) for (const id of Array.isArray(ids)?ids:[]) {
+            const book=typeof id==='string'?await api.world_books.get(id,userId):null;
+            if (!book||record(book.metadata).lumicast!=='cast') continue;
+            const page=await api.world_books.entries.list(book.id,{limit:200,offset:0,userId});
+            for (const e of page.data) {const name=e.comment.replace(/^LumiCast:\s*/,'').trim();if(name&&e.content.trim())lore.push({name:name.slice(0,80),description:e.content.replace(/^\[[^\]\n]*appearance\]\n/i,'').trim().slice(0,6000)});}
+          }
+        } catch {/* no Cast lorebook */}
+        return lore;
+      };
       const chatLines=async(chatId:string):Promise<ChatLine[]>=>(await api.chat.getMessages(chatId)).map(m=>({id:m.id,role:m.role,content:typeof m.content==='string'?unhide(m.content):''}));
       /**
        * The Cast lorebook belongs to the chat, so a character met in one story never turns up in a replay of
@@ -145,7 +159,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
         const v=record(r.input);const sheet=record(v.sheet);
         const field=(key:string)=>text(sheet[key] ?? '',key,4000);
         const description=text(v.description ?? '','description',12_000);
-        const shared:SharedSheet={version:1,sheet:{countTag:field('countTag'),subject:field('subject'),always:field('always'),appearance:field('appearance'),outfit:field('outfit'),anatomy:field('anatomy'),moss:field('moss')},
+        const shared:SharedSheet={version:1,sheet:{countTag:field('countTag'),subject:field('subject'),always:field('always'),appearance:field('appearance'),outfit:field('outfit'),anatomy:field('anatomy'),moss:field('moss'),attitude:field('attitude')},
           name:nameFrom(description),title:(description.split('\n').find(l=>l.trim()) ?? '').trim().slice(0,120),updatedAt:Date.now(),userId:userId ?? ''};
         const pool=(api as unknown as {rpcPool?:{sync?:(endpoint:string,value:unknown,policy?:{requires?:string[]})=>string}}).rpcPool;
         if (typeof pool?.sync!=='function') throw new Error('This Lumiverse version cannot share data between extensions.');
@@ -172,7 +186,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
         if (typeof shared.userId==='string'&&shared.userId&&userId&&shared.userId!==userId) throw new Error('The character sent from Lumi Studio belongs to another Lumiverse user.');
         const field=(key:string,max=4000)=>typeof sheet[key]==='string'?(sheet[key] as string).slice(0,max):'';
         const names=[shared.name,shared.anchor].filter((v):v is string=>typeof v==='string'&&!!v.trim()).map(v=>v.trim().slice(0,80));
-        const out:StudioCharacter={sheet:{countTag:field('countTag',40),subject:field('subject',200),always:field('always'),appearance:field('appearance'),outfit:field('outfit'),anatomy:field('anatomy'),moss:field('moss',1500)},
+        const out:StudioCharacter={sheet:{countTag:field('countTag',40),subject:field('subject',200),always:field('always'),appearance:field('appearance'),outfit:field('outfit'),anatomy:field('anatomy'),moss:field('moss',1500),attitude:field('attitude',200)},
           name:names[0]??'',sentAt:Number(shared.sentAt)||0,description:'',book:'',id:typeof shared.id==='string'?shared.id.slice(0,120):'',kind:shared.kind==='persona'?'persona':'character'};
         // The written description, if this chat's Cast lorebook has one under that name. Best effort.
         try {
@@ -206,7 +220,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
         const pool=(api as unknown as {rpcPool?:{sync?:(e:string,v:unknown,p?:{requires?:string[]})=>string;read?:(e:string)=>Promise<unknown>}}).rpcPool;
         if (typeof pool?.sync!=='function'||typeof pool.read!=='function') throw new Error('This Lumiverse version cannot share data between extensions.');
         pool.sync('tweak.result',{version:1,id,kind:v.kind==='persona'?'persona':'character',sentAt:Number(v.sentAt)||0,userId:userId ?? '',
-          sheet:{countTag:field('countTag',40),subject:field('subject',200),always:field('always'),appearance:field('appearance'),outfit:field('outfit'),anatomy:field('anatomy'),moss:field('moss',1500)}},{requires:[]});
+          sheet:{countTag:field('countTag',40),subject:field('subject',200),always:field('always'),appearance:field('appearance'),outfit:field('outfit'),anatomy:field('anatomy'),moss:field('moss',1500),attitude:field('attitude',200)}},{requires:[]});
         let answer:Record<string,unknown>;
         try {answer=record(await pool.read('lumidraw_studio.lumicast.apply'));}
         catch (error) {
@@ -237,15 +251,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
         const chat=await api.chats.getActive(userId);if(!chat)return out;
         out.chat=chat.name;
         try {const card=chat.character_id&&api.permissions.has('characters' as never)?await api.characters.get(chat.character_id,userId):null;out.card=card?.name ?? '';} catch {/* no card name */}
-        try {
-          const ids=record(chat.metadata).chat_world_book_ids;
-          if (api.permissions.has('world_books' as never)) for (const id of Array.isArray(ids)?ids:[]) {
-            const book=typeof id==='string'?await api.world_books.get(id,userId):null;
-            if (!book||record(book.metadata).lumicast!=='cast') continue;
-            const page=await api.world_books.entries.list(book.id,{limit:200,offset:0,userId});
-            for (const e of page.data) {const name=e.comment.replace(/^LumiCast:\s*/,'').trim();if(name&&e.content.trim())out.lore.push({name:name.slice(0,80),description:e.content.replace(/^\[[^\]\n]*appearance\]\n/i,'').trim().slice(0,6000)});}
-          }
-        } catch {/* no Cast lorebook */}
+        out.lore=await castLore(chat);
         try {
           const personas=(api as unknown as {personas?:{getActive?:(userId?:string)=>Promise<{name:string;description:string}|null>}}).personas;
           if (api.permissions.has('personas' as never)&&typeof personas?.getActive==='function') {const p=await personas.getActive(userId);if(p?.name&&p.description?.trim())out.persona={name:p.name.slice(0,80),description:p.description.slice(0,6000)};}
@@ -258,7 +264,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
         const entered=gelCredentials(text(v.gelUser ?? '','Gelbooru user',300),v.gelKey ? text(v.gelKey,'Gelbooru key',300) : '');
         const credentials={user:entered.user||settings.gelUser,key:entered.key||settings.gelKey};
         const outcome=await testGelbooru(async url=> {
-          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.22.4 (tag metadata client)'}}));
+          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.23.0 (tag metadata client)'}}));
           return {status:Number(response.status),body:typeof response.body==='string'?response.body:''};
         },credentials);
         const unsaved=credentials.user!==settings.gelUser||credentials.key!==settings.gelKey;
@@ -408,7 +414,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
                 const member=members.find(m=>m.name.trim().toLowerCase().replace(/\s+/g,' ')===entry.asked);const sheet=record(entry.sheet);
                 const field=(key:string,max=4000)=>typeof sheet[key]==='string'?(sheet[key] as string).slice(0,max):'';
                 if (!member||!field('appearance').trim()) continue;
-                const full={countTag:field('countTag',40),subject:field('subject',200),always:field('always'),appearance:field('appearance'),outfit:field('outfit'),anatomy:field('anatomy'),moss:field('moss',1500)};
+                const full={countTag:field('countTag',40),subject:field('subject',200),always:field('always'),appearance:field('appearance'),outfit:field('outfit'),anatomy:field('anatomy'),moss:field('moss',1500),attitude:field('attitude',200)};
                 member.sheet={...full,anatomy:''};
                 if (typeof entry.id==='string'&&entry.id) studio.push({member:member.name,sheet:full,name:typeof entry.name==='string'?entry.name.slice(0,80):member.name,sentAt:Number(entry.sentAt)||0,description:member.description,book:'',id:entry.id.slice(0,120),kind:entry.kind==='persona'?'persona':'character'});
               }
@@ -433,7 +439,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
         if (r.action==='mossify') {
           progress('The model is writing the MOSS description…');
           const sheet=record(input.sheet);const field=(key:string,max=4000)=>text(sheet[key] ?? '',key,max);
-          return await new Translator(caller(connection,()=>'writing the MOSS description'),dictionary()).mossify({sheet:{countTag:field('countTag',40),subject:field('subject',200),always:field('always'),appearance:field('appearance'),outfit:field('outfit'),anatomy:'',moss:field('moss',1500)},description:text(input.description ?? '','description',12_000)},controller.signal);
+          return await new Translator(caller(connection,()=>'writing the MOSS description'),dictionary()).mossify({sheet:{countTag:field('countTag',40),subject:field('subject',200),always:field('always'),appearance:field('appearance'),outfit:field('outfit'),anatomy:'',moss:field('moss',1500),attitude:field('attitude',200)},description:text(input.description ?? '','description',12_000)},controller.signal);
         }
         if (refining) {
           progress('The model is thinking about your feedback…');
@@ -442,7 +448,15 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
           return refinement;
         }
         const scope=input.scope==='outfit'||input.scope==='scene'?input.scope:'character';
-        const result=await translator.translate(text(input.description,'description',12_000),controller.signal,label,{scope,stated:text(input.stated ?? '','known facts',300),notes:settings.notes,progress});
+        const description=text(input.description,'description',12_000);
+        // The other people in this story's Cast lorebook, so a picked face does not copy one of theirs.
+        let others:{name:string;description:string}[]=[];
+        if (input.pick===true) try {
+          const chat=api.permissions.has('chats' as never)?await api.chats.getActive(userId):null;
+          const self=fold(nameFrom(description)||description.split('\n')[0]);
+          if (chat) others=(await castLore(chat)).filter(o=>!self.includes(fold(o.name))).slice(0,6);
+        } catch {/* no story open: picks just cannot compare */}
+        const result=await translator.translate(description,controller.signal,label,{scope,stated:text(input.stated ?? '','known facts',300),notes:settings.notes,progress,pick:input.pick===true,others});
         // result.notices is the selected view's own array, so add service notices once per distinct array.
         for(const list of new Set([result.notices,...Object.values(result.views).map(v=>v.notices)]))list.push(...[...dictionary().notices].filter(n=>!list.includes(n)));
         return result;

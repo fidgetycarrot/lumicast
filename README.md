@@ -1,4 +1,9 @@
-# LumiCast 0.22.4
+# LumiCast 0.23.0
+
+**v0.23.0 keeps faces steady and bodies lean, for NovelAI V5.**
+- **A face when the description has none.** When a description leaves the face open, LumiCast picks one during the translation you already run: bangs, eye shape, eyebrows, nose and jaw, and at most one mark or makeup detail. The picks are plain everyday features, never loud, and chosen to differ from the other people in this chat's Cast lorebook. They are written into the end of the description as "Added by LumiCast: …", so you can change them, the next translation reads the same face, and Save to Cast lorebook gives the story model the same face. A description that already has LumiCast's picks never gets a second set. The Paige batch does not pick faces; Paige should write them into its cards.
+- **A lean body.** At most four tags for the figure; no slim or narrow-waist tags beside a full figure; plain large breasts become medium breasts at 1.3, because V5 draws "large" far past real life; back tags only when the description makes them defining. Phrases on the sheet are for the face and head only, two at most, and a phrase that repeats a tagged item (glasses twice) is left out unless it adds a colour. Every change is listed in the notices. Your notes' tags are never touched, and old sheets stay as they are until you translate again.
+- **Attitude.** A new sheet field: a few plain words for how the character comes across ("teasing, confident"). Lumi Studio 1.41.0 reads it to choose expressions and poses; it is never pasted into the prompt. It travels both ways with the rest of the sheet.
 
 **v0.22.4 fixes a Refine suggestion that could delete a trait.** Refine sometimes swaps a tag that isn't a real tag for a phrase in the same words. Lumi Studio saves tags with spaces, so that swap changes nothing, and LumiCast was offering only the removal half. Now the tag stays and a note says why.
 

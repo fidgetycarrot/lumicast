@@ -10,7 +10,7 @@ export const inScope = (group: Group, scope: Scope): boolean => scope === 'scene
 export interface Trait { id: string; group: Group; evidence: string; tags: string[]; detail: string }
 export interface Extraction { traits: Trait[]; skipped: number; weights: Map<string, number> }
 /** stated: facts the user asserts about the character ("femboy, android"), true even if the description never says them. */
-export interface TranslateOptions { scope?: Scope; stated?: string; /** The user's standing prompting guidance, saved in settings. */ notes?: string; /** Called as each stage starts, with a plain sentence for the status line. */ progress?: (stage: string) => void }
+export interface TranslateOptions { scope?: Scope; stated?: string; /** The user's standing prompting guidance, saved in settings. */ notes?: string; /** Called as each stage starts, with a plain sentence for the status line. */ progress?: (stage: string) => void; /** Let the model fill in a face the description leaves open. */ pick?: boolean; /** Other characters in the same story, so picked faces differ from theirs. */ others?: {name: string; description: string}[] }
 /** A prompt the user has generated from, and what they saw in the image. */
 export interface RefineInput { tags: string[]; caption: string; feedback: string; description?: string; stated?: string; notes?: string; /** Tags that define the character (the sheet's Always include). Removable only when the feedback names them. */ locked?: string[]; /** Earlier rounds for this character, oldest first. */ history?: RefineRound[] }
 /** One earlier round of Refine: what the user said, and which suggestions they took or turned down. */
@@ -34,7 +34,8 @@ export interface View { tags: TagRow[]; prose: string; prompt: string; notices: 
 /** The requested scope's view at the top level, plus every scope so the panel can switch without another run. */
 /** The result laid out as Lumi Studio's character sheet fields: comma-separated, spaces for underscores, no sentences. */
 /** moss: a plain-English face-and-body description for MOSS Image, safe for NanoGPT; Lumi Studio uses it word for word. */
-export interface Sheet { countTag: string; subject: string; always: string; appearance: string; outfit: string; anatomy: string; moss: string }
+/** attitude: a few plain words for how the character comes across; Lumi Studio reads it to choose expressions and poses, never as prompt text. */
+export interface Sheet { countTag: string; subject: string; always: string; appearance: string; outfit: string; anatomy: string; moss: string; attitude?: string }
 /** Something that leaves the character under-specified. Advisory only: a gap never changes tags, captions or the sheet. */
 export interface Gap { kind: 'missing' | 'vague'; what: string; note: string }
 /** What LumiCast shares with Lumi Studio through Lumiverse's shared RPC pool, at lumicast.sheet.latest. */
@@ -50,7 +51,8 @@ export function nameFrom(description: string): string {
 }
 /** Where a translation's time went, in milliseconds. */
 export interface Timing { model: number; lookups: number; total: number }
-export interface Translation extends View { issues: Issue[]; model: string; views: Record<Scope, View>; sheet: Sheet; gaps: Gap[]; timing: Timing }
+/** added: face details the model picked because the description left them open, as plain sentences to add to the description. */
+export interface Translation extends View { issues: Issue[]; model: string; views: Record<Scope, View>; sheet: Sheet; gaps: Gap[]; timing: Timing; added: string }
 /** quality: the user's own prefix (quality, score, year, safety tags) for the Anima prompt. Never verified or changed. */
 /** How hard the model thinks: light is a short think, off skips it, inherit uses the connection's own reasoning setting. */
 export type Thinking = 'light' | 'off' | 'inherit';

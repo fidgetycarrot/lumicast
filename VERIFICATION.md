@@ -289,3 +289,10 @@ Translations became slow once Gelbooru credentials started working: every tag al
 - Cause confirmed from the code: a phrase identical to an existing sheet item is dropped as a duplicate, so a "swap bright_hazel_eyes for 'bright hazel eyes'" reached the panel as a removal only.
 - Fix: a removal whose tag matches a suggested phrase word for word is withdrawn with a notice; the Refine prompt also says tags are saved with spaces and must not be swapped for the same words.
 - Tested (unit): that case gives no proposals and the notice; an already-present phrase with no removal is still dropped quietly.
+
+## v0.23.0: picked faces, lean body, attitude
+
+- Tested (unit): face picks are asked for only when the panel asks and the description has no "Added by LumiCast:" yet; picks are grounded, so their tags pass the quote check; expressions, body words, numbers and loud features (paint, tattoos, piercings, glow, heterochromia) are cut from picks; other Cast lorebook characters are passed, without the one being translated; attitude is cleaned to at most six short items.
+- Tested (unit): slim words go beside a full figure; large or big breasts become medium at 1.3 unless the user weighted them; a fifth figure tag and later are left out; the user's notes tags are untouched; sheet phrases skip figure words, keep two at most, and drop a repeat of a tagged item unless it adds a colour.
+- Tested (fake host): the panel writes the picks into the description, shows Attitude, and a second Translate asks for no new picks; attitude goes to Lumi Studio with the sheet.
+- Not tested: live model picks and live NovelAI pictures. Suggested check: Dina on a known seed, before and after.

@@ -8,8 +8,19 @@ The input may also carry "stated": facts the user knows about the character that
 
 The input may also carry "notes": the user's own standing guidance on prompting, learned from images they have generated (which tags to prefer or add for a kind of character, a weight that works). Follow a note when it applies to this character and ignore it when it does not. When a note applies, give it its own trait whose evidence quotes the note, listing every tag the note asks for exactly as the note spells it, even when two of them mean the same thing; the user has tested them together. A tag added because of a note quotes the note as its evidence. Write a tag as "(tag:1.4)" only when a note gives that weight for that tag; never choose a weight yourself.
 
+The input may carry "pick": true. Then also fill in the face the description leaves open, so that every picture of this character shows the same face. Write your picks in "added" as two to five short plain sentences in the description's own person ("She has blunt bangs that stop at her eyebrows. Her eyes turn up at the outer corners."). Rules for picks:
+- Only the face and head: how the bangs or fringe sit and the cut, eye shape, eyebrows, nose, jaw and face shape, and at most one lasting mark or makeup detail. Never the body, height, skin, eye colour, hair colour, clothing, anatomy, an expression or a mood.
+- Only fill what the description leaves open. Never change, repeat or contradict anything it says. When the face is already specific, "added" is "".
+- Natural and everyday, never loud: features a real person could have, suited to the character's age, kind, role and manner as described. No face paint, no bright or unusual makeup colours, no facial tattoos or piercings, no heterochromia, no glowing or unusual eyes, nothing that reads as a costume. Makeup only for someone the description presents as wearing it or whose manner suits it (a sultry singer may wear red lipstick; a gruff soldier does not), and then in natural tones.
+- Pick what makes this person easy to tell apart at a glance, not a generic pretty or handsome face. Real-life faces with real noses, not anime: no anime-only terms.
+- "others" lists other characters in the same story with their descriptions. Do not give this character a fringe, eye shape, nose or mark that one of them already has.
+- When the description is about several characters, "added" is "".
+Give every picked fact its own trait as usual, quoting "added" as its evidence. Without "pick", "added" is "".
+
+"attitude" is two to six plain words, comma separated, for how the character usually comes across, taken from the personality, manner or behaviour the input states: "teasing, confident, sultry" or "gruff, watchful, protective". Not appearance, not poses or gestures ("hand on hip"), and not a passing mood of this one scene. "" when the input says nothing about it or describes several characters.
+
 Return only JSON:
-{"traits":[{"id":"t1","group":"hair","evidence":"exact quote","tags":["black_hair","medium_hair"],"detail":"Near-black hair, about shoulder length"}]}
+{"traits":[{"id":"t1","group":"hair","evidence":"exact quote","tags":["black_hair","medium_hair"],"detail":"Near-black hair, about shoulder length"}],"added":"","attitude":""}
 
 Write one trait per visual fact, and state each fact once even if the text repeats it.
 
@@ -46,6 +57,7 @@ What to leave out:
 - Either/or or contradictory statements: "tags":[] and a detail that keeps both sides.
 - With several characters, use "tags":[] for everything except the count tags, and name the owner in each detail, because tags cannot say who a trait belongs to.
 - Quality, score, artist, copyright and character-name tags.
+- Body tags past the overall figure. The image model tries to show every body tag, and tags that repeat an idea or pull against each other make the figure extreme and the poses forced. Name the figure once: never two tags for the same idea (curvy and voluptuous), never slim, skinny, slender or narrow_waist beside curvy, wide_hips, thick_thighs or a large chest, and tags for the rear (huge_ass, large_ass) only when the text makes the rear a defining trait. The face and hair are what make a character recognisable; tag them fully.
 
 At most 30 traits. An empty traits list means the text describes nothing visible.`;
 
@@ -53,7 +65,7 @@ export const REVIEW = `You finish an Anima image prompt for one character. The i
 
 Return only JSON: {"drop":[],"captions":{"character":"","outfit":"","scene":""},"sheet":{"subject":"","character":[],"outfit":[],"anatomy":[]},"moss":"","vague":[],"issues":[]}
 
-drop lists the candidate tag names that must not be used. A tag stays when a tagger looking at a faithful picture of this character would apply it. Drop one only when its wiki meaning differs from what the text describes even though the words look alike (wide-eyed is a startled expression, not wide-set eyes), when it comes from a metaphor, joke, negation or comparison instead of something visible, when it names clothing the text says is no longer worn, when it exaggerates the text (large_breasts for modest curves), when it contradicts another trait or a better candidate (abs or toned beside a soft belly), or when it would hand one character's trait to another. A plain tag whose nuance is carried in a caption stays: black_hair is right for near-black hair. A type tag such as android or trap stays when the traits together state what its definition requires, even though no single quote uses the word. Also drop near-duplicates: when several candidates name the same item (glasses, round_eyewear and black-framed_eyewear), keep the one or two that say the most and drop the rest. The result is reused in scenes with several characters, so every tag has to earn its place. Apart from that, when unsure, keep the tag.
+drop lists the candidate tag names that must not be used. A tag stays when a tagger looking at a faithful picture of this character would apply it. Drop one only when its wiki meaning differs from what the text describes even though the words look alike (wide-eyed is a startled expression, not wide-set eyes), when it comes from a metaphor, joke, negation or comparison instead of something visible, when it names clothing the text says is no longer worn, when it exaggerates the text (large_breasts for modest curves), when it contradicts another trait or a better candidate (abs or toned beside a soft belly), or when it would hand one character's trait to another. A plain tag whose nuance is carried in a caption stays: black_hair is right for near-black hair. A type tag such as android or trap stays when the traits together state what its definition requires, even though no single quote uses the word. Keep the body lean: at most four tags for the figure (build, chest, waist, hips, thighs, muscle), the ones that say the most, with no two meaning the same thing and none pulling against another (slim or narrow_waist beside curvy or wide_hips); drop the rest. Skin, height and marks do not count toward the four. Also drop near-duplicates: when several candidates name the same item (glasses, round_eyewear and black-framed_eyewear), keep the one or two that say the most and drop the rest. The result is reused in scenes with several characters, so every tag has to earn its place. Apart from that, when unsure, keep the tag.
 
 captions holds three short pieces of plain caption text. The app shows the first alone, the first two together, or all three, so each must read correctly on its own and must stay inside its own traits:
 - "character": one or two short sentences, under 35 words, from the traits whose group is subject, body, hair or face, in that order: what they are (every subject trait, including the kind of character), their build, then hair, then face. This piece is reused in every scene, so it must not mention clothing, accessories, pose, expression, setting or anything from an outfit or moment trait.
@@ -68,7 +80,7 @@ Use "" for a piece that has no traits. Write from the trait details alone; a quo
 
 sheet is the same character laid out for an image tool that saves characters as comma-separated fields and reuses them in every scene. That tool splits on commas and writes its own sentences, so nothing here may be a sentence.
 - "subject": the plainest noun phrase for who this is, two to five lowercase words, with an age word first when the text gives an age: "adult woman", "young adult man", "adult male android". No name, no build, no hair.
-- "character": up to 6 short phrases for the lasting look (body, hair, face) that the kept tags do not already say. This sheet is pasted into prompts that may hold several characters, so every phrase has to earn its place by changing what gets drawn. Each is two to seven lowercase words with no comma, no pronoun and no full stop, and stands alone: "choppy silver-white hair", "violet-pink gradient eyes", "pale porcelain skin". Skip a fact a kept tag fully covers (no "short hair" beside short_hair), and skip a phrase that only restates a tag more strongly ("pale porcelain skin" beside pale_skin, "disproportionately long legs" beside long_legs, "thick weighted lashes" beside thick_eyelashes). Keep a phrase that adds a colour, texture or placement the tag lacks, but at most one phrase for an item the tags already name (eyewear, piercings, hair tips). Nothing about clothing, pose or setting.
+- "character": at most 2 short phrases for the face and head that the kept tags cannot say: the nose, the jaw or face shape, an exact colour. Never the body or figure, and never an impression ("striking features"). This sheet is pasted into prompts that may hold several characters, so every phrase has to earn its place by changing what gets drawn. Each is two to seven lowercase words with no comma, no pronoun and no full stop, and stands alone: "choppy silver-white hair", "violet-pink gradient eyes", "pale porcelain skin". Skip a fact a kept tag fully covers (no "short hair" beside short_hair), and skip a phrase that only restates a tag more strongly ("pale porcelain skin" beside pale_skin, "disproportionately long legs" beside long_legs, "thick weighted lashes" beside thick_eyelashes). Keep a phrase that adds a colour, texture or placement the tag lacks, but at most one phrase for an item the tags already name (eyewear, piercings, hair tips). Nothing about clothing, pose or setting.
 - "outfit": the outfit traits as the saved outfit, which replaces the outfit tags in that tool and is also read by MOSS Image:
 ${OUTFIT_RULES}
 - "anatomy": the same, for the anatomy traits only, kept plain and short.
@@ -239,6 +251,45 @@ function caption(value: unknown, source: string): string | null {
   if (!prose || prose.length > 1500 || /[\u0000-\u001f]/.test(prose)) return null;
   return (prose.match(/\d+/g) ?? []).every(n => source.includes(n)) ? prose : null;
 }
+/** Tags for the figure. NovelAI V5 tries to show every one, so a sheet keeps at most four. */
+export const FIGURE = /^(?:petite|skinny|slim|slender|muscular|muscular_(?:male|female)|toned|toned_male|plump|chubby|fat|curvy|voluptuous|narrow_waist|wide_hips|narrow_hips|thick_thighs|long_legs|broad_shoulders|abs|pectorals|large_pectorals|biceps|stocky|(?:flat|small|medium|large|big|huge|gigantic)_breasts|flat_chest|(?:large|big|huge)_ass|thick_arms|hourglass_figure|shortstack)$/;
+const SLIM = /^(?:skinny|slim|slender|narrow_waist)$/;
+const COLOURS = /\b(?:black|white|gr[ae]y|silver|brown|blonde?|red|ginger|auburn|copper|blue|green|purple|violet|lavender|pink|magenta|orange|gold(?:en)?|yellow|amber|hazel|teal|turquoise|platinum|crimson|scarlet)\b/;
+const FULL = /^(?:curvy|voluptuous|wide_hips|thick_thighs|plump|chubby|(?:large|big|huge|gigantic)_breasts|(?:large|big|huge)_ass|hourglass_figure)$/;
+/** Words that make a phrase about the figure; the sheet's phrases are kept for the face and head. */
+const FIGURE_WORDS = /\b(?:curves?|curvy|frame|build|figure|physique|proportions?|posture|hips?|waist|thighs?|breasts?|bust|chest|rear|ass|butt|buttocks|body|hourglass|voluptuous|muscles?|muscular|shoulders?|silhouette|legs?|arms?)\b/;
+/**
+ * The lean body rules from Lumi Studio's NovelAI tests. Slim words go when the figure is full (the pair gets
+ * exaggerated), plain large breasts become medium at 1.3 (V5 draws "large" far past real life), and only the
+ * first four figure tags stay. Tags from the user's notes are never touched.
+ */
+export function leanBody<T extends {name: string; weight?: number}>(rows: T[], mine: (row: T) => boolean): {rows: T[]; removed: string[]; resized: boolean} {
+  const removed: string[] = []; let resized = false; let figure = 0;
+  const full = rows.some(r => FULL.test(r.name));
+  const out: T[] = [];
+  for (const row of rows) {
+    if (mine(row)) { out.push(row); continue; }
+    if (full && SLIM.test(row.name)) { removed.push(row.name); continue; }
+    let r = row;
+    if (/^(?:large|big)_breasts$/.test(r.name) && !r.weight && !rows.some(o => o !== row && /^medium_breasts$/.test(o.name))) { r = {...r, name:'medium_breasts', weight:1.3}; resized = true; }
+    if (FIGURE.test(r.name) && ++figure > 4) { removed.push(r.name); continue; }
+    out.push(r);
+  }
+  return {rows:out, removed, resized};
+}
+/** The model's face picks, as plain sentences; anything about the body, a mood or a loud look is left out. */
+export function cleanAdded(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  const LOUD = /\b(?:face ?paint|tattoos?|piercings?|pierced|heterochromia|glow(?:s|ing)?|neon|glitter|rainbow|clown|smil\w*|smirk\w*|grin\w*|frown\w*|blush\w*|scowl\w*)\b/i;
+  return value.replace(/^\s*added by lumicast:\s*/i, '').replace(/\s+/g, ' ').trim().split(/(?<=[.!?])\s+/)
+    .filter(s => s.length >= 8 && s.length <= 200 && !/\d/.test(s) && !LOUD.test(s) && !FIGURE_WORDS.test(s.toLowerCase())).slice(0, 5).join(' ').slice(0, 700);
+}
+/** A few plain words for how someone comes across; Lumi Studio reads it to choose expressions and poses. */
+export function cleanAttitude(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value.toLowerCase().split(/[,;\n]+/).map(v => v.replace(/[^a-z' -]+/g, ' ').replace(/\s+/g, ' ').trim()).filter(v => v && v.split(' ').length <= 5).filter((v, i, a) => a.indexOf(v) === i).slice(0, 6).join(', ').slice(0, 120);
+}
+
 // One run serves every scope, so the cap covers identity, outfit and scene tags together.
 const MAX_TAGS = 40;
 
@@ -253,13 +304,20 @@ export class Translator {
     signal.throwIfAborted();
     const stated = text(options.stated ?? '', 'known facts (maximum 300 characters)', 300);
     const notes = text(options.notes ?? '', 'notes (maximum 2,000 characters)', 2000);
-    // Stated facts and notes are quotable evidence too, so they are grounded alongside the description.
-    const grounded = [stated, notes, source].filter(Boolean).join('\n');
-    // A trait quoted from the notes and not from the description is the user's rule: its tags are kept as written.
-    const userText = fold([stated, source].filter(Boolean).join('\n'));
-    const fromNotes = (trait: Trait) => !!notes && fold(notes).includes(fold(trait.evidence)) && !userText.includes(fold(trait.evidence));
+    // Faces are picked once: a description that already carries LumiCast's picks is not given new ones.
+    const pick = options.pick === true && !/\badded by lumicast:/i.test(source);
+    const others = pick ? (options.others ?? []).slice(0, 6).map(o => ({name:String(o.name).slice(0, 80), description:String(o.description).slice(0, 400)})) : [];
     options.progress?.('Step 1 of 3: the model is reading the description…');
-    const extraction = parseExtraction(await timed(EXTRACT, JSON.stringify({...(stated ? {stated} : {}), ...(notes ? {notes} : {}), description:source})), grounded);
+    const raw = await timed(EXTRACT, JSON.stringify({...(stated ? {stated} : {}), ...(notes ? {notes} : {}), ...(pick ? {pick:true, ...(others.length ? {others} : {})} : {}), description:source}));
+    const first = optional(() => json(raw), {} as Record<string, unknown>);
+    const added = pick ? cleanAdded(first.added) : '';
+    const attitude = cleanAttitude(first.attitude);
+    // Stated facts, notes and the picked face are quotable evidence too, so they are grounded alongside the description.
+    const grounded = [stated, notes, source, added].filter(Boolean).join('\n');
+    // A trait quoted from the notes and not from the description is the user's rule: its tags are kept as written.
+    const userText = fold([stated, source, added].filter(Boolean).join('\n'));
+    const fromNotes = (trait: Trait) => !!notes && fold(notes).includes(fold(trait.evidence)) && !userText.includes(fold(trait.evidence));
+    const extraction = parseExtraction(raw, grounded);
     if (!extraction.traits.length) throw new Error('No explicit visual traits were found. Describe the appearance you want translated.');
     const notices = new Set<string>();
     if (extraction.skipped) notices.add(`${extraction.skipped} extracted detail${extraction.skipped === 1 ? ' was' : 's were'} left out because the model did not quote your text for ${extraction.skipped === 1 ? 'it' : 'them'}.`);
@@ -364,8 +422,12 @@ export class Translator {
       const kept = candidates.filter(r => ids.has(r.traitId) && (mine(r) || (!drop.has(r.name) && !uncertain(r))) && (r.name !== 'solo' || scope === 'scene'));
       // Tags from the notes skip the clean-up: the user has tested them as they are.
       const free = kept.filter(r => !mine(r));
-      const tags = [...tidy(removeConflicts(free)), ...kept.filter(mine)].sort((a, b) => order(a) - order(b));
-      if (tags.length < kept.length) own.add('Conflicting tags (two hair colours, lengths, eye colours or sizes) were removed together; the caption keeps the wording.');
+      const tidied = [...tidy(removeConflicts(free)), ...kept.filter(mine)].sort((a, b) => order(a) - order(b));
+      if (tidied.length < kept.length) own.add('Conflicting tags (two hair colours, lengths, eye colours or sizes) were removed together; the caption keeps the wording.');
+      const lean = leanBody(tidied, mine);
+      const tags = lean.rows;
+      if (lean.removed.length) own.add(`Left out to keep the body lean: ${lean.removed.map(n => n.replace(/_/g, ' ')).join(', ')}. NovelAI V5 exaggerates a figure described too many ways, and forces poses to show it.`);
+      if (lean.resized) own.add('Large breasts is written as medium breasts at 1.3: NovelAI V5 draws plain “large” much bigger than real life.');
       const prose = SCOPES.filter(segment => shown.some(t => segmentOf(t.group) === segment)).map(segment => {
         const composed = caption(captions[segment], grounded);
         if (reviewed && !composed) own.add('The model wrote no usable caption for part of this, so that part uses the first-pass wording.');
@@ -391,17 +453,26 @@ export class Translator {
     };
     // Plain words for unverified guesses come first (they often carry a hair or eye colour), then the reviewer's
     // phrases, eight in all. Words already said by a tag or a longer phrase in the same field are skipped.
-    const extras = (groups: Group[], reviewed: unknown, tagList: string): string[] => {
+    const extras = (groups: Group[], reviewed: unknown, tagList: string, lean = false): string[] => {
+      // Phrases for the face and head only, at most two: made-up wording barely steers V5, and figure words exaggerate.
       const fallback = [...[...extraWords].filter(([, trait]) => groups.includes(trait.group)).map(([words]) => words), ...[...unverified].filter(([name, trait]) => groups.includes(trait.group) && !isCupSizeTag(name) && !BREAST_SIZE.test(name) && !/^(?:1girl|1boy|1other|solo)$/.test(name)).map(([name]) => name.replace(/_/g, ' '))];
       const out: string[] = [];
-      for (const v of [...fallback, ...phrases(reviewed, tagList)]) if (!out.includes(v)) out.push(v);
+      const own = phrases(reviewed, tagList).filter(v => !lean || !FIGURE_WORDS.test(v));
+      for (const v of [...fallback, ...own]) if (!out.includes(v)) out.push(v);
       const wordsIn = (v: string) => v.split(/[^a-z0-9]+/).filter(Boolean);
       const taken = [...said(tagList)];
       // Two entries about one item (round eyewear, black-framed eyewear) are plenty; a third phrase is dropped.
       const count = new Map<string, number>();
       for (const t of taken) { const k = itemOf(t); if (k) count.set(k, (count.get(k) ?? 0) + 1); }
       return out.filter(v => !fallback.includes(v) || ![...taken, ...out.filter(o => o !== v && !fallback.includes(o))].some(o => wordsIn(v).every(w => wordsIn(o).includes(w))))
-        .filter(v => { const k = itemOf(v); if (!k) return true; const n = count.get(k) ?? 0; if (n >= 2) return false; count.set(k, n + 1); return true; }).slice(0, 8);
+        .filter(v => !lean || !FIGURE_WORDS.test(v) || /^(?:very tall|flat chest)$/.test(v))
+        // An item a tag already names keeps a phrase only for a colour the tags lack (pink hair tips beside
+        // colored tips); "thin metal-framed reading glasses" beside glasses is the same glasses said twice.
+        .filter(v => { const k = itemOf(v); if (!k) return true; const n = count.get(k) ?? 0; if (n >= 2) return false;
+          if (n >= 1 && lean) { const tagged = taken.filter(t => itemOf(t) === k).join(' '); const hue = v.match(COLOURS)?.[0]; if (!hue || tagged.includes(hue)) return false; }
+          count.set(k, n + 1); return true; })
+        // In the lean sheet, at most two of the reviewer's own phrases: made-up wording barely steers V5.
+        .filter((v, _i, all) => !lean || fallback.includes(v) || all.filter(o => !fallback.includes(o)).indexOf(v) < 2).slice(0, lean ? 4 : 8);
     };
     const groupOf = (row: TagRow) => traits.find(t => t.id === row.traitId)?.group;
     const COUNT = /^(?:1girl|1boy|1other)$/;
@@ -414,10 +485,11 @@ export class Translator {
       countTag: saved.find(t => COUNT.test(t.name))?.name ?? '',
       subject: optional(() => text(sheetIn.subject, 'subject phrase', 60), '').replace(/[,;.\n]+/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase(),
       always: [written(saved.filter(t => groupOf(t) === 'subject' && !COUNT.test(t.name))), ...extras(['subject'], [], '')].filter(Boolean).join(', '),
-      appearance: [appearanceTags, ...extras(['body','hair','face'], sheetIn.character, appearanceTags)].filter(Boolean).join(', '),
+      appearance: [appearanceTags, ...extras(['body','hair','face'], sheetIn.character, appearanceTags, true)].filter(Boolean).join(', '),
       outfit: [outfitTags, ...extras(['outfit'], sheetIn.outfit, outfitTags)].filter(Boolean).join(', '),
       anatomy: [anatomyTags, ...extras(['anatomy'], sheetIn.anatomy, anatomyTags)].filter(Boolean).join(', '),
       moss: '',
+      attitude,
     };
     // The outfit as whole garments, which Lumi Studio and MOSS read item by item; the tags remain only as a fallback.
     const garments = cleanOutfit(sheetIn.outfit, grounded);
@@ -448,7 +520,7 @@ export class Translator {
       const what = optional(() => text(v.what, 'trait', 60), ''); const note = optional(() => text(v.why, 'reason', 200), '');
       if (trait && what && note && !gaps.some(g => g.what === what)) gaps.push({kind:'vague', what, note});
     }
-    return { ...views[scope], issues, model, views, sheet, gaps, timing:{model:modelMs, lookups:lookupMs, total:Date.now() - started} };
+    return { ...views[scope], issues, model, views, sheet, gaps, timing:{model:modelMs, lookups:lookupMs, total:Date.now() - started}, added };
   }
 
   /** Propose changes to a prompt from what the user saw in a generated image. Nothing is applied here. */

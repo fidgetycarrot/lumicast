@@ -460,7 +460,7 @@ test('the revised sheet goes back to the Lumi Studio entry it came from, and onl
   let asked=0;h.setApply(()=>{asked++;return {ok:true,name:'Riley'};});
   b('Update Riley in Lumi Studio').click();await until(()=>status().includes('updated in Lumi Studio'));
   const result=h.calls.filter(c=>(c as unknown[])[0]==='sync'&&(c as unknown[])[1]==='tweak.result').at(-1) as unknown[];
-  expect(result[2]).toEqual({version:1,id:'character_7',kind:'character',sentAt,userId:'u1',sheet:{countTag:'1girl',subject:'',always:'',appearance:'round eyewear',outfit:'',anatomy:'',moss:'already written.'}});
+  expect(result[2]).toEqual({version:1,id:'character_7',kind:'character',sentAt,userId:'u1',sheet:{countTag:'1girl',subject:'',always:'',appearance:'round eyewear',outfit:'',anatomy:'',moss:'already written.',attitude:''}});
   expect(result[3]).toEqual({requires:[]});expect(asked).toBe(1);
   expect(h.root.querySelector('.lc-studio')!.textContent).toContain('Riley is updated in Lumi Studio.');
   // Lumi Studio's refusal is passed on; an older Lumi Studio says so plainly.
@@ -645,4 +645,32 @@ test('the cast picture: tick up to four, looks from Lumi Studio where it has the
     'Jason, right, massive build and dark hair. He wears a dark leather coat. He is standing with arms crossed and stern look.',
     'Behind them, the words "THE BROKEN HELM" in giant carved stone lettering, partly hidden by the group.'].join('\n\n'));
   expect(named(h.root,'groupOut').querySelector('[data-piece="Add to Undesired Content"]')).toBeNull();
+});
+test('a picked face is written into the description, so the next run reads it and picks nothing new',async()=> {
+  dom();const h=harness();cleanups.push(h.stop);const dispose=setup(h.ctx);cleanups.push(dispose);
+  const b=(name:string)=>Array.from(h.root.querySelectorAll('button')).find(x=>x.textContent===name)!;
+  await until(()=>!b('Translate').disabled);h.root.querySelector('select')!.value='c1';
+  const hair={id:'1',group:'hair',evidence:'Short red hair.',tags:['red_hair','short_hair'],detail:'Short red hair'};
+  h.setResponses([{traits:[hair,{id:'2',group:'hair',evidence:'side-swept bangs',tags:['swept_bangs'],detail:'Side-swept bangs'}],added:'She has side-swept bangs.',attitude:'shy, watchful'},{drop:[],captions:{},issues:[]},
+    {traits:[hair],added:'She has freckles.'},{drop:[],captions:{},issues:[]}]);
+  named(h.root,'source').value='Short red hair.';b('Translate').click();await until(()=>!b('Translate').disabled);
+  expect(named(h.root,'source').value).toBe('Short red hair.\n\nAdded by LumiCast: She has side-swept bangs.');
+  expect((h.root.querySelector('[data-sheet="attitude"]') as HTMLInputElement).value).toBe('shy, watchful');
+  expect((h.root.querySelector('[data-sheet="appearance"]') as HTMLTextAreaElement).value).toBe('red hair, short hair, swept bangs');
+  const first=(h.calls.filter(c=>(c as unknown[])[0]==='generation').at(-2) as unknown[])[1] as {messages:{content:string}[]};
+  expect(JSON.parse(first.messages[1].content).pick).toBe(true);
+  b('Translate').click();await until(()=>!b('Translate').disabled);
+  // Translating again keeps the same face: no second set of picks is asked for or added.
+  const second=(h.calls.filter(c=>(c as unknown[])[0]==='generation').at(-2) as unknown[])[1] as {messages:{content:string}[]};
+  expect(JSON.parse(second.messages[1].content).pick).toBeUndefined();
+  expect(named(h.root,'source').value).toBe('Short red hair.\n\nAdded by LumiCast: She has side-swept bangs.');
+});
+test('face picks are told who else is in the story, leaving out the character being translated',async()=> {
+  dom();const h=harness();cleanups.push(h.stop);const rpc=createRpc(h.ctx);cleanups.push(()=>rpc.destroy());
+  await rpc.request('castSave',{name:'Maren',aliases:[],description:'Maren has side-swept bangs.'});
+  await rpc.request('castSave',{name:'Tobin',aliases:[],description:'Tobin has a crooked nose.'});
+  h.setResponses([{traits:[{id:'1',group:'hair',evidence:'red hair',tags:['red_hair'],detail:'Red hair'}],added:''},{drop:[],captions:{},issues:[]}]);
+  await rpc.request('translate',{description:'Tobin has red hair.',connectionId:'c1',pick:true});
+  const sent=JSON.parse(((h.calls.filter(c=>(c as unknown[])[0]==='generation').at(-2) as unknown[])[1] as {messages:{content:string}[]}).messages[1].content);
+  expect(sent.others).toEqual([{name:'Maren',description:'Maren has side-swept bangs.'}]);
 });
