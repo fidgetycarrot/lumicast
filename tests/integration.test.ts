@@ -147,7 +147,11 @@ test('refine: typed feedback becomes verified, selectable changes; weights and n
   h.setResponses([{traits:[{id:'1',group:'hair',evidence:'Short red hair.',tags:['(red_hair:1.4)'],detail:'Short red hair'}]},{drop:[],captions:{character:'Short red hair.'},issues:[]},
     {reply:'The hair read as orange.',remove:[{tag:'made_up',why:'x'}],weight:[{tag:'red_hair',weight:1.8,why:'still too weak'}],add:[{tag:'red_hair',why:'dup'},{tag:'short_hair',weight:null,why:'length was lost'}],phrases:[{phrase:'vivid crimson hair',why:'pins the shade'}]}]);
   source.value='Short red hair.';b('Translate').click();await until(()=>!b('Translate').disabled);
-  expect(tags.value).toBe('(red_hair:1.4), standing');expect(prompt.value).toBe('(red hair:1.4), standing\n\nShort red hair.');
+  expect(tags.value).toBe('(red_hair:1.4), standing');expect(prompt.value).toBe('1.4::red hair ::, standing\n\nShort red hair.');
+  // The same prompt for Anima or SwarmUI keeps their weight form.
+  const weightsFor=Array.from(h.root.querySelectorAll('select')).find(x=>Array.from(x.options).some(o=>o.value==='anima'))!;
+  weightsFor.value='anima';weightsFor.dispatchEvent(new Event('change'));expect(prompt.value).toBe('(red hair:1.4), standing\n\nShort red hair.');
+  weightsFor.value='nai';weightsFor.dispatchEvent(new Event('change'));
   const sheetValue=(key:string)=>(h.root.querySelector(`[data-sheet="${key}"]`) as HTMLInputElement).value;
   expect(appearance.value).toBe('(red hair:1.4)');expect(outfit.value).toBe('');expect(sheetValue('countTag')).toBe('');
   expect(h.root.querySelector('.lc-gaps')!.textContent).toContain('Not stated: eye colour.');expect(h.root.querySelector('.lc-gaps')!.textContent).not.toContain('hair colour');
@@ -165,7 +169,7 @@ test('refine: typed feedback becomes verified, selectable changes; weights and n
   expect(Array.from(h.root.querySelectorAll('.lc-proposal strong')).map(n=>n.textContent)).toEqual(['Weight (red hair:1.8)','Add short hair','Add “vivid crimson hair” to the appearance']);
   expect(h.root.textContent).toContain('The hair read as orange.');expect(tags.value).toBe('(red_hair:1.4), standing');
   boxes[2].checked=false;b('Apply selected').click();await until(()=>!b('Translate').disabled);
-  expect(tags.value).toBe('(red_hair:1.8), standing, short_hair');expect(prose.value).toBe('Short red hair.');expect(prompt.value).toBe('(red hair:1.8), standing, short hair\n\nShort red hair.');
+  expect(tags.value).toBe('(red_hair:1.8), standing, short_hair');expect(prose.value).toBe('Short red hair.');expect(prompt.value).toBe('1.8::red hair ::, standing, short hair\n\nShort red hair.');
   expect(feedback.value).toBe('');expect(h.root.querySelectorAll('.lc-proposal').length).toBe(0);
   expect(appearance.value).toBe('(red hair:1.8), short hair');
   // A phrase goes to the end of the appearance field when it is ticked.
@@ -260,12 +264,12 @@ test('after Refine, the prompt rebuilds itself unless the tags carry unverified 
   named(h.root,'source').value='Short red hair.';b('Translate').click();await until(()=>!b('Translate').disabled);
   named(h.root,'feedback').value='Hair too faint.';b('Suggest changes').click();await until(()=>!b('Translate').disabled);
   b('Apply selected').click();await until(()=>!b('Translate').disabled);
-  expect(named(h.root,'prompt').value).toBe('(red hair:1.5), standing\n\nShort red hair.');expect(h.root.querySelector('.lc-status')!.textContent).toContain('Copy the prompt and generate again.');
+  expect(named(h.root,'prompt').value).toBe('1.5::red hair ::, standing\n\nShort red hair.');expect(h.root.querySelector('.lc-status')!.textContent).toContain('Copy the prompt and generate again.');
   const tags=named(h.root,'tags');tags.value='(red_hair:1.5), freckles';tags.dispatchEvent(new Event('input'));
   named(h.root,'feedback').value='Still faint.';b('Suggest changes').click();await until(()=>!b('Translate').disabled);
   b('Apply selected').click();await until(()=>!b('Translate').disabled);
   expect(named(h.root,'tags').value).toBe('(red_hair:1.8), freckles');
-  expect(named(h.root,'prompt').value).toBe('(red hair:1.5), standing\n\nShort red hair.');expect(h.root.querySelector('.lc-status')!.textContent).toContain('Press Verify edited tags, then Rebuild.');
+  expect(named(h.root,'prompt').value).toBe('1.5::red hair ::, standing\n\nShort red hair.');expect(h.root.querySelector('.lc-status')!.textContent).toContain('Press Verify edited tags, then Rebuild.');
 });
 test('Refine remembers earlier rounds for this character, sends them with the lock, and forgets on a new description',async()=> {
   dom();const h=harness();cleanups.push(h.stop);const dispose=setup(h.ctx);cleanups.push(dispose);

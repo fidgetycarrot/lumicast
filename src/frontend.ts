@@ -418,7 +418,10 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   refine.append(field('Fixing pictures from',refineMode,'Tags changes the Lumi Studio sheet’s tags, weights and short phrases, for Anima or NovelAI. MOSS changes the MOSS description and the outfit wording. Neither touches the other.'),historyBox,field('What did the image get wrong?',feedback,'LumiCast cannot see the image. It works from what you say here, your description, your notes and the character sheet.'),row(suggest),reply,proposed,row(apply),notesBox);
 
   // ── Standalone prompt: for use without Lumi Studio ──
-  const output=card('Prompt for other apps');
+  const output=card('Copy a character for other apps');
+  // NovelAI writes weights as 1.3::tag ::, Anima and SwarmUI as (tag:1.3). Remembered per browser.
+  const weightsFor=el('select');weightsFor.append(option('NovelAI','nai'),option('Anima or SwarmUI','anima'));
+  try{if(localStorage.getItem('lumicast.target')==='anima')weightsFor.value='anima';}catch{/* default */}
   const quality=named(el('input'),'quality');quality.maxLength=600;quality.autocomplete='off';quality.placeholder='e.g. masterpiece, best quality, score_9, newest, safe';
   const saveQuality=button('Save',async()=>{await rpc.request('savePrefs',{quality:quality.value});if(result&&verified)prompt.value=built(splitTags(tags.value),prose.value);notify('Quality tags saved. They go in front of every Anima prompt.');});saveQuality.className='lc-mini';
   // Remembered per browser: whether the Anima prompt carries a caption at all.
@@ -461,9 +464,10 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
     field('Booru tags — comma separated',tags,'Underscores here; the prompt uses spaces. Add emphasis as (tag:1.4).'),tagState,row(verify,copyTags),
     field('Caption',prose,'Edit freely; nothing the text leaves out is filled in.'),copyProse);
   output.append(
-    el('p','Your quality tags, then booru tags, then a short caption: ready to paste into SwarmUI or any Anima setup.'),
+    el('p','The loaded character as one prompt to paste into another app: your quality tags, the tags, then a short caption.'),
+    field('Weights for',weightsFor,'NovelAI and Anima write tag weights differently. Pick where you will paste it.'),
     qualityField,
-    field('Include',scope,'What this prompt covers. Switching needs no new translation. For a full-body picture, also pick a tall image size in SwarmUI, such as 832×1216.'),
+    field('Include',scope,'Just the character, the character with clothes, or everything including pose and place. Switching needs no new translation. For a full-body picture, also pick a tall image size, such as 832×1216.'),
     field('Caption',captionMode,'Turn the caption off if its wording fights your tags. The tags stay the same.'),
     field('Prompt',prompt,'Rebuild applies edits from below and replaces this field. Copy copies exactly what is shown.'),row(copy,rebuild),
     editBox);
@@ -613,10 +617,10 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   };
   panel('start','1 · Get a character','Start here. Pull characters out of the story you are playing, or paste a description of your own. Either way you end up with one character loaded in the next tab.',castCard,input);
   panel('character','2 · Character','The character you are working on. The sheet is what Lumi Studio draws from. If pictures come out wrong, say how in Refine, then send the sheet to Lumi Studio.',studioNews,gapsCard,sheetCard,refine);
-  panel('pictures','3 · Pictures','Prompts for show-off pictures: an intro card for the loaded character, or a cast picture of several people from the story. Neither changes a character.',introCard,groupCard);
-  panel('setup','Setup','Set once: which model LumiCast uses and your tag services. The last two are extras most people will not need.',settings,output,searchCard);
+  panel('pictures','3 · Pictures','Prompts for pictures: an intro card for the loaded character, a cast picture of several people from the story, or the loaded character copied for another app. None of them changes a character.',introCard,groupCard,output);
+  panel('setup','Setup','Set once: which model LumiCast uses and your tag services. The last one is an extra most people will not need.',settings,searchCard);
   intro.style.order='1';tabBar.style.order='2';working.style.order='3';status.style.order='4';
-  const footer=el('p','LumiCast 0.23.1 · Draft stays in this tab until reload.');footer.style.order='99';
+  const footer=el('p','LumiCast 0.23.2 · Draft stays in this tab until reload.');footer.style.order='99';
   app.append(intro,settings,status,studioNews,castCard,input,gapsCard,output,refine,sheetCard,introCard,groupCard,searchCard,tabBar,working,...leads,footer);
   try{showTab(localStorage.getItem('lumicast.tab')||'start',false);}catch{showTab('start',false);}
   const controls=[readOoc,readCard,saveLoaded,introMake,another,introRevise,findCast,groupMake,groupAnother,groupRevise,groupLooks,introCopy,introCopyUndesired,translate,studio,sendBack,writeMoss,again,save,refreshButton,testGel,saveNotes,saveQuality,startOver,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
@@ -658,7 +662,10 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   }
   // Every scope comes back from one translation, so changing Include only re-renders this part.
   /** The Anima prompt as shown: quality tags, booru tags, then the caption unless it is turned off. */
-  function built(list:(string|import('./contracts').Weighted)[],caption:string){return withQuality(assemble(list,captionMode.value==='none'?'':caption),quality.value,list.length>0);}
+  function built(list:(string|import('./contracts').Weighted)[],caption:string){
+    const text=withQuality(assemble(list,captionMode.value==='none'?'':caption),quality.value,list.length>0);
+    return weightsFor.value==='nai'?text.replace(/\(([^():\n]+):\s*([\d.]+)\)/g,(_m,tag:string,weight:string)=>`${weight}::${tag.trim()} ::`):text;
+  }
   function showStandalone(){
     if(!result)return;
     const view=result.views[scope.value as Scope];
@@ -710,6 +717,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   const factsChanged=(from:HTMLInputElement,to:HTMLInputElement)=>from.addEventListener('input',()=>{to.value=from.value;revision++;if(result)notify('Known facts changed. Translate again to refresh the result.');});
   factsChanged(stated,statedAgain);factsChanged(statedAgain,stated);
   captionMode.addEventListener('change',()=>{try{localStorage.setItem('lumicast.caption',captionMode.value);}catch{/* not kept */}if(result&&(verified||!tags.value.trim()))prompt.value=built(splitTags(tags.value),prose.value);notify(captionMode.value==='none'?'Caption turned off. The prompt is tags only.':'Caption turned back on.');});
+  weightsFor.addEventListener('change',()=>{try{localStorage.setItem('lumicast.target',weightsFor.value);}catch{/* not kept */}if(result&&(verified||!tags.value.trim()))prompt.value=built(splitTags(tags.value),prose.value);notify(weightsFor.value==='nai'?'Weights are now written the NovelAI way.':'Weights are now written the Anima way.');});
   scope.addEventListener('change',()=>{if(busy||!result)return;const replaced=edited;showStandalone();if(replaced)notify('Standalone fields reset from the translation; your manual edits there were replaced.');});
   tags.addEventListener('input',()=>{verified=false;edited=true;tagState.textContent='Tags edited — verify existence before rebuilding. Clear all tags to use the caption only.';update();});
   prose.addEventListener('input',()=>{edited=true;notify('Caption changed. Rebuild to apply it to the prompt.');});

@@ -301,3 +301,7 @@ Translations became slow once Gelbooru credentials started working: every tag al
 
 - Tested (unit): huge breasts → large at 1.3 and muscular female → toned at 1.3 when those tags exist; huge ass stays when large ass is not a live tag; muscular male → toned male at 1.3 on the height fixture; without lookups only large → medium is applied.
 - Not tested on real pictures except large breasts; the others follow the same pattern.
+
+## v0.23.2: copy box on Pictures, weights for NovelAI
+
+- Tested (fake host): the copied prompt writes weights as 1.4::tag :: by default and as (tag:1.4) after choosing Anima or SwarmUI, rebuilding on the switch.

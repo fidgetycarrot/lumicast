@@ -1,4 +1,6 @@
-# LumiCast 0.23.1
+# LumiCast 0.23.2
+
+**v0.23.2 brings "Copy a character for other apps" back where you'll see it.** The tabs update had put it under Setup; it is now on the Pictures tab. Include still picks just the character, the character with clothes, or everything including pose and place. New: **Weights for** writes weights the NovelAI way (`1.3::tag ::`, the default) or the Anima/SwarmUI way (`(tag:1.3)`), remembered per browser.
 
 **v0.23.1 applies the large-breasts finding to every size ladder.** NovelAI V5 draws size and strength tags bigger than real life, so each is written one step smaller at 1.3: gigantic → huge and huge → large breasts, large → medium breasts, large pectorals → pectorals, huge ass → large ass, muscular → toned (and the male and female forms). A lower step is used only when the tag service confirms it exists; otherwise the tag stays as written. A weight you gave is never changed, and the notices list every step.
 

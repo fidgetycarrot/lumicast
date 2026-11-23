@@ -1011,7 +1011,13 @@ ${picked}`;
   notesBox.className = "lc-sub";
   notesBox.append(el("summary", "Your notes"), field("What you have learned works", notes, "In your own words. Saved, and read on every translation and refinement. Say which model a note is for (“MOSS: …”, “Anima: …”). A weight is only ever applied when a note gives the number."), saveNotes);
   refine.append(field("Fixing pictures from", refineMode, "Tags changes the Lumi Studio sheet’s tags, weights and short phrases, for Anima or NovelAI. MOSS changes the MOSS description and the outfit wording. Neither touches the other."), historyBox, field("What did the image get wrong?", feedback, "LumiCast cannot see the image. It works from what you say here, your description, your notes and the character sheet."), row(suggest), reply, proposed, row(apply), notesBox);
-  const output = card("Prompt for other apps");
+  const output = card("Copy a character for other apps");
+  const weightsFor = el("select");
+  weightsFor.append(option("NovelAI", "nai"), option("Anima or SwarmUI", "anima"));
+  try {
+    if (localStorage.getItem("lumicast.target") === "anima")
+      weightsFor.value = "anima";
+  } catch {}
   const quality = named(el("input"), "quality");
   quality.maxLength = 600;
   quality.autocomplete = "off";
@@ -1089,7 +1095,7 @@ ${picked}`;
   const editBox = remembered(el("details"), "edit");
   editBox.className = "lc-sub";
   editBox.append(el("summary", "Edit tags and caption"), field("Booru tags — comma separated", tags, "Underscores here; the prompt uses spaces. Add emphasis as (tag:1.4)."), tagState, row(verify, copyTags), field("Caption", prose, "Edit freely; nothing the text leaves out is filled in."), copyProse);
-  output.append(el("p", "Your quality tags, then booru tags, then a short caption: ready to paste into SwarmUI or any Anima setup."), qualityField, field("Include", scope, "What this prompt covers. Switching needs no new translation. For a full-body picture, also pick a tall image size in SwarmUI, such as 832×1216."), field("Caption", captionMode, "Turn the caption off if its wording fights your tags. The tags stay the same."), field("Prompt", prompt, "Rebuild applies edits from below and replaces this field. Copy copies exactly what is shown."), row(copy, rebuild), editBox);
+  output.append(el("p", "The loaded character as one prompt to paste into another app: your quality tags, the tags, then a short caption."), field("Weights for", weightsFor, "NovelAI and Anima write tag weights differently. Pick where you will paste it."), qualityField, field("Include", scope, "Just the character, the character with clothes, or everything including pose and place. Switching needs no new translation. For a full-body picture, also pick a tall image size, such as 832×1216."), field("Caption", captionMode, "Turn the caption off if its wording fights your tags. The tags stay the same."), field("Prompt", prompt, "Rebuild applies edits from below and replaces this field. Copy copies exactly what is shown."), row(copy, rebuild), editBox);
   const introCard = remembered(Object.assign(el("details"), { open: true }), "intro");
   introCard.className = "lc-card";
   introCard.append(el("summary", "Intro card"));
@@ -1377,13 +1383,13 @@ ${picked}`;
   };
   panel("start", "1 · Get a character", "Start here. Pull characters out of the story you are playing, or paste a description of your own. Either way you end up with one character loaded in the next tab.", castCard, input);
   panel("character", "2 · Character", "The character you are working on. The sheet is what Lumi Studio draws from. If pictures come out wrong, say how in Refine, then send the sheet to Lumi Studio.", studioNews, gapsCard, sheetCard, refine);
-  panel("pictures", "3 · Pictures", "Prompts for show-off pictures: an intro card for the loaded character, or a cast picture of several people from the story. Neither changes a character.", introCard, groupCard);
-  panel("setup", "Setup", "Set once: which model LumiCast uses and your tag services. The last two are extras most people will not need.", settings, output, searchCard);
+  panel("pictures", "3 · Pictures", "Prompts for pictures: an intro card for the loaded character, a cast picture of several people from the story, or the loaded character copied for another app. None of them changes a character.", introCard, groupCard, output);
+  panel("setup", "Setup", "Set once: which model LumiCast uses and your tag services. The last one is an extra most people will not need.", settings, searchCard);
   intro.style.order = "1";
   tabBar.style.order = "2";
   working.style.order = "3";
   status.style.order = "4";
-  const footer = el("p", "LumiCast 0.23.1 · Draft stays in this tab until reload.");
+  const footer = el("p", "LumiCast 0.23.2 · Draft stays in this tab until reload.");
   footer.style.order = "99";
   app.append(intro, settings, status, studioNews, castCard, input, gapsCard, output, refine, sheetCard, introCard, groupCard, searchCard, tabBar, working, ...leads, footer);
   try {
@@ -1444,7 +1450,8 @@ ${picked}`;
     share();
   }
   function built(list, caption) {
-    return withQuality(assemble(list, captionMode.value === "none" ? "" : caption), quality.value, list.length > 0);
+    const text = withQuality(assemble(list, captionMode.value === "none" ? "" : caption), quality.value, list.length > 0);
+    return weightsFor.value === "nai" ? text.replace(/\(([^():\n]+):\s*([\d.]+)\)/g, (_m, tag, weight) => `${weight}::${tag.trim()} ::`) : text;
   }
   function showStandalone() {
     if (!result)
@@ -1592,6 +1599,14 @@ ${picked}`;
     if (result && (verified || !tags.value.trim()))
       prompt.value = built(splitTags(tags.value), prose.value);
     notify(captionMode.value === "none" ? "Caption turned off. The prompt is tags only." : "Caption turned back on.");
+  });
+  weightsFor.addEventListener("change", () => {
+    try {
+      localStorage.setItem("lumicast.target", weightsFor.value);
+    } catch {}
+    if (result && (verified || !tags.value.trim()))
+      prompt.value = built(splitTags(tags.value), prose.value);
+    notify(weightsFor.value === "nai" ? "Weights are now written the NovelAI way." : "Weights are now written the Anima way.");
   });
   scope.addEventListener("change", () => {
     if (busy || !result)
