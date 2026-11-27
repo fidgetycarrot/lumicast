@@ -620,7 +620,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   panel('pictures','3 · Pictures','Prompts for pictures: an intro card for the loaded character, a cast picture of several people from the story, or the loaded character copied for another app. None of them changes a character.',introCard,groupCard,output);
   panel('setup','Setup','Set once: which model LumiCast uses and your tag services. The last one is an extra most people will not need.',settings,searchCard);
   intro.style.order='1';tabBar.style.order='2';working.style.order='3';status.style.order='4';
-  const footer=el('p','LumiCast 0.23.2 · Draft stays in this tab until reload.');footer.style.order='99';
+  const footer=el('p','LumiCast 0.23.3 · Draft stays in this tab until reload.');footer.style.order='99';
   app.append(intro,settings,status,studioNews,castCard,input,gapsCard,output,refine,sheetCard,introCard,groupCard,searchCard,tabBar,working,...leads,footer);
   try{showTab(localStorage.getItem('lumicast.tab')||'start',false);}catch{showTab('start',false);}
   const controls=[readOoc,readCard,saveLoaded,introMake,another,introRevise,findCast,groupMake,groupAnother,groupRevise,groupLooks,introCopy,introCopyUndesired,translate,studio,sendBack,writeMoss,again,save,refreshButton,testGel,saveNotes,saveQuality,startOver,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];

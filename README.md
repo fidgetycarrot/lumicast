@@ -1,4 +1,6 @@
-# LumiCast 0.23.2
+# LumiCast 0.23.3
+
+**v0.23.3 drops tags that only name a face part, and stacked body hair.** `eyelashes`, `lips`, `nose`, `eyebrows`, `teeth`, `ears` and `mouth` only tell NovelAI to draw that part prominently (lashes and lips read feminine), so they are left out; specific tags like `thick eyebrows` stay. Body hair keeps one tag (chest hair first) instead of chest, arm, leg and navel hair together. Sheet phrases with vague words ("straight solid nose") are left out. Your notes' tags are never touched.
 
 **v0.23.2 brings "Copy a character for other apps" back where you'll see it.** The tabs update had put it under Setup; it is now on the Pictures tab. Include still picks just the character, the character with clothes, or everything including pose and place. New: **Weights for** writes weights the NovelAI way (`1.3::tag ::`, the default) or the Anima/SwarmUI way (`(tag:1.3)`), remembered per browser.
 

@@ -111,7 +111,7 @@ Use "" for a piece that has no traits. Write from the trait details alone; a quo
 
 sheet is the same character laid out for an image tool that saves characters as comma-separated fields and reuses them in every scene. That tool splits on commas and writes its own sentences, so nothing here may be a sentence.
 - "subject": the plainest noun phrase for who this is, two to five lowercase words, with an age word first when the text gives an age: "adult woman", "young adult man", "adult male android". No name, no build, no hair.
-- "character": at most 2 short phrases for the face and head that the kept tags cannot say: the nose, the jaw or face shape, an exact colour. Never the body or figure, and never an impression ("striking features"). This sheet is pasted into prompts that may hold several characters, so every phrase has to earn its place by changing what gets drawn. Each is two to seven lowercase words with no comma, no pronoun and no full stop, and stands alone: "choppy silver-white hair", "violet-pink gradient eyes", "pale porcelain skin". Skip a fact a kept tag fully covers (no "short hair" beside short_hair), and skip a phrase that only restates a tag more strongly ("pale porcelain skin" beside pale_skin, "disproportionately long legs" beside long_legs, "thick weighted lashes" beside thick_eyelashes). Keep a phrase that adds a colour, texture or placement the tag lacks, but at most one phrase for an item the tags already name (eyewear, piercings, hair tips). Nothing about clothing, pose or setting.
+- "character": at most 2 short phrases for the face and head that the kept tags cannot say: the nose, the jaw or face shape, an exact colour. Never the body or figure, and never an impression or a vague word ("striking features", "solid nose", "strong face"): use plain shape words an artist would draw ("straight narrow nose", "square jaw"). This sheet is pasted into prompts that may hold several characters, so every phrase has to earn its place by changing what gets drawn. Each is two to seven lowercase words with no comma, no pronoun and no full stop, and stands alone: "choppy silver-white hair", "violet-pink gradient eyes", "pale porcelain skin". Skip a fact a kept tag fully covers (no "short hair" beside short_hair), and skip a phrase that only restates a tag more strongly ("pale porcelain skin" beside pale_skin, "disproportionately long legs" beside long_legs, "thick weighted lashes" beside thick_eyelashes). Keep a phrase that adds a colour, texture or placement the tag lacks, but at most one phrase for an item the tags already name (eyewear, piercings, hair tips). Nothing about clothing, pose or setting.
 - "outfit": the outfit traits as the saved outfit, which replaces the outfit tags in that tool and is also read by MOSS Image:
 ${OUTFIT_RULES}
 - "anatomy": the same, for the anatomy traits only, kept plain and short.
@@ -1389,7 +1389,7 @@ ${picked}`;
   tabBar.style.order = "2";
   working.style.order = "3";
   status.style.order = "4";
-  const footer = el("p", "LumiCast 0.23.2 · Draft stays in this tab until reload.");
+  const footer = el("p", "LumiCast 0.23.3 · Draft stays in this tab until reload.");
   footer.style.order = "99";
   app.append(intro, settings, status, studioNews, castCard, input, gapsCard, output, refine, sheetCard, introCard, groupCard, searchCard, tabBar, working, ...leads, footer);
   try {

@@ -305,3 +305,8 @@ Translations became slow once Gelbooru credentials started working: every tag al
 ## v0.23.2: copy box on Pictures, weights for NovelAI
 
 - Tested (fake host): the copied prompt writes weights as 1.4::tag :: by default and as (tag:1.4) after choosing Anima or SwarmUI, rebuilding on the switch.
+
+## v0.23.3: part-only tags, body hair, vague phrases
+
+- Cause confirmed from a real sheet: eyelashes and lips are real tags, so they passed the dictionary check; nothing limited body hair; the phrase rule did not exclude vague words.
+- Tested (unit): eyelashes and lips go with a notice; chest hair stays and navel, arm and leg hair go; a user's own body-hair tag counts as the one kept; "straight solid nose" goes and "square jaw" stays.

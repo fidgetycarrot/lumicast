@@ -442,3 +442,15 @@ test('every size ladder steps down once at 1.3, but only to a step the tag servi
   // Without a lookup, only the step that was tested on real pictures is known.
   expect(leanBody([{name:'huge_breasts'},{name:'large_breasts'}],()=>false).rows.map(r=>r.name)).toEqual(['huge_breasts','medium_breasts']);
 });
+test('face-part-only tags go, body hair keeps one tag, vague phrases go',async()=> {
+  const rows=['toned_male','chest_hair','navel_hair','arm_hair','leg_hair','eyelashes','lips','thick_eyebrows','green_eyes'].map(name=>({name}));
+  const lean=leanBody(rows,()=>false);
+  expect(lean.rows.map(r=>r.name)).toEqual(['toned_male','chest_hair','thick_eyebrows','green_eyes']);
+  expect(lean.removed).toEqual(['navel_hair','arm_hair','leg_hair','eyelashes','lips']);
+  // The user's own tags stay, even part-only ones.
+  expect(leanBody([{name:'lips'},{name:'arm_hair'},{name:'leg_hair'}],r=>r.name!=='leg_hair').rows.map(r=>r.name)).toEqual(['lips','arm_hair']);
+  const face={id:'f',group:'face',evidence:'Thick lashes, full lips, green eyes',tags:['eyelashes','lips','green_eyes'],detail:'x'};
+  const {result}=await run('Thick lashes, full lips, green eyes.',{traits:[face]},{drop:[],captions:{},sheet:{character:['straight solid nose','square jaw']}});
+  expect(result.sheet.appearance).toBe('green eyes, square jaw');
+  expect(result.notices.join(' ')).toContain('Left out: eyelashes, lips.');
+});
