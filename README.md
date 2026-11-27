@@ -1,4 +1,6 @@
-# LumiCast 0.23.4
+# LumiCast 0.24.0
+
+**v0.24.0 lets you say which story a character belongs to.** The Character sheet has a **Story** choice (your character cards, newest first) and a **Role** (main character, recurring, walk-on). When the character comes from a chat's [ooc] reply or its card, Story starts on that chat's card; otherwise it starts on Not set, which sends nothing and leaves Lumi Studio's own link alone. The story goes to Lumi Studio with the sheet, both on Update in Lumi Studio and for Fill from LumiCast, so Lumi Studio 1.46.0 files the face under that story and casts it on the story's first chat. Needs the characters permission to list your cards.
 
 **v0.23.4 tells Lumi Studio which story each Paige character belongs to.** Paige sends a story (the card's id or name, and whether the person is a lead, regular or minor) with each look; LumiCast now passes it on with the sheet, so Lumi Studio 1.46.0 files the face under that story and casts it on the card's first chat.
 

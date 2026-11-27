@@ -315,3 +315,8 @@ Translations became slow once Gelbooru credentials started working: every tag al
 
 - Cause: LumiCast read Paige's looks without their story object, so it never reached lumicast.paige.sheet.
 - Tested (fake host): each look's story goes out on paige.sheet; card_name is read as cardName; an unknown role is dropped; a look with no story (and no batch story) sends none.
+
+## v0.24.0: Story and Role on the sheet
+
+- Tested (fake host): cards listed newest first after Not set; Not set sends no story; picking a card and role sends {cardId, cardName, role} on sheet.latest; reading the open chat's [ooc] reply selects that chat's card; loading a character from Lumi Studio resets both to Not set.
+- Not tested live. Lumi Studio 1.46.0 reads the story on updates (tweak.result); its Fill from LumiCast path (sheet.latest) needs to read shared.story too.

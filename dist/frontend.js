@@ -434,6 +434,7 @@ function setup(ctx, options = {}) {
   const castButtons = [];
   const readOoc = button("Use the last [ooc] reply", async () => {
     const read = await clocked("castRead", { connectionId: connection.value });
+    loadStories(true);
     castNews.hidden = true;
     readOoc.className = "";
     castList.replaceChildren(el("p", `From your [ooc] message “${read.question.length > 120 ? `${read.question.slice(0, 120)}…` : read.question}”. Check each description, then save it.`));
@@ -446,6 +447,7 @@ function setup(ctx, options = {}) {
   });
   const readCardNow = async () => {
     const read = await clocked("cardRead", { connectionId: connection.value });
+    loadStories(true);
     castList.replaceChildren(el("p", `From the card “${read.card}”. Check each description, then make its prompt.${read.cut ? " The card’s lorebooks were too long to read in full, so some entries were left out." : ""}`));
     castButtons.splice(0);
     listed = [];
@@ -586,6 +588,8 @@ ${picked}`;
   let studioRef = null;
   const applyStudio = (got) => {
     studioRef = { id: got.id, kind: got.kind, sentAt: got.sentAt, name: got.name };
+    storyPick.value = "";
+    rolePick.value = "";
     sendBack.textContent = `Update ${got.name || "this character"} in Lumi Studio`;
     for (const key of Object.keys(sheet))
       sheet[key].box.value = got.sheet[key] ?? "";
@@ -632,7 +636,7 @@ ${picked}`;
     if (!studioRef)
       throw new Error("Load a character from Lumi Studio first.");
     const values = Object.fromEntries(Object.keys(sheet).map((k) => [k, sheet[k].box.value]));
-    const done = await rpc.request("toStudio", { id: studioRef.id, kind: studioRef.kind, sentAt: studioRef.sentAt, sheet: values });
+    const done = await rpc.request("toStudio", { id: studioRef.id, kind: studioRef.kind, sentAt: studioRef.sentAt, sheet: values, story: storyOf() });
     const who = done.name || studioRef.name || "The character";
     studioText.textContent = `${who} is updated in Lumi Studio. Generate a new picture there to check it. You can keep refining and send it again.`;
     notify(`${who} updated in Lumi Studio.${groupTake ? " To put the change into your cast picture, open Pictures and press Use the updated looks." : ""}`);
@@ -729,6 +733,28 @@ ${picked}`;
   const shareState = el("small");
   shareState.className = "lc-muted";
   sheetCard.append(shareState);
+  const storyPick = el("select");
+  storyPick.append(option("Not set", ""));
+  const rolePick = el("select");
+  rolePick.append(option("Not set", ""), option("Main character", "lead"), option("Recurring", "regular"), option("Walk-on", "minor"));
+  const storyState = el("small");
+  storyState.className = "lc-muted";
+  const loadStories = async (pickCurrent) => {
+    try {
+      const got = await rpc.request("stories", {});
+      const keep = storyPick.value;
+      storyPick.replaceChildren(option("Not set", ""), ...got.cards.map((c) => option(c.name, c.id)));
+      storyPick.value = pickCurrent && got.current && got.cards.some((c) => c.id === got.current) ? got.current : got.cards.some((c) => c.id === keep) ? keep : "";
+      storyState.textContent = "";
+    } catch (e) {
+      storyState.textContent = `Could not list your character cards: ${e instanceof Error ? e.message : "unknown error"}`;
+    }
+  };
+  const storyOf = () => storyPick.value ? { cardId: storyPick.value, cardName: storyPick.selectedOptions[0]?.textContent ?? "", ...rolePick.value ? { role: rolePick.value } : {} } : undefined;
+  const storyBox = el("div");
+  storyBox.className = "lc-sub";
+  storyBox.append(el("h2", "Story"), field("Story", storyPick, "The character card this person belongs to. Lumi Studio files them under it and puts them in the cast on that story’s first chat."), field("Role", rolePick, "Main characters come first in Lumi Studio’s Library and cast."), storyState);
+  sheetCard.append(storyBox);
   const gapsBox = el("div");
   gapsBox.className = "lc-gaps";
   const gapsCard = el("section");
@@ -1389,7 +1415,7 @@ ${picked}`;
   tabBar.style.order = "2";
   working.style.order = "3";
   status.style.order = "4";
-  const footer = el("p", "LumiCast 0.23.4 · Draft stays in this tab until reload.");
+  const footer = el("p", "LumiCast 0.24.0 · Draft stays in this tab until reload.");
   footer.style.order = "99";
   app.append(intro, settings, status, studioNews, castCard, input, gapsCard, output, refine, sheetCard, introCard, groupCard, searchCard, tabBar, working, ...leads, footer);
   try {
@@ -1398,6 +1424,9 @@ ${picked}`;
     showTab("start", false);
   }
   const controls = [readOoc, readCard, saveLoaded, introMake, another, introRevise, findCast, groupMake, groupAnother, groupRevise, groupLooks, introCopy, introCopyUndesired, translate, studio, sendBack, writeMoss, again, save, refreshButton, testGel, saveNotes, saveQuality, startOver, verify, rebuild, copy, copyTags, copyProse, suggest, apply, search, ...Object.values(sheet).map((f) => f.copyField)];
+  storyPick.addEventListener("change", () => share());
+  rolePick.addEventListener("change", () => share());
+  loadStories(false);
   let shareTimer;
   function share() {
     clearTimeout(shareTimer);
@@ -1405,7 +1434,7 @@ ${picked}`;
       const values = Object.fromEntries(Object.keys(sheet).map((k) => [k, sheet[k].box.value]));
       if (!Object.values(values).some((v) => v.trim()))
         return;
-      rpc.request("publish", { sheet: values, description: source.value }).then(() => {
+      rpc.request("publish", { sheet: values, description: source.value, story: storyOf() }).then(() => {
         if (!closed)
           shareState.textContent = "Ready for Fill from LumiCast in Lumi Studio.";
       }).catch((e) => {

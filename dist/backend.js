@@ -1854,6 +1854,16 @@ function generationError(error, provider, model, stage) {
 var DEFAULTS = { connectionId: "", castConnectionId: "", gelUser: "", gelKey: "", notes: "", quality: "", thinking: "light" };
 var thinking = (v) => THINKING.includes(v) ? v : "light";
 var REASONING = { light: { source: "custom", apiReasoning: true, effort: "low" }, off: { source: "off" }, inherit: undefined };
+var storyFrom = (value) => {
+  const v = record(value);
+  const id = v.cardId ?? v.card_id, name = v.cardName ?? v.card_name;
+  const story = {
+    ...typeof id === "string" && id.trim() ? { cardId: id.trim().slice(0, 100) } : {},
+    ...typeof name === "string" && name.trim() ? { cardName: name.trim().slice(0, 120) } : {},
+    ...v.role === "lead" || v.role === "regular" || v.role === "minor" ? { role: v.role } : {}
+  };
+  return story.cardId || story.cardName ? story : undefined;
+};
 function setupBackend(api, options = {}) {
   const users = new Map;
   let closed = false;
@@ -1875,7 +1885,7 @@ function setupBackend(api, options = {}) {
     await s.load;
   };
   const dictionaryFor = (s) => s.dictionary ??= new BooruDictionary(async (url) => {
-    const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.23.4 (tag metadata client)" } }));
+    const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.24.0 (tag metadata client)" } }));
     if (typeof response.status !== "number" || typeof response.body !== "string")
       throw new Error("Invalid proxy response.");
     return { status: response.status, body: response.body };
@@ -2046,6 +2056,24 @@ function setupBackend(api, options = {}) {
         s.settings = next;
         return true;
       }
+      if (r.action === "stories") {
+        need(["characters"]);
+        const cards = [];
+        for (let offset = 0;offset < 1000; offset += 100) {
+          const page = await api.characters.list({ limit: 100, offset, userId });
+          for (const c of page.data)
+            cards.push({ id: c.id, name: (c.name || "Unnamed card").slice(0, 120), at: Number(c.updated_at) || 0 });
+          if (page.data.length < 100 || cards.length >= page.total)
+            break;
+        }
+        cards.sort((a, b) => b.at - a.at || a.name.localeCompare(b.name));
+        let current = "";
+        try {
+          const chat = api.permissions.has("chats") ? await api.chats.getActive(userId) : null;
+          current = chat?.character_id ?? "";
+        } catch {}
+        return { cards: cards.map(({ id, name }) => ({ id, name })), current };
+      }
       if (r.action === "publish") {
         const v = record(r.input);
         const sheet = record(v.sheet);
@@ -2058,7 +2086,8 @@ function setupBackend(api, options = {}) {
           title: (description.split(`
 `).find((l) => l.trim()) ?? "").trim().slice(0, 120),
           updatedAt: Date.now(),
-          userId: userId ?? ""
+          userId: userId ?? "",
+          ...((st) => st ? { story: st } : {})(storyFrom(v.story))
         };
         const pool = api.rpcPool;
         if (typeof pool?.sync !== "function")
@@ -2143,7 +2172,8 @@ function setupBackend(api, options = {}) {
           kind: v.kind === "persona" ? "persona" : "character",
           sentAt: Number(v.sentAt) || 0,
           userId: userId ?? "",
-          sheet: { countTag: field("countTag", 40), subject: field("subject", 200), always: field("always"), appearance: field("appearance"), outfit: field("outfit"), anatomy: field("anatomy"), moss: field("moss", 1500), attitude: field("attitude", 200) }
+          sheet: { countTag: field("countTag", 40), subject: field("subject", 200), always: field("always"), appearance: field("appearance"), outfit: field("outfit"), anatomy: field("anatomy"), moss: field("moss", 1500), attitude: field("attitude", 200) },
+          ...((st) => st ? { story: st } : {})(storyFrom(v.story))
         }, { requires: [] });
         let answer;
         try {
@@ -2203,7 +2233,7 @@ function setupBackend(api, options = {}) {
         const entered = gelCredentials(text(v.gelUser ?? "", "Gelbooru user", 300), v.gelKey ? text(v.gelKey, "Gelbooru key", 300) : "");
         const credentials = { user: entered.user || settings.gelUser, key: entered.key || settings.gelKey };
         const outcome = await testGelbooru(async (url) => {
-          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.23.4 (tag metadata client)" } }));
+          const response = record(await api.cors(url, { method: "GET", headers: { Accept: "application/json", "User-Agent": "LumiCast/0.24.0 (tag metadata client)" } }));
           return { status: Number(response.status), body: typeof response.body === "string" ? response.body : "" };
         }, credentials);
         const unsaved = credentials.user !== settings.gelUser || credentials.key !== settings.gelKey;
@@ -2478,16 +2508,6 @@ function setupBackend(api, options = {}) {
       reply(undefined, error instanceof Error && error.name === "AbortError" ? "Operation cancelled or timed out. Your edits are preserved." : error instanceof ModelRequestError || trusted ? message : "The operation failed. Check your connection, provider status and tag-service access. Your edits are preserved.");
     });
   });
-  const storyFrom = (value) => {
-    const v = record(value);
-    const id = v.cardId ?? v.card_id, name = v.cardName ?? v.card_name;
-    const story = {
-      ...typeof id === "string" && id.trim() ? { cardId: id.trim().slice(0, 100) } : {},
-      ...typeof name === "string" && name.trim() ? { cardName: name.trim().slice(0, 120) } : {},
-      ...v.role === "lead" || v.role === "regular" || v.role === "minor" ? { role: v.role } : {}
-    };
-    return story.cardId || story.cardName ? story : undefined;
-  };
   const pool = api.rpcPool;
   const paigeStatus = (status) => {
     try {

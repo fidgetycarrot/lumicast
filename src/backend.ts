@@ -13,6 +13,15 @@ const thinking=(v:unknown):Thinking=>THINKING.includes(v as Thinking)?v as Think
 // A light think is enough to pick tags; long reasoning was most of the wait. Off and inherit are the user's choice.
 const REASONING={light:{source:'custom',apiReasoning:true,effort:'low'},off:{source:'off'},inherit:undefined} as const;
 /** waitScale: tests shrink the rate-limit waits. */
+/** Which story (character card) a character belongs to; Lumi Studio files the face under it and casts it on the card's first chat. */
+type Story={cardId?:string;cardName?:string;role?:'lead'|'regular'|'minor'};
+/** A story object as Paige or the panel send it, camel or snake case; anything without a card id or name is no story at all. */
+const storyFrom=(value:unknown):Story|undefined=>{
+  const v=record(value);const id=v.cardId ?? v.card_id,name=v.cardName ?? v.card_name;
+  const story:Story={...(typeof id==='string'&&id.trim()?{cardId:id.trim().slice(0,100)}:{}),...(typeof name==='string'&&name.trim()?{cardName:name.trim().slice(0,120)}:{}),
+    ...(v.role==='lead'||v.role==='regular'||v.role==='minor'?{role:v.role}:{})};
+  return story.cardId||story.cardName?story:undefined;
+};
 export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = {}) {
   type UserState={ settings?:Settings; dictionary?:BooruDictionary; load?:Promise<void>; jobs:Map<string,AbortController> };
   const users = new Map<string, UserState>();
@@ -26,7 +35,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
     await s.load;
   };
   const dictionaryFor=(s:UserState)=>s.dictionary ??= new BooruDictionary(async url=> {
-    const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.23.4 (tag metadata client)'}}));
+    const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.24.0 (tag metadata client)'}}));
     if(typeof response.status!=='number'||typeof response.body!=='string')throw new Error('Invalid proxy response.');
     return {status:response.status,body:response.body};
   },{user:s.settings!.gelUser,key:s.settings!.gelKey});
@@ -154,13 +163,29 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
         s.settings=next;
         return true;
       }
+      if (r.action === 'stories') {
+        // The user's character cards, newest first, for the Story choice; current is the open chat's card.
+        need(['characters']);
+        const cards:{id:string;name:string;at:number}[]=[];
+        for (let offset=0;offset<1000;offset+=100) {
+          const page=await api.characters.list({limit:100,offset,userId});
+          for (const c of page.data) cards.push({id:c.id,name:(c.name||'Unnamed card').slice(0,120),at:Number((c as unknown as {updated_at?:number}).updated_at)||0});
+          if (page.data.length<100||cards.length>=page.total) break;
+        }
+        cards.sort((a,b)=>b.at-a.at||a.name.localeCompare(b.name));
+        let current='';
+        try {const chat=api.permissions.has('chats' as never)?await api.chats.getActive(userId):null;current=chat?.character_id ?? '';} catch {/* no chat open */}
+        return {cards:cards.map(({id,name})=>({id,name})),current};
+      }
       if (r.action === 'publish') {
         // The latest sheet, for Lumi Studio's "Fill from LumiCast". In memory only; cleared when Lumiverse restarts.
         const v=record(r.input);const sheet=record(v.sheet);
         const field=(key:string)=>text(sheet[key] ?? '',key,4000);
         const description=text(v.description ?? '','description',12_000);
         const shared:SharedSheet={version:1,sheet:{countTag:field('countTag'),subject:field('subject'),always:field('always'),appearance:field('appearance'),outfit:field('outfit'),anatomy:field('anatomy'),moss:field('moss'),attitude:field('attitude')},
-          name:nameFrom(description),title:(description.split('\n').find(l=>l.trim()) ?? '').trim().slice(0,120),updatedAt:Date.now(),userId:userId ?? ''};
+          name:nameFrom(description),title:(description.split('\n').find(l=>l.trim()) ?? '').trim().slice(0,120),updatedAt:Date.now(),userId:userId ?? '',
+          // Sent only when a story was picked; leaving it out keeps whatever Lumi Studio already has.
+          ...((st=>st?{story:st}:{})(storyFrom(v.story)))};
         const pool=(api as unknown as {rpcPool?:{sync?:(endpoint:string,value:unknown,policy?:{requires?:string[]})=>string}}).rpcPool;
         if (typeof pool?.sync!=='function') throw new Error('This Lumiverse version cannot share data between extensions.');
         return pool.sync('sheet.latest',shared,{requires:[]});
@@ -220,7 +245,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
         const pool=(api as unknown as {rpcPool?:{sync?:(e:string,v:unknown,p?:{requires?:string[]})=>string;read?:(e:string)=>Promise<unknown>}}).rpcPool;
         if (typeof pool?.sync!=='function'||typeof pool.read!=='function') throw new Error('This Lumiverse version cannot share data between extensions.');
         pool.sync('tweak.result',{version:1,id,kind:v.kind==='persona'?'persona':'character',sentAt:Number(v.sentAt)||0,userId:userId ?? '',
-          sheet:{countTag:field('countTag',40),subject:field('subject',200),always:field('always'),appearance:field('appearance'),outfit:field('outfit'),anatomy:field('anatomy'),moss:field('moss',1500),attitude:field('attitude',200)}},{requires:[]});
+          sheet:{countTag:field('countTag',40),subject:field('subject',200),always:field('always'),appearance:field('appearance'),outfit:field('outfit'),anatomy:field('anatomy'),moss:field('moss',1500),attitude:field('attitude',200)},...((st=>st?{story:st}:{})(storyFrom(v.story)))},{requires:[]});
         let answer:Record<string,unknown>;
         try {answer=record(await pool.read('lumidraw_studio.lumicast.apply'));}
         catch (error) {
@@ -264,7 +289,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
         const entered=gelCredentials(text(v.gelUser ?? '','Gelbooru user',300),v.gelKey ? text(v.gelKey,'Gelbooru key',300) : '');
         const credentials={user:entered.user||settings.gelUser,key:entered.key||settings.gelKey};
         const outcome=await testGelbooru(async url=> {
-          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.23.4 (tag metadata client)'}}));
+          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.24.0 (tag metadata client)'}}));
           return {status:Number(response.status),body:typeof response.body==='string'?response.body:''};
         },credentials);
         const unsaved=credentials.user!==settings.gelUser||credentials.key!==settings.gelKey;
@@ -473,16 +498,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
    * back at once; the translations run in the background, one at a time, and each finished sheet goes straight
    * into Lumi Studio (lumidraw_studio.lumicast.add), new or updated by name. Progress is shared at paige.status.
    */
-  /** Which story (character card) a look belongs to; Lumi Studio files the face under it and casts it on the card's first chat. */
-  type Story={cardId?:string;cardName?:string;role?:'lead'|'regular'|'minor'};
   type PaigeLook={name:string;aliases:string[];kind:'character'|'persona';description:string;story?:Story};
-  /** Paige's story object, camel or snake case; anything without a card id or name is no story at all. */
-  const storyFrom=(value:unknown):Story|undefined=>{
-    const v=record(value);const id=v.cardId ?? v.card_id,name=v.cardName ?? v.card_name;
-    const story:Story={...(typeof id==='string'&&id.trim()?{cardId:id.trim().slice(0,100)}:{}),...(typeof name==='string'&&name.trim()?{cardName:name.trim().slice(0,120)}:{}),
-      ...(v.role==='lead'||v.role==='regular'||v.role==='minor'?{role:v.role}:{})};
-    return story.cardId||story.cardName?story:undefined;
-  };
 /** names: everyone in the batch, in order. stage: what LumiCast is doing for current right now. updatedAt: last sign of life, so Paige can tell working from stuck. */
   type PaigeStatus={sessionId:string;done:number;total:number;running:boolean;current?:string;stage?:string;names?:string[];startedAt?:number;updatedAt?:number;error?:string;finished:{name:string;ok:boolean;message:string}[]};
   const pool=(api as unknown as {rpcPool?:{sync?:(e:string,v:unknown,p?:{requires?:string[]})=>string;read?:(e:string)=>Promise<unknown>;handle?:(e:string,h:(ctx:{requesterExtensionId:string})=>unknown,p?:{requires?:string[]})=>string}}).rpcPool;

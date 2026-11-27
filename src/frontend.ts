@@ -102,7 +102,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   const castList=el('div');
   const castButtons:HTMLButtonElement[]=[];
   const readOoc=button('Use the last [ooc] reply',async()=> {
-    const read=await clocked<CastRead>('castRead',{connectionId:connection.value});
+    const read=await clocked<CastRead>('castRead',{connectionId:connection.value});void loadStories(true);
     castNews.hidden=true;readOoc.className='';
     castList.replaceChildren(el('p',`From your [ooc] message “${read.question.length>120?`${read.question.slice(0,120)}…`:read.question}”. Check each description, then save it.`));
     castButtons.splice(0);listed=[];
@@ -112,7 +112,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   });
   // A character card often describes several people; each becomes an entry here, ready for a prompt.
   const readCardNow=async()=> {
-    const read=await clocked<CardRead>('cardRead',{connectionId:connection.value});
+    const read=await clocked<CardRead>('cardRead',{connectionId:connection.value});void loadStories(true);
     castList.replaceChildren(el('p',`From the card “${read.card}”. Check each description, then make its prompt.${read.cut?' The card’s lorebooks were too long to read in full, so some entries were left out.':''}`));
     castButtons.splice(0);listed=[];
     for(const member of read.characters)castList.append(castEntry(member,true));
@@ -194,7 +194,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   // The Lumi Studio entry this sheet came from, so the revised sheet can go back to it.
   let studioRef:{id:string;kind:string;sentAt:number;name:string}|null=null;
   const applyStudio=(got:StudioCharacter)=> {
-    studioRef={id:got.id,kind:got.kind,sentAt:got.sentAt,name:got.name};sendBack.textContent=`Update ${got.name||'this character'} in Lumi Studio`;
+    studioRef={id:got.id,kind:got.kind,sentAt:got.sentAt,name:got.name};storyPick.value='';rolePick.value='';sendBack.textContent=`Update ${got.name||'this character'} in Lumi Studio`;
     for(const key of Object.keys(sheet) as (keyof typeof sheet)[])sheet[key].box.value=got.sheet[key]??'';
     source.value=got.description;stated.value='';statedAgain.value='';revision++;translatedFrom=source.value;
     result=null;fromStudio=true;forgetRounds();roundFeedback='';showRounds();pending=[];proposed.replaceChildren();reply.textContent='';
@@ -215,7 +215,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   const sendBack=button('Update in Lumi Studio',async()=> {
     if(!studioRef)throw new Error('Load a character from Lumi Studio first.');
     const values=Object.fromEntries((Object.keys(sheet) as (keyof typeof sheet)[]).map(k=>[k,sheet[k].box.value]));
-    const done=await rpc.request<{name:string}>('toStudio',{id:studioRef.id,kind:studioRef.kind,sentAt:studioRef.sentAt,sheet:values});
+    const done=await rpc.request<{name:string}>('toStudio',{id:studioRef.id,kind:studioRef.kind,sentAt:studioRef.sentAt,sheet:values,story:storyOf()});
     const who=done.name||studioRef.name||'The character';
     studioText.textContent=`${who} is updated in Lumi Studio. Generate a new picture there to check it. You can keep refining and send it again.`;
     notify(`${who} updated in Lumi Studio.${groupTake?' To put the change into your cast picture, open Pictures and press Use the updated looks.':''}`);
@@ -275,6 +275,24 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   const sheetCard=remembered(Object.assign(el('details'),{open:true}),'sheet');sheetCard.className='lc-card';sheetCard.append(el('summary','Character sheet'));
   sheetCard.append(el('p','One field per box in Lumi Studio’s character editor. In Lumi Studio, open a new reusable character or persona and choose Fill from LumiCast to copy all of them at once, or copy each field below.'));
   const shareState=el('small');shareState.className='lc-muted';sheetCard.append(shareState);
+  // Which story (character card) this character belongs to. Lumi Studio files the face under it in its Library and
+  // puts it in the cast on that card's first chat. "Not set" sends nothing, so Lumi Studio keeps what it has.
+  const storyPick=el('select');storyPick.append(option('Not set','')); 
+  const rolePick=el('select');rolePick.append(option('Not set',''),option('Main character','lead'),option('Recurring','regular'),option('Walk-on','minor'));
+  const storyState=el('small');storyState.className='lc-muted';
+  const loadStories=async(pickCurrent:boolean)=> {
+    try {
+      const got=await rpc.request<{cards:{id:string;name:string}[];current:string}>('stories',{});
+      const keep=storyPick.value;storyPick.replaceChildren(option('Not set',''),...got.cards.map(c=>option(c.name,c.id)));
+      storyPick.value=pickCurrent&&got.current&&got.cards.some(c=>c.id===got.current)?got.current:got.cards.some(c=>c.id===keep)?keep:'';
+      storyState.textContent='';
+    } catch(e){storyState.textContent=`Could not list your character cards: ${e instanceof Error?e.message:'unknown error'}`;}
+  };
+  const storyOf=()=>storyPick.value?{cardId:storyPick.value,cardName:storyPick.selectedOptions[0]?.textContent ?? '',...(rolePick.value?{role:rolePick.value}:{})}:undefined;
+  const storyBox=el('div');storyBox.className='lc-sub';
+  storyBox.append(el('h2','Story'),field('Story',storyPick,'The character card this person belongs to. Lumi Studio files them under it and puts them in the cast on that story’s first chat.'),
+    field('Role',rolePick,'Main characters come first in Lumi Studio’s Library and cast.'),storyState);
+  sheetCard.append(storyBox);
   // Gaps are answered where they are shown: the box mirrors Known facts.
   const gapsBox=el('div');gapsBox.className='lc-gaps';
   const gapsCard=el('section');gapsCard.className='lc-card';gapsCard.hidden=true;gapsCard.append(gapsBox);
@@ -620,11 +638,13 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
   panel('pictures','3 · Pictures','Prompts for pictures: an intro card for the loaded character, a cast picture of several people from the story, or the loaded character copied for another app. None of them changes a character.',introCard,groupCard,output);
   panel('setup','Setup','Set once: which model LumiCast uses and your tag services. The last one is an extra most people will not need.',settings,searchCard);
   intro.style.order='1';tabBar.style.order='2';working.style.order='3';status.style.order='4';
-  const footer=el('p','LumiCast 0.23.4 · Draft stays in this tab until reload.');footer.style.order='99';
+  const footer=el('p','LumiCast 0.24.0 · Draft stays in this tab until reload.');footer.style.order='99';
   app.append(intro,settings,status,studioNews,castCard,input,gapsCard,output,refine,sheetCard,introCard,groupCard,searchCard,tabBar,working,...leads,footer);
   try{showTab(localStorage.getItem('lumicast.tab')||'start',false);}catch{showTab('start',false);}
   const controls=[readOoc,readCard,saveLoaded,introMake,another,introRevise,findCast,groupMake,groupAnother,groupRevise,groupLooks,introCopy,introCopyUndesired,translate,studio,sendBack,writeMoss,again,save,refreshButton,testGel,saveNotes,saveQuality,startOver,verify,rebuild,copy,copyTags,copyProse,suggest,apply,search,...Object.values(sheet).map(f=>f.copyField)];
 
+  storyPick.addEventListener('change',()=>share());rolePick.addEventListener('change',()=>share());
+  void loadStories(false);
   // Every change to the sheet is offered to Lumi Studio, a moment after typing stops.
   let shareTimer:ReturnType<typeof setTimeout>|undefined;
   function share(){
@@ -632,7 +652,7 @@ export function setup(ctx:SpindleFrontendContext,options:{studioPollMs?:number}=
     shareTimer=setTimeout(()=> {
       const values=Object.fromEntries((Object.keys(sheet) as (keyof typeof sheet)[]).map(k=>[k,sheet[k].box.value]));
       if(!Object.values(values).some(v=>v.trim()))return;
-      void rpc.request('publish',{sheet:values,description:source.value})
+      void rpc.request('publish',{sheet:values,description:source.value,story:storyOf()})
         .then(()=>{if(!closed)shareState.textContent='Ready for Fill from LumiCast in Lumi Studio.';})
         .catch(e=>{if(!closed)shareState.textContent=`Not shared with Lumi Studio: ${e instanceof Error?e.message:'unknown error'} Copy the fields by hand.`;});
     },400);

@@ -25,7 +25,7 @@ function harness(provider='openrouter',model='test/generative') {
     personas:{getActive:async()=>persona},
     chats:{getActive:async()=>story.chat&&structuredClone(story.chat),get:async(id:string)=>story.chat?.id===id?structuredClone(story.chat):null,update:async(id:string,v:{metadata:Record<string,unknown>})=>{calls.push(['chatUpdate',id,v.metadata]);story.chat!.metadata=v.metadata;return story.chat;}},
     chat:{getMessages:async(id:string)=>id==='chat1'?story.messages.map(m=>({...m,is_user:m.role==='user'})):[]},
-    characters:{get:async(id:string)=>id===story.card.id?{...story.card}:null,update:async(id:string,v:{world_book_ids:string[]})=>{calls.push(['attach',id,v.world_book_ids]);story.card.world_book_ids=v.world_book_ids;return story.card;}},
+    characters:{list:async()=>({data:[{...story.card,updated_at:2},{id:'card2',name:'Port Hesk',updated_at:5}],total:2}),get:async(id:string)=>id===story.card.id?{...story.card}:null,update:async(id:string,v:{world_book_ids:string[]})=>{calls.push(['attach',id,v.world_book_ids]);story.card.world_book_ids=v.world_book_ids;return story.card;}},
     world_books:{get:async(id:string)=>story.books.get(id)??null,create:async(v:{name:string;metadata:Record<string,unknown>})=>{const b={id:`b${story.books.size}`,...v};story.books.set(b.id,b);return b;},
       entries:{list:async(id:string)=>({data:story.entries.filter(e=>e.world_book_id===id),total:0}),
         create:async(id:string,v:{key:string[];content:string;comment:string})=>{const e={id:`e${story.entries.length}`,world_book_id:id,...v};story.entries.push(e);return e;},
@@ -677,4 +677,27 @@ test('face picks are told who else is in the story, leaving out the character be
   await rpc.request('translate',{description:'Tobin has red hair.',connectionId:'c1',pick:true});
   const sent=JSON.parse(((h.calls.filter(c=>(c as unknown[])[0]==='generation').at(-2) as unknown[])[1] as {messages:{content:string}[]}).messages[1].content);
   expect(sent.others).toEqual([{name:'Maren',description:'Maren has side-swept bangs.'}]);
+});
+
+test('the Story choice lists cards newest first, starts on the chat card after an [ooc] read, and goes to Lumi Studio',async()=> {
+  dom();const h=harness();cleanups.push(h.stop);const dispose=setup(h.ctx);cleanups.push(dispose);
+  const b=(name:string)=>Array.from(h.root.querySelectorAll('button')).find(x=>x.textContent===name)!;
+  await until(()=>!b('Translate').disabled);h.root.querySelector('select')!.value='c1';
+  const storyPick=Array.from(h.root.querySelectorAll('select')).find(x=>Array.from(x.options).some(o=>o.value==='card2'))!;
+  await until(()=>storyPick.options.length===3);
+  // Not set until the character comes from a chat: nothing is sent, so Lumi Studio keeps what it has.
+  expect(Array.from(storyPick.options).map(o=>o.textContent)).toEqual(['Not set','Port Hesk','Narrator']);expect(storyPick.value).toBe('');
+  named(h.root,'source').value='Jason Slatz\nShort red hair.';
+  h.setResponses([{traits:[{id:'1',group:'hair',evidence:'Short red hair.',tags:['red_hair','short_hair'],detail:'Short red hair'}]},{drop:[],captions:{},issues:[]}]);
+  b('Translate').click();await until(()=>!b('Translate').disabled);
+  const latest=()=>(h.calls.filter(c=>(c as unknown[])[0]==='sync'&&(c as unknown[])[1]==='sheet.latest').at(-1) as unknown[]|undefined)?.[2] as {story?:unknown}|undefined;
+  await until(()=>!!latest());expect(latest()!.story).toBeUndefined();
+  storyPick.value='card2';storyPick.dispatchEvent(new Event('change'));
+  const rolePick=Array.from(h.root.querySelectorAll('select')).find(x=>Array.from(x.options).some(o=>o.value==='lead'))!;
+  rolePick.value='lead';rolePick.dispatchEvent(new Event('change'));
+  await until(()=>!!latest()?.story);expect(latest()!.story).toEqual({cardId:'card2',cardName:'Port Hesk',role:'lead'});
+  // Reading the open chat's [ooc] reply picks that chat's card.
+  h.story.messages.push({id:'m1',role:'user',content:'[ooc] describe Jason'},{id:'m2',role:'assistant',content:'Jason has short red hair.'});
+  h.setResponses([{characters:[{name:'Jason',aliases:[],description:'Jason has short red hair.'}]}]);
+  b('Use the last [ooc] reply').click();await until(()=>storyPick.value==='card1');
 });

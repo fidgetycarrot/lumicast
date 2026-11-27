@@ -42,7 +42,7 @@ export interface Gap { kind: 'missing' | 'vague'; what: string; note: string }
 /** A character Lumi Studio sends back to be tweaked, with its Cast lorebook description when one is found. */
 /** id and kind name the saved Lumi Studio entry (empty id: not saved there yet), so the revised sheet can go back to it. */
 export interface StudioCharacter { sheet: Sheet; name: string; sentAt: number; description: string; book: string; id: string; kind: 'character' | 'persona' }
-export interface SharedSheet { version: 1; sheet: Sheet; name: string; title: string; updatedAt: number; userId: string }
+export interface SharedSheet { version: 1; sheet: Sheet; name: string; title: string; updatedAt: number; userId: string; story?: {cardId?: string; cardName?: string; role?: 'lead'|'regular'|'minor'} }
 /** A likely character name from a description's first line, such as "Jason Slatz — physical description:". */
 export function nameFrom(description: string): string {
   const first = (description.split('\n').find(l => l.trim()) ?? '').trim();
