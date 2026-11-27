@@ -26,7 +26,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
     await s.load;
   };
   const dictionaryFor=(s:UserState)=>s.dictionary ??= new BooruDictionary(async url=> {
-    const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.23.3 (tag metadata client)'}}));
+    const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.23.4 (tag metadata client)'}}));
     if(typeof response.status!=='number'||typeof response.body!=='string')throw new Error('Invalid proxy response.');
     return {status:response.status,body:response.body};
   },{user:s.settings!.gelUser,key:s.settings!.gelKey});
@@ -264,7 +264,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
         const entered=gelCredentials(text(v.gelUser ?? '','Gelbooru user',300),v.gelKey ? text(v.gelKey,'Gelbooru key',300) : '');
         const credentials={user:entered.user||settings.gelUser,key:entered.key||settings.gelKey};
         const outcome=await testGelbooru(async url=> {
-          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.23.3 (tag metadata client)'}}));
+          const response=record(await api.cors(url,{method:'GET',headers:{Accept:'application/json','User-Agent':'LumiCast/0.23.4 (tag metadata client)'}}));
           return {status:Number(response.status),body:typeof response.body==='string'?response.body:''};
         },credentials);
         const unsaved=credentials.user!==settings.gelUser||credentials.key!==settings.gelKey;
@@ -473,7 +473,16 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
    * back at once; the translations run in the background, one at a time, and each finished sheet goes straight
    * into Lumi Studio (lumidraw_studio.lumicast.add), new or updated by name. Progress is shared at paige.status.
    */
-  type PaigeLook={name:string;aliases:string[];kind:'character'|'persona';description:string};
+  /** Which story (character card) a look belongs to; Lumi Studio files the face under it and casts it on the card's first chat. */
+  type Story={cardId?:string;cardName?:string;role?:'lead'|'regular'|'minor'};
+  type PaigeLook={name:string;aliases:string[];kind:'character'|'persona';description:string;story?:Story};
+  /** Paige's story object, camel or snake case; anything without a card id or name is no story at all. */
+  const storyFrom=(value:unknown):Story|undefined=>{
+    const v=record(value);const id=v.cardId ?? v.card_id,name=v.cardName ?? v.card_name;
+    const story:Story={...(typeof id==='string'&&id.trim()?{cardId:id.trim().slice(0,100)}:{}),...(typeof name==='string'&&name.trim()?{cardName:name.trim().slice(0,120)}:{}),
+      ...(v.role==='lead'||v.role==='regular'||v.role==='minor'?{role:v.role}:{})};
+    return story.cardId||story.cardName?story:undefined;
+  };
 /** names: everyone in the batch, in order. stage: what LumiCast is doing for current right now. updatedAt: last sign of life, so Paige can tell working from stuck. */
   type PaigeStatus={sessionId:string;done:number;total:number;running:boolean;current?:string;stage?:string;names?:string[];startedAt?:number;updatedAt?:number;error?:string;finished:{name:string;ok:boolean;message:string}[]};
   const pool=(api as unknown as {rpcPool?:{sync?:(e:string,v:unknown,p?:{requires?:string[]})=>string;read?:(e:string)=>Promise<unknown>;handle?:(e:string,h:(ctx:{requesterExtensionId:string})=>unknown,p?:{requires?:string[]})=>string}}).rpcPool;
@@ -498,7 +507,9 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
     const sessionId=typeof shared.sessionId==='string'?shared.sessionId.slice(0,100):'';
     const looks:PaigeLook[]=shared.characters.slice(0,24).map(c=>record(c)).filter(c=>typeof c.name==='string'&&c.name.trim()&&typeof c.description==='string'&&c.description.trim()).map(c=>({
       name:String(c.name).trim().slice(0,80),aliases:(Array.isArray(c.aliases)?c.aliases:[]).filter((a):a is string=>typeof a==='string').map(a=>a.trim().slice(0,60)).filter(Boolean).slice(0,8),
-      kind:c.kind==='persona'?'persona':'character',description:String(c.description).slice(0,12_000)}));
+      kind:c.kind==='persona'?'persona':'character',description:String(c.description).slice(0,12_000),
+      // Each look's own story, else the batch's (Paige sends both; a look's role only rides on its own).
+      ...((s=>s?{story:s}:{})(storyFrom(c.story) ?? storyFrom(shared.story)))}));
     if (!looks.length) return {ok:false,message:'None of the looks Paige sent had a name and a description.'};
     if (paigeBusy||paigeQueue.length) return {ok:false,message:'LumiCast is still working on the last batch from Paige. Wait for it, then press Send looks again.'};
     paigeQueue.push({looks,userId,sessionId});
@@ -545,7 +556,7 @@ export function setupBackend(api: SpindleAPI, options: { waitScale?: number } = 
             }
           }
           status.stage='Saving to Lumi Studio…';paigeStatus(status);
-          pool!.sync!('paige.sheet',{version:1,sessionId,name:look.name,aliases:look.aliases,kind:look.kind,userId:userId ?? '',sentAt:Date.now(),sheet:result.sheet},{requires:[]});
+          pool!.sync!('paige.sheet',{version:1,sessionId,name:look.name,aliases:look.aliases,kind:look.kind,userId:userId ?? '',sentAt:Date.now(),sheet:result.sheet,...(look.story?{story:look.story}:{})},{requires:[]});
           const answer=record(await pool!.read!('lumidraw_studio.lumicast.add'));
           ok=answer.ok===true;
           // Lumi Studio never replaces anyone; a taken name comes back as "Vesper 2" with the name it clashed with.

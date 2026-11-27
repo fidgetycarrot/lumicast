@@ -310,3 +310,8 @@ Translations became slow once Gelbooru credentials started working: every tag al
 
 - Cause confirmed from a real sheet: eyelashes and lips are real tags, so they passed the dictionary check; nothing limited body hair; the phrase rule did not exclude vague words.
 - Tested (unit): eyelashes and lips go with a notice; chest hair stays and navel, arm and leg hair go; a user's own body-hair tag counts as the one kept; "straight solid nose" goes and "square jaw" stays.
+
+## v0.23.4: story link for Paige characters
+
+- Cause: LumiCast read Paige's looks without their story object, so it never reached lumicast.paige.sheet.
+- Tested (fake host): each look's story goes out on paige.sheet; card_name is read as cardName; an unknown role is dropped; a look with no story (and no batch story) sends none.

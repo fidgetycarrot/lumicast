@@ -105,3 +105,18 @@ test('three rate limits in a row give up with the reason', async () => {
   expect(status.finished[0].message).toContain('RATE_LIMIT');
   h.stop();
 });
+
+test('each look carries its story to Lumi Studio, so it is filed under the card', async () => {
+  const h = host();
+  h.share([
+    { name: 'Jory Kett', kind: 'character', description: 'Jory Kett — appearance:\nRed hair.', story: { cardId: 'card9', cardName: 'Port Hesk', role: 'lead' } },
+    { name: 'Ivy', kind: 'character', description: 'Ivy — appearance:\nRed hair.', story: { card_name: 'Port Hesk', role: 'boss' } },
+    { name: 'Odo', kind: 'character', description: 'Odo — appearance:\nRed hair.' },
+  ]);
+  expect(await h.handlers.get('paige.start')!({ requesterExtensionId: 'paige' })).toEqual({ ok: true, count: 3 });
+  await h.finished();
+  const sheets = h.added as { name: string; story?: unknown }[];
+  // Snake case is read too, an unknown role is left off, and a look with no story sends none.
+  expect(sheets.map(s => [s.name, s.story])).toEqual([['Jory Kett', { cardId: 'card9', cardName: 'Port Hesk', role: 'lead' }], ['Ivy', { cardName: 'Port Hesk' }], ['Odo', undefined]]);
+  h.stop();
+});

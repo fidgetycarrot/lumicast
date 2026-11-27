@@ -1,4 +1,6 @@
-# LumiCast 0.23.3
+# LumiCast 0.23.4
+
+**v0.23.4 tells Lumi Studio which story each Paige character belongs to.** Paige sends a story (the card's id or name, and whether the person is a lead, regular or minor) with each look; LumiCast now passes it on with the sheet, so Lumi Studio 1.46.0 files the face under that story and casts it on the card's first chat.
 
 **v0.23.3 drops tags that only name a face part, and stacked body hair.** `eyelashes`, `lips`, `nose`, `eyebrows`, `teeth`, `ears` and `mouth` only tell NovelAI to draw that part prominently (lashes and lips read feminine), so they are left out; specific tags like `thick eyebrows` stay. Body hair keeps one tag (chest hair first) instead of chest, arm, leg and navel hair together. Sheet phrases with vague words ("straight solid nose") are left out. Your notes' tags are never touched.
 
